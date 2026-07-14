@@ -2,6 +2,8 @@ add_library(
 	cg-core
 	STATIC
 		
+	${CMAKE_CURRENT_SOURCE_DIR}/defs.hpp
+
 	${CMAKE_CURRENT_SOURCE_DIR}/dummy.cpp
 )
 
@@ -9,7 +11,10 @@ target_include_directories(
 	cg-core
 	
 	PUBLIC
-	${CMAKE_CURRENT_SOURCE_DIR}
+	# include <xxx.hpp>
+	#${CMAKE_CURRENT_SOURCE_DIR}
+	# include <core/xxx.hpp>
+	${CMAKE_SOURCE_DIR}
 )
 
 target_compile_options(
