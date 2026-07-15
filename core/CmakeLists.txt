@@ -4,7 +4,11 @@ add_library(
 		
 	${CMAKE_CURRENT_SOURCE_DIR}/defs.hpp
 
-	${CMAKE_CURRENT_SOURCE_DIR}/dummy.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/card.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/card.cpp
+
+	${CMAKE_CURRENT_SOURCE_DIR}/card_monster.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/card_monster.cpp
 )
 
 target_include_directories(
