@@ -7,6 +7,11 @@ add_library(
 	${CMAKE_CURRENT_SOURCE_DIR}/card.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/card.cpp
 
+	${CMAKE_CURRENT_SOURCE_DIR}/card_target.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/card_target.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/card_material.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/card_material.cpp
+
 	${CMAKE_CURRENT_SOURCE_DIR}/card_monster.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/card_monster.cpp
 )

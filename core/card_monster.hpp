@@ -1,12 +1,10 @@
 #pragma once
 
 #include <core/card.hpp>
+#include <core/card_material.hpp>
 
 namespace cg
 {
-	class MonsterSummonMaterial;
-	class MonsterSummonMaterials;
-
 	// 怪兽卡类型
 	enum class MonsterCategory : std::uint8_t
 	{
@@ -198,6 +196,16 @@ namespace cg
 		BOTTOM_RIGHT = 1 << 7,
 	};
 
+	// 怪兽卡基础信息
+	class MonsterInfo
+	{
+	public:
+		MonsterCategory category;
+		MonsterAbility ability;
+		MonsterAttribute attribute;
+		MonsterRace race;
+	};
+
 	// 怪兽卡
 	class MonsterCard : public Card
 	{
@@ -205,21 +213,16 @@ namespace cg
 		//
 
 	protected:
-		MonsterCategory monster_category_;
-		MonsterAbility monster_ability_;
-		MonsterAttribute monster_attribute_;
-		MonsterRace monster_race_;
+		MonsterInfo info_;
 
 		// todo: 记录召唤素材?
 
-		MonsterCard(
-			MonsterCategory category,
-			MonsterAbility ability,
-			MonsterAttribute attribute,
-			MonsterRace race
-		) noexcept;
+		explicit MonsterCard(MonsterInfo info) noexcept;
 
 	public:
+		// 获取怪兽卡信息
+		[[nodiscard]] auto monster_info() const noexcept -> MonsterInfo;
+
 		// 获取怪兽卡类型
 		[[nodiscard]] auto monster_category() const noexcept -> MonsterCategory;
 
@@ -232,11 +235,15 @@ namespace cg
 		// 获取怪兽卡种族
 		[[nodiscard]] auto monster_race() const noexcept -> MonsterRace;
 
-		// 检查能否召唤
-		[[nodiscard]] virtual auto can_summon(const Dual& dual, const Player& owner, const MonsterSummonMaterials& materials) const noexcept -> bool = 0;
+		// 检查当前决斗能否召唤该卡
+		[[nodiscard]] virtual auto can_summon(const Dual& dual, const Player& owner) const noexcept -> bool = 0;
 
-		// 尝试召唤
-		virtual auto try_summon(Dual& dual, Player& owner, MonsterSummonMaterials& materials) noexcept -> void = 0;
+		// 获取所有可用于召唤的材料
+		[[nodiscard]] virtual auto get_summon_materials(const Dual& dual, const Player& owner) const noexcept -> SummonMaterialCards = 0;
+
+		// 使用指定材料尝试召唤
+		// 返回召唤是否成功
+		[[nodiscard]] virtual auto try_summon(Dual& dual, Player& owner, SummonMaterialCards& materials) noexcept -> bool = 0;
 	};
 
 	// 普通怪兽卡
@@ -246,26 +253,24 @@ namespace cg
 		//
 
 	private:
-		MonsterLevel monster_level_;
-		MonsterLevel monster_level_current_;
+		MonsterLevel level_;
+		MonsterLevel level_current_;
 
 	public:
 		// todo: 构造
-		NormalMonsterCard(
-			MonsterCategory category,
-			MonsterAbility ability,
-			MonsterAttribute attribute,
-			MonsterRace race,
-			MonsterLevel level
-		) noexcept;
+		NormalMonsterCard(MonsterInfo info, MonsterLevel level) noexcept;
 
 		auto can_activate(const Dual& dual, const Player& owner) const noexcept -> bool override;
 
-		auto try_activate(Dual& dual, Player& owner) noexcept -> void override;
+		auto get_activate_targets(const Dual& dual, const Player& owner) const noexcept -> TargetCards override;
 
-		auto can_summon(const Dual& dual, const Player& owner, const MonsterSummonMaterials& materials) const noexcept -> bool override;
+		auto try_activate(const Dual& dual, const Player& owner, TargetCards& targets) noexcept -> bool override;
 
-		auto try_summon(Dual& dual, Player& owner, MonsterSummonMaterials& materials) noexcept -> void override;
+		auto can_summon(const Dual& dual, const Player& owner) const noexcept -> bool override;
+
+		auto get_summon_materials(const Dual& dual, const Player& owner) const noexcept -> SummonMaterialCards override;
+
+		auto try_summon(Dual& dual, Player& owner, SummonMaterialCards& materials) noexcept -> bool override;
 
 		[[nodiscard]] auto level_origin() const noexcept -> MonsterLevel;
 
@@ -283,26 +288,24 @@ namespace cg
 		//
 
 	private:
-		MonsterLevel monster_level_;
-		MonsterLevel monster_level_current_;
+		MonsterLevel level_;
+		MonsterLevel level_current_;
 
 	public:
 		// todo: 构造
-		RitualMonsterCard(
-			MonsterCategory category,
-			MonsterAbility ability,
-			MonsterAttribute attribute,
-			MonsterRace race,
-			MonsterLevel level
-		) noexcept;
+		RitualMonsterCard(MonsterInfo info, MonsterLevel level) noexcept;
 
 		auto can_activate(const Dual& dual, const Player& owner) const noexcept -> bool override;
 
-		auto try_activate(Dual& dual, Player& owner) noexcept -> void override;
+		auto get_activate_targets(const Dual& dual, const Player& owner) const noexcept -> TargetCards override;
 
-		auto can_summon(const Dual& dual, const Player& owner, const MonsterSummonMaterials& materials) const noexcept -> bool override;
+		auto try_activate(const Dual& dual, const Player& owner, TargetCards& targets) noexcept -> bool override;
 
-		auto try_summon(Dual& dual, Player& owner, MonsterSummonMaterials& materials) noexcept -> void override;
+		auto can_summon(const Dual& dual, const Player& owner) const noexcept -> bool override;
+
+		auto get_summon_materials(const Dual& dual, const Player& owner) const noexcept -> SummonMaterialCards override;
+
+		auto try_summon(Dual& dual, Player& owner, SummonMaterialCards& materials) noexcept -> bool override;
 
 		[[nodiscard]] auto level_origin() const noexcept -> MonsterLevel;
 
@@ -320,27 +323,25 @@ namespace cg
 		//
 
 	private:
-		MonsterLevel monster_level_;
-		MonsterLevel monster_level_current_;
+		MonsterLevel level_;
+		MonsterLevel level_current_;
 
 	public:
 		// todo: 其他接口
 		// todo: 构造
-		FusionMonsterCard(
-			MonsterCategory category,
-			MonsterAbility ability,
-			MonsterAttribute attribute,
-			MonsterRace race,
-			MonsterLevel level
-		) noexcept;
+		FusionMonsterCard(MonsterInfo info, MonsterLevel level) noexcept;
 
 		auto can_activate(const Dual& dual, const Player& owner) const noexcept -> bool override;
 
-		auto try_activate(Dual& dual, Player& owner) noexcept -> void override;
+		auto get_activate_targets(const Dual& dual, const Player& owner) const noexcept -> TargetCards override;
 
-		auto can_summon(const Dual& dual, const Player& owner, const MonsterSummonMaterials& materials) const noexcept -> bool override;
+		auto try_activate(const Dual& dual, const Player& owner, TargetCards& targets) noexcept -> bool override;
 
-		auto try_summon(Dual& dual, Player& owner, MonsterSummonMaterials& materials) noexcept -> void override;
+		auto can_summon(const Dual& dual, const Player& owner) const noexcept -> bool override;
+
+		auto get_summon_materials(const Dual& dual, const Player& owner) const noexcept -> SummonMaterialCards override;
+
+		auto try_summon(Dual& dual, Player& owner, SummonMaterialCards& materials) noexcept -> bool override;
 
 		[[nodiscard]] auto level_origin() const noexcept -> MonsterLevel;
 
@@ -356,26 +357,24 @@ namespace cg
 		//
 
 	private:
-		MonsterLevel monster_level_;
-		MonsterLevel monster_level_current_;
+		MonsterLevel level_;
+		MonsterLevel level_current_;
 
 	public:
 		// todo: 构造
-		SynchroMonsterCard(
-			MonsterCategory category,
-			MonsterAbility ability,
-			MonsterAttribute attribute,
-			MonsterRace race,
-			MonsterLevel level
-		) noexcept;
+		SynchroMonsterCard(MonsterInfo info, MonsterLevel level) noexcept;
 
 		auto can_activate(const Dual& dual, const Player& owner) const noexcept -> bool override;
 
-		auto try_activate(Dual& dual, Player& owner) noexcept -> void override;
+		auto get_activate_targets(const Dual& dual, const Player& owner) const noexcept -> TargetCards override;
 
-		auto can_summon(const Dual& dual, const Player& owner, const MonsterSummonMaterials& materials) const noexcept -> bool override;
+		auto try_activate(const Dual& dual, const Player& owner, TargetCards& targets) noexcept -> bool override;
 
-		auto try_summon(Dual& dual, Player& owner, MonsterSummonMaterials& materials) noexcept -> void override;
+		auto can_summon(const Dual& dual, const Player& owner) const noexcept -> bool override;
+
+		auto get_summon_materials(const Dual& dual, const Player& owner) const noexcept -> SummonMaterialCards override;
+
+		auto try_summon(Dual& dual, Player& owner, SummonMaterialCards& materials) noexcept -> bool override;
 
 		[[nodiscard]] auto level_origin() const noexcept -> MonsterLevel;
 
@@ -390,30 +389,36 @@ namespace cg
 	class XyzMonsterCard final : public MonsterCard
 	{
 	public:
-		//
+		using size_type = XyzMaterialCards::size_type;
 
 	private:
-		MonsterRank monster_rank_;
+		MonsterRank rank_;
+
+		XyzMaterialCards materials_;
 
 	public:
 		// todo: 构造
-		XyzMonsterCard(
-			MonsterCategory category,
-			MonsterAbility ability,
-			MonsterAttribute attribute,
-			MonsterRace race,
-			MonsterRank rank
-		) noexcept;
+		XyzMonsterCard(MonsterInfo info, MonsterRank rank, XyzMaterialCards materials) noexcept;
 
 		auto can_activate(const Dual& dual, const Player& owner) const noexcept -> bool override;
 
-		auto try_activate(Dual& dual, Player& owner) noexcept -> void override;
+		auto get_activate_targets(const Dual& dual, const Player& owner) const noexcept -> TargetCards override;
 
-		auto can_summon(const Dual& dual, const Player& owner, const MonsterSummonMaterials& materials) const noexcept -> bool override;
+		auto try_activate(const Dual& dual, const Player& owner, TargetCards& targets) noexcept -> bool override;
 
-		auto try_summon(Dual& dual, Player& owner, MonsterSummonMaterials& materials) noexcept -> void override;
+		auto can_summon(const Dual& dual, const Player& owner) const noexcept -> bool override;
+
+		auto get_summon_materials(const Dual& dual, const Player& owner) const noexcept -> SummonMaterialCards override;
+
+		auto try_summon(Dual& dual, Player& owner, SummonMaterialCards& materials) noexcept -> bool override;
 
 		[[nodiscard]] auto rank() const noexcept -> MonsterRank;
+
+		[[nodiscard]] auto materials() const noexcept -> const XyzMaterialCards&;
+
+		auto add_material(XyzMaterialCard material) noexcept -> void;
+
+		auto remove_material(size_type index) noexcept -> bool;
 
 		// todo: 其他接口
 	};
@@ -425,30 +430,26 @@ namespace cg
 		//
 
 	private:
-		MonsterLevel monster_level_;
-		MonsterLevel monster_level_current_;
-		MonsterPendulum left_monster_pendulum_;
-		MonsterPendulum right_monster_pendulum_;
+		MonsterLevel level_;
+		MonsterLevel level_current_;
+		MonsterPendulum left_pendulum_;
+		MonsterPendulum right_pendulum_;
 
 	public:
 		// todo: 构造
-		PendulumMonsterCard(
-			MonsterCategory category,
-			MonsterAbility ability,
-			MonsterAttribute attribute,
-			MonsterRace race,
-			MonsterLevel level,
-			MonsterPendulum left_pendulum,
-			MonsterPendulum right_pendulum
-		) noexcept;
+		PendulumMonsterCard(MonsterInfo info, MonsterLevel level, MonsterPendulum left_pendulum, MonsterPendulum right_pendulum) noexcept;
 
 		auto can_activate(const Dual& dual, const Player& owner) const noexcept -> bool override;
 
-		auto try_activate(Dual& dual, Player& owner) noexcept -> void override;
+		auto get_activate_targets(const Dual& dual, const Player& owner) const noexcept -> TargetCards override;
 
-		auto can_summon(const Dual& dual, const Player& owner, const MonsterSummonMaterials& materials) const noexcept -> bool override;
+		auto try_activate(const Dual& dual, const Player& owner, TargetCards& targets) noexcept -> bool override;
 
-		auto try_summon(Dual& dual, Player& owner, MonsterSummonMaterials& materials) noexcept -> void override;
+		auto can_summon(const Dual& dual, const Player& owner) const noexcept -> bool override;
+
+		auto get_summon_materials(const Dual& dual, const Player& owner) const noexcept -> SummonMaterialCards override;
+
+		auto try_summon(Dual& dual, Player& owner, SummonMaterialCards& materials) noexcept -> bool override;
 
 		[[nodiscard]] auto level_origin() const noexcept -> MonsterLevel;
 
@@ -470,25 +471,23 @@ namespace cg
 		//
 
 	private:
-		MonsterLinkMarker monster_link_marker_;
+		MonsterLinkMarker link_marker_;
 
 	public:
 		// todo: 构造
-		LinkMonsterCard(
-			MonsterCategory category,
-			MonsterAbility ability,
-			MonsterAttribute attribute,
-			MonsterRace race,
-			MonsterLinkMarker link_marker
-		) noexcept;
+		LinkMonsterCard(MonsterInfo info, MonsterLinkMarker link_marker) noexcept;
 
 		auto can_activate(const Dual& dual, const Player& owner) const noexcept -> bool override;
 
-		auto try_activate(Dual& dual, Player& owner) noexcept -> void override;
+		auto get_activate_targets(const Dual& dual, const Player& owner) const noexcept -> TargetCards override;
 
-		auto can_summon(const Dual& dual, const Player& owner, const MonsterSummonMaterials& materials) const noexcept -> bool override;
+		auto try_activate(const Dual& dual, const Player& owner, TargetCards& targets) noexcept -> bool override;
 
-		auto try_summon(Dual& dual, Player& owner, MonsterSummonMaterials& materials) noexcept -> void override;
+		auto can_summon(const Dual& dual, const Player& owner) const noexcept -> bool override;
+
+		auto get_summon_materials(const Dual& dual, const Player& owner) const noexcept -> SummonMaterialCards override;
+
+		auto try_summon(Dual& dual, Player& owner, SummonMaterialCards& materials) noexcept -> bool override;
 
 		[[nodiscard]] auto link_marker() const noexcept -> MonsterLinkMarker;
 

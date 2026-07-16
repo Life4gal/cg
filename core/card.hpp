@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include <core/defs.hpp>
+#include <core/card_target.hpp>
 
 namespace cg
 {
@@ -52,13 +52,17 @@ namespace cg
 		// MONSTER | TRAP -> 陷阱怪兽
 		[[nodiscard]] auto card_category() const noexcept -> CardCategory;
 
-		// 检查能否发动效果
+		// 检查当前决斗能否发动该卡效果
 		[[nodiscard]] virtual auto can_activate(const Dual& dual, const Player& owner) const noexcept -> bool = 0;
 
-		// 尝试发动效果
-		// todo: 以某些卡为对象?
-		virtual auto try_activate(Dual& dual, Player& owner) noexcept -> void = 0;
+		// 获取所有可用于对象的卡
+		// 如果不去对象则返回空?如何和无法取得有效对象做区分?
+		[[nodiscard]] virtual auto get_activate_targets(const Dual& dual, const Player& owner) const noexcept -> TargetCards = 0;
 
-		// todo
+		// 使用指定对象尝试发动
+		// 返回是否发动成功
+		[[nodiscard]] virtual auto try_activate(const Dual& dual, const Player& owner, TargetCards& targets) noexcept -> bool = 0;
+
+		// todo: 其他接口
 	};
 }
