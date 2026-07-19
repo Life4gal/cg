@@ -4,6 +4,17 @@
 
 namespace cg
 {
+	// 玩家
+	enum class Player : std::uint8_t
+	{
+		UNKNOWN = 0,
+
+		// ====================================
+
+		PLAYER_1,
+		PLAYER_2,
+	};
+
 	// 卡片位置
 	enum class CardLocation : std::uint16_t
 	{
@@ -46,7 +57,7 @@ namespace cg
 		// 魔陷区域
 		SPELL_ZONE = INTERNAL_SPELL_MAIN_ZONE | INTERNAL_SPELL_FIELD_ZONE | INTERNAL_SPELL_PENDULUM_ZONE,
 		// 场上
-		ON_FIELD = MONSTER_ZONE | SPELL_ZONE,
+		FIELD = MONSTER_ZONE | SPELL_ZONE,
 
 		// 手牌
 		HAND = INTERNAL_POSITION_HAND,
@@ -58,35 +69,50 @@ namespace cg
 		OVERLAY = INTERNAL_POSITION_OVERLAY,
 	};
 
-	// 卡片因为什么改变了位置
-	enum class CardReason : std::uint32_t
+	// 卡片场上位置
+	enum class CardZone : std::uint16_t
 	{
-		// 抽卡
-		INTERNAL_DRAW = 1 << 0,
-		// 被破坏
-		INTERNAL_DESTROY = 1 << 1,
-
-		// 丢弃(手牌送墓)
-		INTERNAL_DISCARD = 1 << 2,
-		// 代价
-		INTERNAL_COST = 1 << 3,
-
-		INTERNAL_SUMMON_ADVANCE = 1 << 10,
-		INTERNAL_SUMMON_SPECIAL = 1 << 11,
-		INTERNAL_SUMMON_RITUAL = 1 << 12,
-		INTERNAL_SUMMON_FUSION = 1 << 13,
-		INTERNAL_SUMMON_SYNCHRO = 1 << 14,
-		INTERNAL_SUMMON_XYZ = 1 << 15,
-		INTERNAL_SUMMON_LINK = 1 << 16,
+		NONE = 0,
 
 		// ====================================
 
-		// TODO
+		// 从左往右
+
+		// -主怪兽区
+		MONSTER_MAIN_ZONE_0 = 1 << 0,
+		MONSTER_MAIN_ZONE_1 = 1 << 1,
+		MONSTER_MAIN_ZONE_2 = 1 << 2,
+		MONSTER_MAIN_ZONE_3 = 1 << 3,
+		MONSTER_MAIN_ZONE_4 = 1 << 4,
+		MONSTER_MAIN_ZONE = MONSTER_MAIN_ZONE_0 | MONSTER_MAIN_ZONE_1 | MONSTER_MAIN_ZONE_2 | MONSTER_MAIN_ZONE_3 | MONSTER_MAIN_ZONE_4,
+		// -额外怪兽区
+		MONSTER_EXTRA_ZONE_0 = 1 << 5,
+		MONSTER_EXTRA_ZONE_1 = 1 << 6,
+		MONSTER_EXTRA_ZONE = MONSTER_EXTRA_ZONE_0 | MONSTER_EXTRA_ZONE_1,
+		// -怪兽区
+		MONSTER_ZONE = MONSTER_MAIN_ZONE | MONSTER_EXTRA_ZONE,
+		// -魔法陷阱区
+		SPELL_ZONE_0 = 1 << 7,
+		SPELL_ZONE_1 = 1 << 8,
+		SPELL_ZONE_2 = 1 << 9,
+		SPELL_ZONE_3 = 1 << 10,
+		SPELL_ZONE_4 = 1 << 11,
+		SPELL_ZONE = SPELL_ZONE_0 | SPELL_ZONE_1 | SPELL_ZONE_2 | SPELL_ZONE_3 | SPELL_ZONE_4,
+		// -灵摆区
+		SPELL_PENDULUM_ZONE_LEFT = SPELL_ZONE_0,
+		SPELL_PENDULUM_ZONE_RIGHT = SPELL_ZONE_4,
+		SPELL_PENDULUM_ZONE = SPELL_PENDULUM_ZONE_LEFT | SPELL_PENDULUM_ZONE_RIGHT,
+		// -场地魔法区
+		SPELL_FIELD_ZONE = 1 << 12,
 	};
 
 	// 卡片表示形式
 	enum class CardForm : std::uint8_t
 	{
+		NONE = 0,
+
+		// ====================================
+
 		// 表侧表示
 		INTERNAL_FACE_UP = 1 << 0,
 		// 里侧表示
@@ -115,6 +141,36 @@ namespace cg
 		ATTACK = FACE_UP_ATTACK | FACE_DOWN_ATTACK,
 		// 表侧或是里侧守备
 		DEFENSE = FACE_UP_DEFENSE | FACE_DOWN_DEFENSE,
+	};
+
+	// 卡片状态改变原因
+	enum class CardReason : std::uint32_t
+	{
+		// 抽卡
+		INTERNAL_DRAW = 1 << 0,
+		// 被破坏
+		INTERNAL_DESTROY = 1 << 1,
+
+		// 丢弃(手牌送墓)
+		INTERNAL_DISCARD = 1 << 2,
+		// 代价
+		INTERNAL_COST = 1 << 3,
+
+		INTERNAL_SUMMON_ADVANCE = 1 << 10,
+		INTERNAL_SUMMON_SPECIAL = 1 << 11,
+		INTERNAL_SUMMON_RITUAL = 1 << 12,
+		INTERNAL_SUMMON_FUSION = 1 << 13,
+		INTERNAL_SUMMON_SYNCHRO = 1 << 14,
+		INTERNAL_SUMMON_XYZ = 1 << 15,
+		INTERNAL_SUMMON_LINK = 1 << 16,
+
+		// ====================================
+
+		// TODO
+
+		// 规则
+		RULE,
+
 	};
 
 	// 卡片类型
@@ -211,58 +267,54 @@ namespace cg
 		EXTRA_DECK = INTERNAL_MONSTER_FUSION | INTERNAL_MONSTER_SYNCHRO | INTERNAL_MONSTER_XYZ | INTERNAL_MONSTER_LINK,
 	};
 
-	// 卡片(怪兽卡)召唤类型
-	enum class CardSummonType : std::uint16_t
+	// 卡片字段
+	class CardArchetype
 	{
-		// 通常召唤
-		INTERNAL_NORMAL = 1 << 0,
-		// 上级召唤
-		INTERNAL_ADVANCE = 1 << 1,
-		// 二重召唤
-		INTERNAL_GEMINI = 1 << 2,
-		INTERNAL_DUAL = INTERNAL_GEMINI,
+	public:
+		using value_type = std::uint16_t;
 
-		// 反转召唤
-		INTERNAL_FLIP = 1 << 3,
+		// 主字段,例如[HERO]
+		value_type main : 12;
+		// 子字段,例如[D-HERO],[E-HERO]等
+		value_type sub : 4;
 
-		// 特殊召唤
-		INTERNAL_SPECIAL = 1 << 4,
-		// 仪式召唤
-		INTERNAL_RITUAL = 1 << 5,
-		// 融合召唤
-		INTERNAL_FUSION = 1 << 6,
-		// 同调召唤
-		INTERNAL_SYNCHRO = 1 << 7,
-		// 超量召唤
-		INTERNAL_XYZ = 1 << 8,
-		// 灵摆召唤
-		INTERNAL_PENDULUM = 1 << 9,
-		// 连接召唤
-		INTERNAL_LINK = 1 << 10,
+		constexpr CardArchetype() noexcept
+			: main{0},
+			  sub{0} {}
 
-		// ====================================
+		constexpr explicit CardArchetype(const value_type value) noexcept
+			: main{static_cast<value_type>(value & 0x0FFF)},
+			  sub{static_cast<value_type>((value >> 12) & 0x000F)} {}
 
-		ADVANCE = INTERNAL_NORMAL | INTERNAL_ADVANCE,
-		GEMINI = INTERNAL_NORMAL | INTERNAL_GEMINI,
-		DUAL = INTERNAL_NORMAL | INTERNAL_DUAL,
+		[[nodiscard]] constexpr auto operator==(const CardArchetype& other) const noexcept -> bool
+		{
+			return main == other.main && sub == other.sub;
+		}
 
-		FLIP = INTERNAL_FLIP,
+		[[nodiscard]] constexpr auto match(const CardArchetype& required) const noexcept -> bool
+		{
+			// 主字段必须完全匹配
+			if (main != required.main)
+			{
+				return false;
+			}
 
-		RITUAL = INTERNAL_SPECIAL | INTERNAL_RITUAL,
-		FUSION = INTERNAL_SPECIAL | INTERNAL_FUSION,
-		SYNCHRO = INTERNAL_SPECIAL | INTERNAL_SYNCHRO,
-		XYZ = INTERNAL_SPECIAL | INTERNAL_XYZ,
-		PENDULUM = INTERNAL_SPECIAL | INTERNAL_PENDULUM,
-		LINK = INTERNAL_SPECIAL | INTERNAL_LINK,
+			// 子字段必须完全包含
+			if ((sub & required.sub) != required.sub)
+			{
+				return false;
+			}
+
+			return true;
+		}
 	};
 
-	// 卡片(怪兽卡)属性
-	enum class CardAttribute : std::uint8_t
+	// 无效字段
+	constexpr CardArchetype InvalidArchetype{};
+
+	// 怪兽卡属性
+	enum class MonsterAttribute : std::uint8_t
 	{
-		NONE = 0,
-
-		// ====================================
-
 		// 地属性
 		EARTH = 1 << 0,
 		// 水属性
@@ -279,13 +331,9 @@ namespace cg
 		DIVINE = 6,
 	};
 
-	// 卡片(怪兽卡)种族
-	enum class CardRace : std::uint8_t
+	// 怪兽卡种族
+	enum class MonsterRace : std::uint8_t
 	{
-		NONE = 0,
-
-		// ====================================
-
 		// 战士族
 		WARRIOR,
 		// 魔法师族
@@ -336,5 +384,124 @@ namespace cg
 		WYRM,
 		// 幻想魔族
 		ILLUSION,
+	};
+
+	// 怪兽卡等级(等级可能被改变,我们允许更大的值)
+	enum class MonsterLevel : std::uint16_t
+	{
+		L0 = 0,
+		L1 = 1,
+		L2 = 2,
+		L3 = 3,
+		L4 = 4,
+		L5 = 5,
+		L6 = 6,
+		L7 = 7,
+		L8 = 8,
+		L9 = 9,
+		L10 = 10,
+		L11 = 11,
+		L12 = 12,
+		L13 = 13,
+
+		L_MAX = 0xFFFF,
+	};
+
+	// 怪兽卡阶级
+	enum class MonsterRank : std::uint8_t
+	{
+		R0 = 0,
+		R1 = 1,
+		R2 = 2,
+		R3 = 3,
+		R4 = 4,
+		R5 = 5,
+		R6 = 6,
+		R7 = 7,
+		R8 = 8,
+		R9 = 9,
+		R10 = 10,
+		R11 = 11,
+		R12 = 12,
+		R13 = 13,
+	};
+
+	// 怪兽卡灵摆刻度
+	enum class MonsterPendulum : std::uint8_t
+	{
+		P0 = 0,
+		P1 = 1,
+		P2 = 2,
+		P3 = 3,
+		P4 = 4,
+		P5 = 5,
+		P6 = 6,
+		P7 = 7,
+		P8 = 8,
+		P9 = 9,
+		P10 = 10,
+		P11 = 11,
+		P12 = 12,
+		P13 = 13,
+	};
+
+	// 怪兽卡链接箭头
+	enum class MonsterLinkMarker : std::uint8_t
+	{
+		TOP_LEFT = 1 << 0,
+		TOP = 1 << 1,
+		TOP_RIGHT = 1 << 2,
+
+		LEFT = 1 << 3,
+		RIGHT = 1 << 4,
+
+		BOTTOM_LEFT = 1 << 5,
+		BOTTOM = 1 << 6,
+		BOTTOM_RIGHT = 1 << 7,
+	};
+
+	// 怪兽卡召唤类型
+	enum class MonsterSummonType : std::uint16_t
+	{
+		// 通常召唤
+		INTERNAL_NORMAL = 1 << 0,
+		// 上级召唤
+		INTERNAL_ADVANCE = 1 << 1,
+		// 二重召唤
+		INTERNAL_GEMINI = 1 << 2,
+		INTERNAL_DUAL = INTERNAL_GEMINI,
+
+		// 反转召唤
+		INTERNAL_FLIP = 1 << 3,
+
+		// 特殊召唤
+		INTERNAL_SPECIAL = 1 << 4,
+		// 仪式召唤
+		INTERNAL_RITUAL = 1 << 5,
+		// 融合召唤
+		INTERNAL_FUSION = 1 << 6,
+		// 同调召唤
+		INTERNAL_SYNCHRO = 1 << 7,
+		// 超量召唤
+		INTERNAL_XYZ = 1 << 8,
+		// 灵摆召唤
+		INTERNAL_PENDULUM = 1 << 9,
+		// 连接召唤
+		INTERNAL_LINK = 1 << 10,
+
+		// ====================================
+
+		ADVANCE = INTERNAL_NORMAL | INTERNAL_ADVANCE,
+		GEMINI = INTERNAL_NORMAL | INTERNAL_GEMINI,
+		DUAL = INTERNAL_NORMAL | INTERNAL_DUAL,
+
+		FLIP = INTERNAL_FLIP,
+
+		RITUAL = INTERNAL_SPECIAL | INTERNAL_RITUAL,
+		FUSION = INTERNAL_SPECIAL | INTERNAL_FUSION,
+		SYNCHRO = INTERNAL_SPECIAL | INTERNAL_SYNCHRO,
+		XYZ = INTERNAL_SPECIAL | INTERNAL_XYZ,
+		PENDULUM = INTERNAL_SPECIAL | INTERNAL_PENDULUM,
+		LINK = INTERNAL_SPECIAL | INTERNAL_LINK,
 	};
 }

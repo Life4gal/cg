@@ -2,18 +2,22 @@ add_library(
 	cg-core
 	STATIC
 		
+	# =============================
+	# UTILITY
+	# =============================
+
+	${CMAKE_CURRENT_SOURCE_DIR}/utility/flag.hpp
+			
+	# =============================
+	# CORE
+	# =============================
+
 	${CMAKE_CURRENT_SOURCE_DIR}/defs.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/card_data.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/card_state.hpp
 
 	${CMAKE_CURRENT_SOURCE_DIR}/card.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/card.cpp
-
-	${CMAKE_CURRENT_SOURCE_DIR}/card_target.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/card_target.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/card_material.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/card_material.cpp
-
-	${CMAKE_CURRENT_SOURCE_DIR}/card_monster.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/card_monster.cpp
 )
 
 target_include_directories(
