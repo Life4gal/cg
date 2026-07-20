@@ -2,10 +2,10 @@
 
 #include <variant>
 
-namespace cg
+namespace cg::core
 {
 	// 卡片场上表示形式
-	enum class CardFieldForm : std::uint8_t
+	enum class FieldForm : std::uint8_t
 	{
 		// ====================================
 
@@ -40,7 +40,7 @@ namespace cg
 	};
 
 	// 卡片位置
-	class CardLocation
+	class Location
 	{
 	public:
 		using index_type = std::uint8_t;
@@ -80,7 +80,7 @@ namespace cg
 			};
 
 			Index index;
-			CardFieldForm form;
+			FieldForm form;
 		};
 
 		// 在魔陷区域

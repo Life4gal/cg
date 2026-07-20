@@ -4,12 +4,12 @@
 #include <set>
 #include <ranges>
 
-namespace cg
+namespace cg::core
 {
 	class Card;
 
 	// 卡片视图
-	class CardView
+	class View
 	{
 	public:
 		class Sorter
@@ -35,9 +35,9 @@ namespace cg
 		}
 
 	public:
-		constexpr CardView() noexcept = default;
+		constexpr View() noexcept = default;
 
-		constexpr explicit CardView(view_type view) noexcept
+		constexpr explicit View(view_type view) noexcept
 			: view_{std::move(view)} {}
 
 		// -------------------------------------------------
@@ -112,11 +112,11 @@ namespace cg
 		// -------------------------------------------------
 
 		// 获取前N张卡片的子视图
-		[[nodiscard]] constexpr auto select(const size_type count) const noexcept -> CardView
+		[[nodiscard]] constexpr auto select(const size_type count) const noexcept -> View
 		{
 			auto result = view_ | std::views::take(count) | std::ranges::to<view_type>();
 
-			return CardView{std::move(result)};
+			return View{std::move(result)};
 		}
 
 		// -------------------------------------------------
@@ -126,11 +126,11 @@ namespace cg
 		// 获取所有满足条件的卡片的子视图
 		template<typename Predicate>
 			requires std::predicate<Predicate, const Card&>
-		[[nodiscard]] constexpr auto filter(Predicate predicate) const noexcept -> CardView
+		[[nodiscard]] constexpr auto filter(Predicate predicate) const noexcept -> View
 		{
 			auto result = view_ | std::views::filter(predicate) | std::ranges::to<view_type>();
 
-			return CardView{std::move(result)};
+			return View{std::move(result)};
 		}
 
 		// 获取所有满足条件的卡片的数量

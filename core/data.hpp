@@ -3,7 +3,7 @@
 #include <array>
 #include <variant>
 
-namespace cg
+namespace cg::core
 {
 	// 怪兽卡类型
 	class MonsterCategory
@@ -238,7 +238,7 @@ namespace cg
 	};
 
 	// 卡片字段
-	class CardArchetype
+	class Archetype
 	{
 	public:
 		using value_type = std::uint16_t;
@@ -248,21 +248,21 @@ namespace cg
 		// 子字段,例如[D-HERO],[E-HERO]等
 		value_type sub : 4;
 
-		[[nodiscard]] constexpr static auto none() noexcept -> CardArchetype
+		[[nodiscard]] constexpr static auto none() noexcept -> Archetype
 		{
-			return CardArchetype{0};
+			return Archetype{0};
 		}
 
-		constexpr explicit CardArchetype(const value_type value) noexcept
+		constexpr explicit Archetype(const value_type value) noexcept
 			: main{static_cast<value_type>(value & 0x0FFF)},
 			  sub{static_cast<value_type>((value >> 12) & 0x000F)} {}
 
-		[[nodiscard]] constexpr auto operator==(const CardArchetype& other) const noexcept -> bool
+		[[nodiscard]] constexpr auto operator==(const Archetype& other) const noexcept -> bool
 		{
 			return main == other.main && sub == other.sub;
 		}
 
-		[[nodiscard]] constexpr auto match(const CardArchetype& required) const noexcept -> bool
+		[[nodiscard]] constexpr auto match(const Archetype& required) const noexcept -> bool
 		{
 			// 主字段必须完全匹配
 			if (main != required.main)
@@ -281,10 +281,10 @@ namespace cg
 	};
 
 	// 无字段
-	constexpr auto NoneArchetype = CardArchetype::none();
+	constexpr auto NoneArchetype = Archetype::none();
 
 	// 卡片数据
-	class CardData
+	class Data
 	{
 	public:
 		using code_type = std::uint32_t;
@@ -341,7 +341,7 @@ namespace cg
 		};
 
 		using data_type = std::variant<Uninitialized, Monster, Spell, Trap>;
-		using archetypes_type = std::array<CardArchetype, max_archetype_count>;
+		using archetypes_type = std::array<Archetype, max_archetype_count>;
 
 		// 8位卡片密码(如青眼白龙是89631139)
 		code_type code;
@@ -360,12 +360,12 @@ namespace cg
 		{
 			return []<std::size_t... Index>(std::index_sequence<Index...>) noexcept -> archetypes_type
 			{
-				return {(std::ignore = Index, NoneArchetype)...};
+				return {(std::ignore = Index, NoneArchetype)...}; // NOLINT(clang-diagnostic-comma)
 			}(std::make_index_sequence<max_archetype_count>{});
 		}
 
 	public:
-		constexpr CardData() noexcept
+		constexpr Data() noexcept
 			: code{invalid_code},
 			  alias_code{invalid_code},
 			  rule_code{invalid_code},

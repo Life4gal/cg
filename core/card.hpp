@@ -1,8 +1,8 @@
 #pragma once
 
-#include <core/card_state.hpp>
+#include <core/state.hpp>
 
-namespace cg
+namespace cg::core
 {
 	class Duel;
 
@@ -19,11 +19,11 @@ namespace cg
 
 		// -- 卡片数据 --
 
-		CardData data;
+		Data data;
 
 		// -- 身份标识 --
 
-		// 实例ID
+		// 实例ID,也用于排序
 		id_type instance_id;
 		// 场地ID(反复进出场地的卡片不视为同一张卡)
 		id_type field_id;
@@ -32,11 +32,11 @@ namespace cg
 		// -- 状态 --
 
 		// 当前状态
-		CardState current;
+		State current;
 		// 上一步骤状态
-		CardState previous;
+		State previous;
 		// 临时状态(操作进行的中间状态)
-		CardState temp;
+		State temp;
 
 		explicit Card(Duel& duel) noexcept;
 	};

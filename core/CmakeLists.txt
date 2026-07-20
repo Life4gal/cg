@@ -12,8 +12,17 @@ add_library(
 	# CORE
 	# =============================
 
-	${CMAKE_CURRENT_SOURCE_DIR}/card_data.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/card_location.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/data.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/location.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/state.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/event.hpp
+
+	${CMAKE_CURRENT_SOURCE_DIR}/view.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/view.cpp
+
+	${CMAKE_CURRENT_SOURCE_DIR}/effect.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/effect.cpp
+
 	${CMAKE_CURRENT_SOURCE_DIR}/card.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/card.cpp
 )

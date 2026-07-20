@@ -2,10 +2,10 @@
 
 #include <vector>
 
-#include <core/card_data.hpp>
-#include <core/card_location.hpp>
+#include <core/data.hpp>
+#include <core/location.hpp>
 
-namespace cg
+namespace cg::core
 {
 	// 玩家
 	enum class Player : std::uint8_t
@@ -16,7 +16,7 @@ namespace cg
 	};
 
 	// 卡片状态改变原因
-	enum class CardReason : std::uint32_t
+	enum class Reason : std::uint32_t
 	{
 		RULE = 0,
 
@@ -24,16 +24,16 @@ namespace cg
 	};
 
 	class Card;
-	class CardEffect;
+	class Effect;
 
 	// 卡片瞬时状态
-	class CardState
+	class State
 	{
 	public:
-		using code_type = CardData::code_type;
+		using code_type = Data::code_type;
 
 		// 无效卡密
-		constexpr static code_type invalid_code = CardData::invalid_code;
+		constexpr static code_type invalid_code = Data::invalid_code;
 
 		class Uninitialized {};
 
@@ -86,7 +86,7 @@ namespace cg
 		};
 
 		using data_type = std::variant<Uninitialized, Monster, Spell, Trap>;
-		using archetypes_type = std::vector<CardArchetype>;
+		using archetypes_type = std::vector<Archetype>;
 
 		// 8位卡片密码,那些"卡名当作XXX"之类的效果会修改该值
 		code_type code;
@@ -101,24 +101,24 @@ namespace cg
 		// 当前控制者,可被"洗脑"之类的卡片修改
 		Player controller;
 		// 当前位置
-		CardLocation location;
+		Location location;
 
 		// 进入此状态的原因,例如被解放/被战斗破坏
-		CardReason reason;
+		Reason reason;
 		// 造成状态改变的玩家
 		Player reason_player;
 		// 造成状态改变的卡片
 		Card* reason_card;
 		// 造成状态改变的效果
-		CardEffect* reason_effect;
+		Effect* reason_effect;
 
-		constexpr CardState() noexcept
+		constexpr State() noexcept
 			: code{invalid_code},
 			  code2{invalid_code},
 			  data{Uninitialized{}},
 			  controller{Player::UNKNOWN},
 			  // location{},
-			  reason{CardReason::RULE},
+			  reason{Reason::RULE},
 			  reason_player{Player::UNKNOWN},
 			  reason_card{nullptr},
 			  reason_effect{nullptr}
