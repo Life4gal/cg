@@ -1,6 +1,8 @@
 #pragma once
 
 #include <core/state.hpp>
+#include <core/effect.hpp>
+#include <core/view.hpp>
 
 namespace cg::core
 {

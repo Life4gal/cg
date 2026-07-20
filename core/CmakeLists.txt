@@ -28,6 +28,12 @@ add_library(
 
 	${CMAKE_CURRENT_SOURCE_DIR}/card.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/card.cpp
+
+	${CMAKE_CURRENT_SOURCE_DIR}/field.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/field.cpp
+
+	${CMAKE_CURRENT_SOURCE_DIR}/duel.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/duel.cpp
 )
 
 target_include_directories(
