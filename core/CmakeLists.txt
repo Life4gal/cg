@@ -6,34 +6,16 @@ add_library(
 	# UTILITY
 	# =============================
 
-	${CMAKE_CURRENT_SOURCE_DIR}/utility/flag.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utility/enum.hpp
 			
 	# =============================
 	# CORE
 	# =============================
 
-	${CMAKE_CURRENT_SOURCE_DIR}/bridge.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/bridge.cpp
 
-	${CMAKE_CURRENT_SOURCE_DIR}/data.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/location.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/state.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/event.hpp
 
-	${CMAKE_CURRENT_SOURCE_DIR}/view.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/view.cpp
 
-	${CMAKE_CURRENT_SOURCE_DIR}/effect.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/effect.cpp
-
-	${CMAKE_CURRENT_SOURCE_DIR}/card.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/card.cpp
-
-	${CMAKE_CURRENT_SOURCE_DIR}/field.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/field.cpp
-
-	${CMAKE_CURRENT_SOURCE_DIR}/duel.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/duel.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/dummy.cpp
 )
 
 target_include_directories(
@@ -58,10 +40,3 @@ target_compile_features(
 	PRIVATE
 	cxx_std_23
 )
-
-#target_link_libraries(
-#	cg-core
-#	PRIVATE
-#	
-#	xxx
-#)
