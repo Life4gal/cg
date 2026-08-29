@@ -7,7 +7,22 @@ add_library(
 	# =============================
 
 	${CMAKE_CURRENT_SOURCE_DIR}/utility/enum.hpp
-			
+				
+	# =============================
+	# dommain
+	# =============================
+	
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/player.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/random.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/card.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/attribute.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/race.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/numeric.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/summon.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/reason.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/zone.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/turn.hpp
+
 	# =============================
 	# CORE
 	# =============================
