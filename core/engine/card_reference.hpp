@@ -29,9 +29,19 @@ namespace cg::engine
 		constexpr explicit CardOptional(Card* card) noexcept
 			: card_{card} {}
 
+		[[nodiscard]] constexpr auto get() const noexcept -> Card*
+		{
+			return card_;
+		}
+
+		[[nodiscard]] constexpr auto operator==(const Card* other) const noexcept -> bool
+		{
+			return card_ == other;
+		}
+
 		[[nodiscard]] constexpr auto operator==(const CardOptional& other) const noexcept -> bool
 		{
-			return card_ == other.card_;
+			return *this == other.card_;
 		}
 
 		// todo

@@ -16,6 +16,10 @@ namespace cg::engine
 		domain::Player controller;
 		// 当前所在区域
 		domain::Zone zone;
+		// 如果不在场上(例如卡组/额外卡组/超量素材/墓地/除外区),该卡所处下标
+		domain::zone_sequence_type zone_index;
+		// 如果在场上,所处位置
+		domain::FieldZoneSequence field_zone;
 		// 当前表示形式(仅在场上时有意义)
 		domain::FieldZoneForm form;
 
