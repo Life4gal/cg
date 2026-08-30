@@ -7,6 +7,7 @@ add_library(
 	# =============================
 
 	${CMAKE_CURRENT_SOURCE_DIR}/utility/enum.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utility/string_hash.hpp
 				
 	# =============================
 	# dommain
@@ -22,15 +23,28 @@ add_library(
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/reason.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/zone.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/turn.hpp
-
+				
 	# =============================
-	# CORE
+	# dommain
 	# =============================
 
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/series_registry.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/series_registry.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/prototype.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/prototype_registry.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/prototype_registry.cpp
 
-
-
-	${CMAKE_CURRENT_SOURCE_DIR}/dummy.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/card_reference.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/effect_reference.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/card_state.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/turn_state.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/card_order.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/card_order.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/collection.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/card.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/card.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/effect.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/effect.cpp
 )
 
 target_include_directories(
