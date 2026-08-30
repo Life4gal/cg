@@ -29,6 +29,12 @@ namespace cg::domain
 		FIELD_SPELL,
 	};
 
+	// 场上区域
+	[[nodiscard]] constexpr auto is_field_zone(const Zone zone) noexcept -> bool
+	{
+		return zone == Zone::MONSTER || zone == Zone::SPELL_TRAP || zone == Zone::PENDULUM || zone == Zone::FIELD_SPELL;
+	}
+
 	// 选卡区域
 	enum class SelectZone : std::uint16_t
 	{
@@ -129,4 +135,33 @@ namespace cg::domain
 		PENDULUM_LEFT = SPELL_TRAP_1,
 		PENDULUM_RIGHT = SPELL_TRAP_5,
 	};
+
+	// 场上区域的表示形式
+	enum class FieldZoneForm : std::uint8_t
+	{
+		FACE_UP_ATTACK,
+		FACE_DOWN_ATTACK,
+		FACE_UP_DEFENSE,
+		FACE_DOWN_DEFENSE,
+	};
+
+	[[nodiscard]] constexpr auto is_face_up_form(const FieldZoneForm form) noexcept -> bool
+	{
+		return form == FieldZoneForm::FACE_UP_ATTACK || form == FieldZoneForm::FACE_UP_DEFENSE;
+	}
+
+	[[nodiscard]] constexpr auto is_face_down_form(const FieldZoneForm form) noexcept -> bool
+	{
+		return form == FieldZoneForm::FACE_DOWN_ATTACK || form == FieldZoneForm::FACE_DOWN_DEFENSE;
+	}
+
+	[[nodiscard]] constexpr auto is_attack_form(const FieldZoneForm form) noexcept -> bool
+	{
+		return form == FieldZoneForm::FACE_UP_ATTACK || form == FieldZoneForm::FACE_DOWN_ATTACK;
+	}
+
+	[[nodiscard]] constexpr auto is_defense_form(const FieldZoneForm form) noexcept -> bool
+	{
+		return form == FieldZoneForm::FACE_UP_DEFENSE || form == FieldZoneForm::FACE_DOWN_DEFENSE;
+	}
 }
