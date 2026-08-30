@@ -45,6 +45,8 @@ add_library(
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/card.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/effect.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/effect.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/field.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/field.cpp
 )
 
 target_include_directories(

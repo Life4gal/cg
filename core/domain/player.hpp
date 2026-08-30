@@ -8,9 +8,9 @@ namespace cg::domain
 	{
 		RED = 0,
 		BLUE = 1,
-
-		COUNT = 2,
 	};
+
+	constexpr auto player_count = static_cast<std::size_t>(2);
 
 	[[nodiscard]] constexpr auto opponent_of(const Player player) noexcept -> Player
 	{

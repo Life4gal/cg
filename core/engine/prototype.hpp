@@ -21,40 +21,40 @@ namespace cg::engine
 		constexpr static series_code_type placeholder = 0;
 
 		// 卡密(卡片左下角的 8 位编号)
-		card_code_type code;
+		card_code_type code = placeholder;
 		// 规范卡密: 异画卡/同名卡指向的原卡(origin_code == 原卡)
-		card_code_type canonical_code;
+		card_code_type canonical_code = placeholder;
 		// 规则替换卡密(origin_code == 无)
-		card_code_type rule_code;
+		card_code_type rule_code = placeholder;
 
 		// 字段
 		std::array<series_code_type, max_series_count> series;
 
 		// 卡牌类型
-		domain::CardTypeWrapper card_type;
+		domain::CardTypeWrapper card_type = {domain::CardType::NONE};
 
 		// ==== 怪兽卡 ====
 
 		// 属性
-		domain::AttributeWrapper attribute;
+		domain::AttributeWrapper attribute = {domain::Attribute::EARTH};
 		// 种族
-		domain::Race race;
+		domain::Race race = domain::Race::WARRIOR;
 
 		// 等级/阶级/链接箭头
 		union
 		{
-			domain::LevelWrapper level;
+			domain::LevelWrapper level = {domain::Level::L1};
 			domain::Rank rank;
 			domain::LinkMarkerWrapper link_marker;
 		};
 
 		// 攻击力
-		domain::attack_value_type attack;
+		domain::attack_value_type attack = 0;
 		// 防御力
-		domain::defense_value_type defense;
+		domain::defense_value_type defense = 0;
 		// 灵摆刻度(如果有)
-		domain::PendulumScale left_pendulum;
-		domain::PendulumScale right_pendulum;
+		domain::PendulumScale left_pendulum = domain::PendulumScale::PS0;
+		domain::PendulumScale right_pendulum = domain::PendulumScale::PS0;
 
 		// ==== 魔法卡 ====
 

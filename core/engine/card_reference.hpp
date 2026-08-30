@@ -29,6 +29,9 @@ namespace cg::engine
 		constexpr explicit CardOptional(Card* card) noexcept
 			: card_{card} {}
 
+		constexpr explicit CardOptional(const CardReference reference) noexcept
+			: card_{&reference.get()} {}
+
 		[[nodiscard]] constexpr auto get() const noexcept -> Card*
 		{
 			return card_;

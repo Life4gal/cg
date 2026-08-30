@@ -89,6 +89,9 @@ namespace cg::domain
 		PS13 = 13,
 	};
 
+	// 生命值
+	using life_point_type = std::uint32_t;
+	using life_point_delta_type = std::int32_t;
 	// 攻击力
 	using attack_value_type = std::int32_t;
 	// 防御力

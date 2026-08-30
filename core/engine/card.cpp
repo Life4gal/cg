@@ -729,7 +729,7 @@ namespace cg::engine
 		// 将本卡作为超量素材的目标
 		material.xyz().xyz_data().overlay_target = CardOptional{&card_.get()};
 		// 将超量素材添加到超量素材列表
-		xyz_data().materials.insert(material);
+		xyz_data().materials.push_back(material);
 
 		// 设置超量素材状态
 		auto material_state = material.state();

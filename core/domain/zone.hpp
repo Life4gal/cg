@@ -13,6 +13,8 @@ namespace cg::domain
 		HAND,
 		// 怪兽区域
 		MONSTER,
+		// 额外怪兽区
+		EXTRA_MONSTER,
 		// 魔陷区域
 		SPELL_TRAP,
 		// 墓地
@@ -24,15 +26,18 @@ namespace cg::domain
 		// 超量素材
 		OVERLAY,
 		// 灵摆区域
-		PENDULUM,
+		// 移除该定义,使用Zone+FieldZoneSequence判断
+		// PENDULUM,
 		// 场地魔法区域
-		FIELD_SPELL,
+		// 移除该定义,使用Zone+FieldZoneSequence判断
+		// FIELD_SPELL,
 	};
 
 	// 场上区域
 	[[nodiscard]] constexpr auto is_field_zone(const Zone zone) noexcept -> bool
 	{
-		return zone == Zone::MONSTER || zone == Zone::SPELL_TRAP || zone == Zone::PENDULUM || zone == Zone::FIELD_SPELL;
+		// return zone == Zone::MONSTER || zone == Zone::EXTRA_MONSTER || zone == Zone::SPELL_TRAP || zone == Zone::PENDULUM || zone == Zone::FIELD_SPELL;
+		return zone == Zone::MONSTER || zone == Zone::EXTRA_MONSTER || zone == Zone::SPELL_TRAP;
 	}
 
 	// 选卡区域
@@ -46,20 +51,22 @@ namespace cg::domain
 		HAND = 1 << 1,
 		// 怪兽区域
 		MONSTER = 1 << 2,
+		// 额外怪兽区
+		EXTRA_MONSTER = 1 << 3,
 		// 魔陷区域
-		SPELL_TRAP = 1 << 3,
+		SPELL_TRAP = 1 << 4,
 		// 墓地
-		GRAVEYARD = 1 << 4,
+		GRAVEYARD = 1 << 5,
 		// 除外区
-		REMOVED = 1 << 5,
+		REMOVED = 1 << 6,
 		// 额外卡组
-		EXTRA_DECK = 1 << 6,
+		EXTRA_DECK = 1 << 7,
 		// 超量素材
-		OVERLAY = 1 << 7,
-		// 灵摆区域
-		PENDULUM = 1 << 8,
-		// 场地区域
-		FIELD_SPELL = 1 << 9,
+		OVERLAY = 1 << 8,
+		// // 灵摆区域
+		// PENDULUM = 1 << 9,
+		// // 场地区域
+		// FIELD_SPELL = 1 << 10,
 	};
 
 	class SelectZoneWrapper : public utility::Enum<
@@ -79,12 +86,14 @@ namespace cg::domain
 
 			// 怪兽区域
 			w |= SelectZone::MONSTER;
+			// 额外怪兽区
+			w |= SelectZone::EXTRA_MONSTER;
 			// 魔陷区域
 			w |= SelectZone::SPELL_TRAP;
-			// 灵摆区域(共用魔陷区域)
-			w |= SelectZone::PENDULUM;
-			// 场地魔法区域
-			w |= SelectZone::FIELD_SPELL;
+			// // 灵摆区域(共用魔陷区域)
+			// w |= SelectZone::PENDULUM;
+			// // 场地魔法区域
+			// w |= SelectZone::FIELD_SPELL;
 
 			return w;
 		}();
@@ -103,10 +112,9 @@ namespace cg::domain
 		SHUFFLE,
 	};
 
-	// 区域内的位置序号
+	// 非场上区域的位置序号
 	using zone_sequence_type = std::uint8_t;
 
-	// 场上区域的位置序号
 	enum class FieldZoneSequence : zone_sequence_type
 	{
 		// 怪兽区域
@@ -115,11 +123,8 @@ namespace cg::domain
 		MONSTER_MAIN_3 = 2,
 		MONSTER_MAIN_4 = 3,
 		MONSTER_MAIN_5 = 4,
-		MONSTER_EXTRA_1 = 5,
-		MONSTER_EXTRA_2 = 6,
-
-		MONSTER_MAIN_COUNT = 5,
-		MONSTER_EXTRA_COUNT = 2,
+		MONSTER_EXTRA_1 = 0,
+		MONSTER_EXTRA_2 = 1,
 
 		// 魔陷区域
 		SPELL_TRAP_1 = 0,
@@ -128,13 +133,13 @@ namespace cg::domain
 		SPELL_TRAP_4 = 3,
 		SPELL_TRAP_5 = 4,
 		SPELL_TRAP_FIELD_SPELL = 5,
-
-		SPELL_TRAP_COUNT = 6,
-
-		// 灵摆区域(共用魔陷区域)
 		PENDULUM_LEFT = SPELL_TRAP_1,
 		PENDULUM_RIGHT = SPELL_TRAP_5,
 	};
+
+	constexpr auto field_monster_main_count = static_cast<std::size_t>(5);
+	constexpr auto field_monster_extra_count = static_cast<std::size_t>(2);
+	constexpr auto field_spell_trap_count = static_cast<std::size_t>(6);
 
 	// 场上区域的表示形式
 	enum class FieldZoneForm : std::uint8_t

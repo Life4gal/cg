@@ -12,15 +12,17 @@ namespace cg::domain
 		FOUR = 4,
 		FIVE = 5,
 		SIX = 6,
-
-		COUNT = 6,
 	};
+
+	constexpr auto dice_min_value = DiceValue::ONE;
+	constexpr auto dice_max_value = DiceValue::SIX;
 
 	enum class CoinSide : std::uint8_t
 	{
 		HEADS = 0,
 		TAILS = 1,
-
-		COUNT = 2,
 	};
+
+	constexpr auto coin_min_value = CoinSide::HEADS;
+	constexpr auto coin_max_value = CoinSide::TAILS;
 }

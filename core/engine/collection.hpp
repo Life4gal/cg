@@ -25,22 +25,22 @@ namespace cg::engine
 	private:
 		container_type cards_;
 
-		constexpr explicit Group(container_type cards) noexcept
+		explicit Group(container_type cards) noexcept
 			: cards_{std::move(cards)} {}
 
 	public:
-		constexpr Group() noexcept = default;
+		Group() noexcept = default;
 
 		// -------------------------------------------------
 		// 容器大小
 		// -------------------------------------------------
 
-		[[nodiscard]] constexpr auto empty() const noexcept -> bool
+		[[nodiscard]] auto empty() const noexcept -> bool
 		{
 			return cards_.empty();
 		}
 
-		[[nodiscard]] constexpr auto size() const noexcept -> size_type
+		[[nodiscard]] auto size() const noexcept -> size_type
 		{
 			return cards_.size();
 		}
@@ -49,27 +49,27 @@ namespace cg::engine
 		// 遍历容器
 		// -------------------------------------------------
 
-		[[nodiscard]] constexpr auto begin() noexcept -> iterator
+		[[nodiscard]] auto begin() noexcept -> iterator
 		{
 			return cards_.begin();
 		}
 
-		[[nodiscard]] constexpr auto begin() const noexcept -> const_iterator
+		[[nodiscard]] auto begin() const noexcept -> const_iterator
 		{
 			return cards_.begin();
 		}
 
-		[[nodiscard]] constexpr auto end() noexcept -> iterator
+		[[nodiscard]] auto end() noexcept -> iterator
 		{
 			return cards_.end();
 		}
 
-		[[nodiscard]] constexpr auto end() const noexcept -> const_iterator
+		[[nodiscard]] auto end() const noexcept -> const_iterator
 		{
 			return cards_.end();
 		}
 
-		[[nodiscard]] constexpr auto contains(const Card& card) const noexcept -> bool
+		[[nodiscard]] auto contains(const Card& card) const noexcept -> bool
 		{
 			return cards_.contains(const_cast<Card&>(card));
 		}
@@ -78,30 +78,30 @@ namespace cg::engine
 		// 修改容器
 		// -------------------------------------------------
 
-		constexpr auto reserve(const size_type capacity) noexcept -> void
+		auto reserve(const size_type capacity) noexcept -> void
 		{
 			std::ignore = this;
 			std::ignore = capacity;
 		}
 
-		constexpr auto insert(Card& card) noexcept -> bool
+		auto insert(Card& card) noexcept -> bool
 		{
 			return cards_.insert(card).second;
 		}
 
 		template<typename Range>
-		constexpr auto insert(Range&& range) noexcept -> auto //
+		auto insert(Range&& range) noexcept -> auto //
 			requires requires { cards_.insert_range(std::forward<Range>(range)); }
 		{
 			return cards_.insert_range(std::forward<Range>(range));
 		}
 
-		constexpr auto erase(const Card& card) noexcept -> bool
+		auto erase(const Card& card) noexcept -> bool
 		{
 			return cards_.erase(const_cast<Card&>(card)) != 0;
 		}
 
-		constexpr auto clear() noexcept -> void
+		auto clear() noexcept -> void
 		{
 			cards_.clear();
 		}
@@ -111,7 +111,7 @@ namespace cg::engine
 		// -------------------------------------------------
 
 		// 获取前N张卡片的子视图
-		[[nodiscard]] constexpr auto select(const size_type count) const noexcept -> Group
+		[[nodiscard]] auto select(const size_type count) const noexcept -> Group
 		{
 			auto result = cards_ | std::views::take(count) | std::ranges::to<container_type>();
 
@@ -125,7 +125,7 @@ namespace cg::engine
 		// 获取所有满足条件的卡片的子视图
 		template<typename Predicate>
 			requires std::predicate<Predicate, const Card&>
-		[[nodiscard]] constexpr auto filter(Predicate predicate) const noexcept -> Group
+		[[nodiscard]] auto filter(Predicate predicate) const noexcept -> Group
 		{
 			auto result = cards_ | std::views::filter(predicate) | std::ranges::to<container_type>();
 
@@ -135,7 +135,7 @@ namespace cg::engine
 		// 获取所有满足条件的卡片的数量
 		template<typename Predicate>
 			requires std::predicate<Predicate, const Card&>
-		[[nodiscard]] constexpr auto filter_count(Predicate predicate) const noexcept -> size_type
+		[[nodiscard]] auto filter_count(Predicate predicate) const noexcept -> size_type
 		{
 			return std::ranges::count_if(cards_, predicate);
 		}
@@ -143,7 +143,7 @@ namespace cg::engine
 		// 检查是否有满足条件的卡片
 		template<typename Predicate>
 			requires std::predicate<Predicate, const Card&>
-		[[nodiscard]] constexpr auto filter_exists(Predicate predicate) const noexcept -> bool
+		[[nodiscard]] auto filter_exists(Predicate predicate) const noexcept -> bool
 		{
 			return cards_ | std::ranges::any_of(predicate);
 		}
@@ -151,7 +151,7 @@ namespace cg::engine
 		// 获取第一张满足条件的卡片
 		template<typename Predicate>
 			requires std::predicate<Predicate, const Card&>
-		[[nodiscard]] constexpr auto filter_first(Predicate predicate) const noexcept -> const Card*
+		[[nodiscard]] auto filter_first(Predicate predicate) const noexcept -> const Card*
 		{
 			const auto it = cards_ | std::ranges::find_if(predicate);
 
@@ -234,6 +234,16 @@ namespace cg::engine
 			);
 		}
 
+		[[nodiscard]] constexpr auto front() const noexcept -> CardReference
+		{
+			return cards_.front();
+		}
+
+		[[nodiscard]] constexpr auto back() const noexcept -> CardReference
+		{
+			return cards_.back();
+		}
+
 		// -------------------------------------------------
 		// 修改容器
 		// -------------------------------------------------
@@ -243,17 +253,21 @@ namespace cg::engine
 			cards_.reserve(capacity);
 		}
 
-		constexpr auto insert(Card& card) noexcept -> bool
+		constexpr auto push_back(Card& card) noexcept -> void
 		{
 			cards_.emplace_back(card);
-			return true;
+		}
+
+		constexpr auto pop_back() noexcept -> void
+		{
+			cards_.pop_back();
 		}
 
 		template<typename Range>
-		constexpr auto insert(Range&& range) noexcept -> auto //
-			requires requires { cards_.insert_range(std::forward<Range>(range)); }
+		constexpr auto append(Range&& range) noexcept -> auto //
+			requires requires { cards_.append_range(std::forward<Range>(range)); }
 		{
-			return cards_.insert_range(std::forward<Range>(range));
+			return cards_.append_range(std::forward<Range>(range));
 		}
 
 		constexpr auto erase(const Card& card) noexcept -> bool
@@ -351,6 +365,11 @@ namespace cg::engine
 		container_type cards_;
 
 	public:
+		constexpr View() noexcept = default;
+
+		constexpr explicit View(container_type view) noexcept
+			: cards_{std::move(view)} {}
+
 		constexpr explicit View(const Group& group) noexcept
 			: cards_{group.begin(), group.end()} {}
 
