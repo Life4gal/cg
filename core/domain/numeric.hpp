@@ -49,6 +49,27 @@ namespace cg::domain
 		R13 = 13,
 	};
 
+	// 连接箭头
+	enum class LinkMarker : std::uint8_t
+	{
+		TOP_LEFT = 1 << 0,
+		TOP = 1 << 1,
+		TOP_RIGHT = 1 << 2,
+
+		LEFT = 1 << 3,
+		RIGHT = 1 << 4,
+
+		BOTTOM_LEFT = 1 << 5,
+		BOTTOM = 1 << 6,
+		BOTTOM_RIGHT = 1 << 7,
+	};
+
+	class LinkMarkerWrapper : public utility::Enum<
+				LinkMarker,
+				// &, &=, |, |=, ^, ^=, ~
+				utility::EnumSupport::BIT_OPERATION
+			> {};
+
 	// 灵摆刻度
 	enum class PendulumScale : std::uint8_t
 	{
