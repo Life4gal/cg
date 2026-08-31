@@ -1,31 +1,22 @@
 #include <core/engine/prototype_registry.hpp>
 
-#include <unordered_map>
-
-namespace
-{
-	using namespace cg;
-
-	std::unordered_map<domain::CardCode, engine::Prototype> g_registered_prototype;
-}
-
 namespace cg::engine
 {
 	auto PrototypeRegistry::register_prototype(const Prototype& prototype) noexcept -> void
 	{
-		g_registered_prototype[prototype.code] = prototype;
+		registered_prototype_[prototype.code] = prototype;
 	}
 
-	auto PrototypeRegistry::registered(const domain::CardCode code) noexcept -> bool
+	auto PrototypeRegistry::registered(const domain::CardCode code) const noexcept -> bool
 	{
-		return g_registered_prototype.contains(code);
+		return registered_prototype_.contains(code);
 	}
 
-	auto PrototypeRegistry::find_prototype(const domain::CardCode code) noexcept -> const Prototype*
+	auto PrototypeRegistry::find_prototype(const domain::CardCode code) const noexcept -> const Prototype*
 	{
-		const auto it = g_registered_prototype.find(code);
+		const auto it = registered_prototype_.find(code);
 
-		if (it != g_registered_prototype.end())
+		if (it != registered_prototype_.end())
 		{
 			return &it->second;
 		}
@@ -33,13 +24,13 @@ namespace cg::engine
 		return nullptr;
 	}
 
-	auto PrototypeRegistry::size() noexcept -> std::size_t
+	auto PrototypeRegistry::size() const noexcept -> std::size_t
 	{
-		return g_registered_prototype.size();
+		return registered_prototype_.size();
 	}
 
 	auto PrototypeRegistry::clear() noexcept -> void
 	{
-		g_registered_prototype.clear();
+		registered_prototype_.clear();
 	}
 }
