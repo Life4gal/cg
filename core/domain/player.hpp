@@ -6,8 +6,8 @@ namespace cg::domain
 {
 	enum class Player : std::uint8_t
 	{
-		RED = 0,
-		BLUE = 1,
+		FIRST = 0,
+		SECOND = 1,
 	};
 
 	constexpr auto player_count = static_cast<std::size_t>(2);

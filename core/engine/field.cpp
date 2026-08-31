@@ -4,9 +4,37 @@
 #include <limits>
 
 #include <core/engine/card.hpp>
+#include <core/engine/duel.hpp>
+
+namespace
+{
+	using namespace cg;
+
+	[[nodiscard]] constexpr auto default_player_field() noexcept -> engine::PlayerField
+	{
+		return
+		{
+				.life_point = 8000,
+				.start_hand = 5,
+				.draw_count = 1,
+				.deck = {},
+				.extra_deck = {},
+				.hand = {},
+				.graveyard = {},
+				.removed = {},
+				.monster = {},
+				.spell_trap = {},
+		};
+	}
+}
 
 namespace cg::engine
 {
+	auto Field::duel() const noexcept -> Duel&
+	{
+		return duel_.get();
+	}
+
 	Field::PlaygroundHandler::PlaygroundHandler(Field& field) noexcept
 		: field_{field} {}
 
@@ -93,6 +121,11 @@ namespace cg::engine
 		}
 	}
 
+	auto Field::PlaygroundHandler::start_draw(const domain::Player player) noexcept -> void
+	{
+		draw(player, start_hand(player));
+	}
+
 	auto Field::PlaygroundHandler::draw(const domain::Player player, const domain::zone_sequence_type count) noexcept -> void
 	{
 		auto& pf = player_field(player);
@@ -132,11 +165,10 @@ namespace cg::engine
 
 	auto Field::PlaygroundHandler::shuffle_deck(const domain::Player player) noexcept -> void
 	{
+		const auto& duel = field_.get().duel();
 		auto& pf = player_field(player);
 
-		// todo: 随机数引擎
-		// std::ranges::shuffle(pf.deck, );
-		std::ignore = pf.deck;
+		std::ranges::shuffle(pf.deck, duel.random());
 
 		// todo: 广播洗牌
 	}
@@ -161,22 +193,20 @@ namespace cg::engine
 
 	auto Field::PlaygroundHandler::shuffle_extra_deck(const domain::Player player) noexcept -> void
 	{
+		const auto& duel = field_.get().duel();
 		auto& pf = player_field(player);
 
-		// todo: 随机数引擎
-		// std::ranges::shuffle(pf.extra_deck, );
-		std::ignore = pf.extra_deck;
+		std::ranges::shuffle(pf.extra_deck, duel.random());
 
 		// todo: 广播洗牌
 	}
 
 	auto Field::PlaygroundHandler::shuffle_hand(const domain::Player player) noexcept -> void
 	{
+		const auto& duel = field_.get().duel();
 		auto& pf = player_field(player);
 
-		// todo: 随机数引擎
-		// std::ranges::shuffle(pf.hand, );
-		std::ignore = pf.hand;
+		std::ranges::shuffle(pf.hand, duel.random());
 
 		// todo: 广播洗牌
 	}
@@ -554,17 +584,25 @@ namespace cg::engine
 
 	auto Field::RandomHandler::toss_dice(const domain::Player player, const std::size_t count) noexcept -> void
 	{
-		auto& r = random_data();
+		const auto& duel = field_.get().duel();
+		auto& dice_results = random_data().dice_results;
 
-		r.dice_results.clear();
-		r.dice_results.reserve(count);
+		dice_results.clear();
+		dice_results.reserve(count);
 
 		// todo: 随机数引擎
 		for (std::size_t i = 0; i < count; ++i)
 		{
-			// todo: 效果替换?
-			// const auto value = random(domain::dice_min_value, domain::dice_max_value);
-			// r.dice_results.push_back(static_cast<domain::DiceValue>(value));
+			// // todo: 效果替换?
+			// if (replaced)
+			// {
+			// 	//
+			// }
+			// else
+			// {
+			const auto value = duel.random().int_inclusive(static_cast<std::uint32_t>(domain::dice_min_value), domain::dice_max_value);
+			dice_results.push_back(static_cast<domain::DiceValue>(value));
+			// }
 		}
 
 		// todo: 广播掷骰子
@@ -572,17 +610,25 @@ namespace cg::engine
 
 	auto Field::RandomHandler::toss_coin(const domain::Player player, const std::size_t count) noexcept -> void
 	{
-		auto& r = random_data();
+		const auto& duel = field_.get().duel();
+		auto& coin_results = random_data().coin_results;
 
-		r.coin_results.clear();
-		r.coin_results.reserve(count);
+		coin_results.clear();
+		coin_results.reserve(count);
 
 		// todo: 随机数引擎
 		for (std::size_t i = 0; i < count; ++i)
 		{
-			// todo: 效果替换?
-			// const auto value = random(domain::coin_min_value, domain::coin_max_value);
-			// r.coin_results.push_back(static_cast<domain::CoinSide>(value));
+			// // todo: 效果替换?
+			// if (replaced)
+			// {
+			// 	//
+			// }
+			// else
+			// {
+			const auto value = duel.random().int_inclusive(static_cast<std::uint32_t>(domain::coin_min_value), domain::coin_max_value);
+			coin_results.push_back(static_cast<domain::CoinSide>(value));
+			// }
 		}
 
 		// todo: 广播掷硬币
@@ -598,6 +644,195 @@ namespace cg::engine
 		return random_data().coin_results;
 	}
 
+	Field::TurnHandler::TurnHandler(Field& field) noexcept
+		: field_{field} {}
+
+	auto Field::TurnHandler::turn_data() noexcept -> Turn&
+	{
+		return field_.get().turn_;
+	}
+
+	auto Field::TurnHandler::turn_data() const noexcept -> const Turn&
+	{
+		return field_.get().turn_;
+	}
+
+	auto Field::TurnHandler::set_turn_id(const domain::TurnId id) noexcept -> void
+	{
+		turn_data().id = id;
+	}
+
+	auto Field::TurnHandler::set_phase(const domain::Phase phase) noexcept -> void
+	{
+		turn_data().phase = phase;
+	}
+
+	auto Field::TurnHandler::set_turn_phase(const domain::TurnPhase turn_phase) noexcept -> void
+	{
+		turn_data().phase.turn = turn_phase;
+	}
+
+	auto Field::TurnHandler::set_battle_step(const domain::BattleStep battle_step) noexcept -> void
+	{
+		turn_data().phase.battle = battle_step;
+	}
+
+	auto Field::TurnHandler::set_damage_step(const domain::DamageStep damage_step) noexcept -> void
+	{
+		turn_data().phase.damage = damage_step;
+	}
+
+	auto Field::TurnHandler::set_player(const domain::Player player) noexcept -> void
+	{
+		turn_data().player = player;
+	}
+
+	auto Field::TurnHandler::set_can_battle(const bool can_battle) noexcept -> void
+	{
+		turn_data().can_battle = can_battle;
+	}
+
+	auto Field::TurnHandler::set_can_normal_summon(const bool can_normal_summon) noexcept -> void
+	{
+		turn_data().can_normal_summon = can_normal_summon;
+	}
+
+	auto Field::TurnHandler::set_can_special_summon(const bool can_special_summon) noexcept -> void
+	{
+		turn_data().can_special_summon = can_special_summon;
+	}
+
+	auto Field::TurnHandler::turn_id() const noexcept -> domain::TurnId
+	{
+		return turn_data().id;
+	}
+
+	auto Field::TurnHandler::phase() const noexcept -> domain::Phase
+	{
+		return turn_data().phase;
+	}
+
+	auto Field::TurnHandler::turn_phase() const noexcept -> domain::TurnPhase
+	{
+		return phase().turn;
+	}
+
+	auto Field::TurnHandler::battle_step() const noexcept -> domain::BattleStep
+	{
+		return phase().battle;
+	}
+
+	auto Field::TurnHandler::damage_step() const noexcept -> domain::DamageStep
+	{
+		return phase().damage;
+	}
+
+	auto Field::TurnHandler::can_battle() const noexcept -> bool
+	{
+		return turn_data().can_battle;
+	}
+
+	auto Field::TurnHandler::can_normal_summon() const noexcept -> bool
+	{
+		return turn_data().can_normal_summon;
+	}
+
+	auto Field::TurnHandler::can_special_summon() const noexcept -> bool
+	{
+		return turn_data().can_special_summon;
+	}
+
+	auto Field::TurnHandler::is_turn_id(const domain::TurnId expected_id) const noexcept -> bool
+	{
+		return turn_id() == expected_id;
+	}
+
+	auto Field::TurnHandler::is_phase(const domain::Phase expected_phase) const noexcept -> bool
+	{
+		return phase() == expected_phase;
+	}
+
+	auto Field::TurnHandler::is_turn_phase(const domain::TurnPhase expected_turn_phase) const noexcept -> bool
+	{
+		return phase().turn == expected_turn_phase;
+	}
+
+	auto Field::TurnHandler::is_battle_step(const domain::BattleStep expected_battle_step) const noexcept -> bool
+	{
+		return phase().battle == expected_battle_step;
+	}
+
+	auto Field::TurnHandler::is_damage_step(const domain::DamageStep expected_damage_step) const noexcept -> bool
+	{
+		return phase().damage == expected_damage_step;
+	}
+
+	auto Field::TurnHandler::new_turn(const domain::Player player) noexcept -> void
+	{
+		// todo: 回合结束处理?
+
+		const auto current_turn_id = turn_id();
+		const auto next_turn_id = static_cast<domain::TurnId>(std::to_underlying(current_turn_id) + 1);
+
+		// 设置回合ID
+		set_turn_id(next_turn_id);
+		// 设置当前阶段
+		set_turn_phase(domain::TurnPhase::DRAW);
+		set_battle_step(domain::BattleStep::START);
+		set_damage_step(domain::DamageStep::START);
+		// 设置回合玩家
+		set_player(player);
+		// 设置允许攻击
+		set_can_battle(true);
+		// 设置可以通常召唤
+		set_can_normal_summon(true);
+		// 设置可以特殊召唤
+		set_can_special_summon(true);
+
+		// todo: 广播抽卡阶段开始
+	}
+
+	auto Field::TurnHandler::advance_phase(const domain::TurnPhase turn_phase) noexcept -> void
+	{
+		// 设置当前阶段
+		set_turn_phase(turn_phase);
+		set_battle_step(domain::BattleStep::START);
+		set_damage_step(domain::DamageStep::START);
+
+		// todo: 广播指定阶段开始
+	}
+
+	Field::Field(Duel& duel) noexcept
+		: duel_{duel},
+		  playground_
+		  {
+				  .player_fields =
+				  {
+						  default_player_field(),
+						  default_player_field(),
+				  },
+				  .shared_extra_monster_field = {},
+		  },
+		  random_
+		  {
+				  .dice_results = {},
+				  .coin_results = {},
+		  },
+		  turn_
+		  {
+				  .id = static_cast<domain::TurnId>(0),
+				  .phase =
+				  {
+						  .turn = domain::TurnPhase::DRAW,
+						  .battle = domain::BattleStep::START,
+						  .damage = domain::DamageStep::START
+				  },
+				  .player = domain::Player::FIRST,
+				  .can_battle = false,
+				  .can_normal_summon = false,
+				  .can_special_summon = false,
+		  } {}
+
 	auto Field::playground() noexcept -> PlaygroundHandler
 	{
 		return PlaygroundHandler{*this};
@@ -606,5 +841,10 @@ namespace cg::engine
 	auto Field::random() noexcept -> RandomHandler
 	{
 		return RandomHandler{*this};
+	}
+
+	auto Field::turn() noexcept -> TurnHandler
+	{
+		return TurnHandler{*this};
 	}
 }

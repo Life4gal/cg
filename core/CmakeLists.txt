@@ -49,6 +49,19 @@ add_library(
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/effect.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/field.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/field.cpp
+
+	
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/api.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/api.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/duel.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/duel.cpp
+				
+	# =============================
+	# script
+	# =============================
+
+	${CMAKE_CURRENT_SOURCE_DIR}/script/host.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/script/host.cpp
 )
 
 target_include_directories(

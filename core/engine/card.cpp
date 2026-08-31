@@ -921,12 +921,12 @@ namespace cg::engine
 		  prototype_{prototype},
 		  state_
 		  {
-				  .controller = domain::Player::RED,
+				  .controller = domain::Player::FIRST,
 				  .zone = domain::Zone::DECK,
 				  .zone_index = 0,
 				  .field_zone = domain::FieldZoneSequence::MONSTER_MAIN_1,
 				  .form = domain::FieldZoneForm::FACE_UP_ATTACK,
-				  .reason_player = domain::Player::RED,
+				  .reason_player = domain::Player::FIRST,
 				  .reason_card = CardOptional{},
 				  .reason_effect = EffectOptional{},
 				  .reason = {domain::Reason::NORMAL_SUMMON},
@@ -935,7 +935,7 @@ namespace cg::engine
 		  {
 				  .kind = domain::SummonKind::NORMAL,
 				  .from_zone = domain::Zone::DECK,
-				  .player = domain::Player::RED,
+				  .player = domain::Player::FIRST,
 				  .turn_id = static_cast<domain::TurnId>(0),
 				  .materials = {},
 		  },

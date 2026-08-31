@@ -14,8 +14,8 @@ namespace cg::domain
 		SIX = 6,
 	};
 
-	constexpr auto dice_min_value = DiceValue::ONE;
-	constexpr auto dice_max_value = DiceValue::SIX;
+	constexpr auto dice_min_value = static_cast<std::underlying_type_t<DiceValue>>(DiceValue::ONE);
+	constexpr auto dice_max_value = static_cast<std::underlying_type_t<DiceValue>>(DiceValue::SIX);
 
 	enum class CoinSide : std::uint8_t
 	{
@@ -23,6 +23,6 @@ namespace cg::domain
 		TAILS = 1,
 	};
 
-	constexpr auto coin_min_value = CoinSide::HEADS;
-	constexpr auto coin_max_value = CoinSide::TAILS;
+	constexpr auto coin_min_value = static_cast<std::underlying_type_t<CoinSide>>(CoinSide::HEADS);
+	constexpr auto coin_max_value = static_cast<std::underlying_type_t<CoinSide>>(CoinSide::TAILS);
 }

@@ -4,6 +4,9 @@
 
 namespace cg::domain
 {
+	// 回合ID(第几回合)
+	enum class TurnId : std::uint32_t {};
+
 	// 回合阶段
 	enum class TurnPhase : std::uint8_t
 	{
@@ -61,5 +64,7 @@ namespace cg::domain
 		{
 			return turn == TurnPhase::MAIN1 || turn == TurnPhase::MAIN2;
 		}
+
+		[[nodiscard]] constexpr auto operator==(const Phase& other) const noexcept -> bool = default;
 	};
 }

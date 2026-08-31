@@ -9,7 +9,4 @@ namespace cg::domain
 
 	// 效果实例ID
 	enum class EffectInstanceId : std::uint64_t {};
-
-	// 回合ID
-	enum class TurnId : std::uint32_t {};
 }
