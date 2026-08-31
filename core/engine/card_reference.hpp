@@ -4,8 +4,6 @@
 
 namespace cg::engine
 {
-	using card_instance_id_type = std::uint64_t;
-
 	class Card;
 
 	class CardReference : public std::reference_wrapper<Card>

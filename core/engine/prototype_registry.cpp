@@ -6,7 +6,7 @@ namespace
 {
 	using namespace cg;
 
-	std::unordered_map<engine::card_code_type, engine::Prototype> g_registered_prototype;
+	std::unordered_map<domain::CardCode, engine::Prototype> g_registered_prototype;
 }
 
 namespace cg::engine
@@ -16,12 +16,12 @@ namespace cg::engine
 		g_registered_prototype[prototype.code] = prototype;
 	}
 
-	auto PrototypeRegistry::registered(const card_code_type code) noexcept -> bool
+	auto PrototypeRegistry::registered(const domain::CardCode code) noexcept -> bool
 	{
 		return g_registered_prototype.contains(code);
 	}
 
-	auto PrototypeRegistry::find_prototype(const card_code_type code) noexcept -> const Prototype*
+	auto PrototypeRegistry::find_prototype(const domain::CardCode code) noexcept -> const Prototype*
 	{
 		const auto it = g_registered_prototype.find(code);
 

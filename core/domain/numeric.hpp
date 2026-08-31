@@ -89,16 +89,15 @@ namespace cg::domain
 		PS13 = 13,
 	};
 
-	// 生命值
+	// 生命值(不允许负数,但是设置为有符号类型可以简化计算)
 	using life_point_type = std::uint32_t;
-	using life_point_delta_type = std::int32_t;
-	// 攻击力
+	// 攻击力(不允许负数,但是设置为有符号类型可以简化计算)
 	using attack_value_type = std::int32_t;
-	// 防御力
+	// 防御力(不允许负数,但是设置为有符号类型可以简化计算)
 	using defense_value_type = std::int32_t;
 
 	// 未知攻击力(?)
-	constexpr static attack_value_type unknown_attack_value = -1;
+	constexpr attack_value_type unknown_attack_value = -1;
 	// 位置防御力(?)
-	constexpr static defense_value_type unknown_defense_value = -1;
+	constexpr defense_value_type unknown_defense_value = -1;
 }

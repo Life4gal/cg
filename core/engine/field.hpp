@@ -99,7 +99,7 @@ namespace cg::engine
 			[[nodiscard]] auto draw_count(domain::Player player) const noexcept -> domain::zone_sequence_type;
 
 			// 改变生命值
-			auto update_life_point(domain::Player player, domain::life_point_delta_type delta) noexcept -> void;
+			auto update_life_point(domain::Player player, domain::life_point_type delta) noexcept -> void;
 
 			// 从卡组抽牌
 			auto draw(domain::Player player, domain::zone_sequence_type count) noexcept -> void;

@@ -2,7 +2,7 @@
 
 namespace cg::engine
 {
-	auto Effect::instance_id() const noexcept -> effect_instance_id_type
+	auto Effect::instance_id() const noexcept -> domain::EffectInstanceId
 	{
 		return instance_id_;
 	}

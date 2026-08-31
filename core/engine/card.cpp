@@ -10,17 +10,17 @@ namespace cg::engine
 		return card_.get().prototype_.get();
 	}
 
-	auto Card::PrototypeHandler::code() const noexcept -> card_code_type
+	auto Card::PrototypeHandler::code() const noexcept -> domain::CardCode
 	{
 		return prototype_data().code;
 	}
 
-	auto Card::PrototypeHandler::code_rule() const noexcept -> card_code_type
+	auto Card::PrototypeHandler::code_rule() const noexcept -> domain::CardCode
 	{
 		return prototype_data().duel_code();
 	}
 
-	auto Card::PrototypeHandler::series() const noexcept -> std::array<series_code_type, Prototype::max_series_count>
+	auto Card::PrototypeHandler::series() const noexcept -> std::array<domain::SeriesCode, Prototype::max_series_count>
 	{
 		return prototype_data().series;
 	}
@@ -472,9 +472,9 @@ namespace cg::engine
 		summon_data().player = player;
 	}
 
-	auto Card::SummonHandler::set_turn_index(const turn_index_type turn_index) noexcept -> void
+	auto Card::SummonHandler::set_turn_id(const domain::TurnId turn_id) noexcept -> void
 	{
-		summon_data().turn_index = turn_index;
+		summon_data().turn_id = turn_id;
 	}
 
 	auto Card::SummonHandler::set_materials(Group group) noexcept -> void
@@ -497,9 +497,9 @@ namespace cg::engine
 		return summon_data().player;
 	}
 
-	auto Card::SummonHandler::turn_index() const noexcept -> turn_index_type
+	auto Card::SummonHandler::turn_id() const noexcept -> domain::TurnId
 	{
-		return summon_data().turn_index;
+		return summon_data().turn_id;
 	}
 
 	auto Card::SummonHandler::materials() const noexcept -> View
@@ -522,9 +522,9 @@ namespace cg::engine
 		return player() == expected_player;
 	}
 
-	auto Card::SummonHandler::is_turn_index(const turn_index_type expected_turn_index) const noexcept -> bool
+	auto Card::SummonHandler::is_turn_id(const domain::TurnId expected_turn_id) const noexcept -> bool
 	{
-		return turn_index() == expected_turn_index;
+		return turn_id() == expected_turn_id;
 	}
 
 	auto Card::SummonHandler::has_material(const Card& card) const noexcept -> bool
@@ -556,7 +556,7 @@ namespace cg::engine
 
 		bi.attack_announced_count += 1;
 		// todo: 获取当前回合号
-		bi.attack_turn_index = 0;
+		bi.attack_turn_id = static_cast<domain::TurnId>(0);
 	}
 
 	auto Card::BattleHandler::record_attack_canceled() noexcept -> void
@@ -564,7 +564,7 @@ namespace cg::engine
 		auto& bi = battle_data();
 
 		// todo: 获取当前回合号
-		bi.attack_canceled_turn_index = 0;
+		bi.attack_canceled_turn_id = static_cast<domain::TurnId>(0);
 	}
 
 	auto Card::BattleHandler::record_attacked_card(Card& card) noexcept -> void
@@ -591,26 +591,26 @@ namespace cg::engine
 		return battle_data().attack_announced_count;
 	}
 
-	auto Card::BattleHandler::attack_turn_index() const noexcept -> turn_index_type
+	auto Card::BattleHandler::attack_turn_id() const noexcept -> domain::TurnId
 	{
-		return battle_data().attack_turn_index;
+		return battle_data().attack_turn_id;
 	}
 
-	auto Card::BattleHandler::attack_canceled_turn_index() const noexcept -> turn_index_type
+	auto Card::BattleHandler::attack_canceled_turn_id() const noexcept -> domain::TurnId
 	{
-		return battle_data().attack_canceled_turn_index;
+		return battle_data().attack_canceled_turn_id;
 	}
 
 	auto Card::BattleHandler::is_attacked_this_turn() const noexcept -> bool
 	{
 		// todo: 获取当前回合号
-		return attack_turn_index() == 0;
+		return attack_turn_id() == static_cast<domain::TurnId>(0);
 	}
 
 	auto Card::BattleHandler::is_attack_canceled_this_turn() const noexcept -> bool
 	{
 		// todo: 获取当前回合号
-		return attack_canceled_turn_index() == 0;
+		return attack_canceled_turn_id() == static_cast<domain::TurnId>(0);
 	}
 
 	Card::TargetHandler::TargetHandler(Card& card) noexcept
@@ -915,7 +915,7 @@ namespace cg::engine
 		return true;
 	}
 
-	Card::Card(Duel& duel, const card_instance_id_type instance_id, const Prototype& prototype) noexcept
+	Card::Card(Duel& duel, const domain::CardInstanceId instance_id, const Prototype& prototype) noexcept
 		: duel_{duel},
 		  instance_id_{instance_id},
 		  prototype_{prototype},
@@ -936,7 +936,7 @@ namespace cg::engine
 				  .kind = domain::SummonKind::NORMAL,
 				  .from_zone = domain::Zone::DECK,
 				  .player = domain::Player::RED,
-				  .turn_index = 0,
+				  .turn_id = static_cast<domain::TurnId>(0),
 				  .materials = {},
 		  },
 		  battle_
@@ -945,8 +945,8 @@ namespace cg::engine
 				  .battled_cards = {},
 				  .attacked_count = 0,
 				  .attack_announced_count = 0,
-				  .attack_turn_index = 0,
-				  .attack_canceled_turn_index = 0,
+				  .attack_turn_id = static_cast<domain::TurnId>(0),
+				  .attack_canceled_turn_id = static_cast<domain::TurnId>(0),
 		  },
 		  target_
 		  {
@@ -967,7 +967,7 @@ namespace cg::engine
 		//
 	}
 
-	auto Card::instance_id() const noexcept -> card_instance_id_type
+	auto Card::instance_id() const noexcept -> domain::CardInstanceId
 	{
 		return instance_id_;
 	}

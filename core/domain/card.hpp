@@ -4,6 +4,13 @@
 
 namespace cg::domain
 {
+	// 卡密代码
+	enum class CardCode : std::uint32_t {};
+
+	// 字段代码
+	enum class SeriesCode : std::uint32_t {};
+
+	// 卡片类型
 	enum class CardType : std::uint32_t
 	{
 		NONE = 0,

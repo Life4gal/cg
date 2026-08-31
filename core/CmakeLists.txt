@@ -23,6 +23,7 @@ add_library(
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/reason.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/zone.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/turn.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/id.hpp
 				
 	# =============================
 	# dommain

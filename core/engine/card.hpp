@@ -34,7 +34,7 @@ namespace cg::engine
 			// 召唤的玩家
 			domain::Player player;
 			// 召唤的回合
-			turn_index_type turn_index;
+			domain::TurnId turn_id;
 			// 召唤使用的材料
 			Group materials;
 		};
@@ -51,9 +51,9 @@ namespace cg::engine
 			// 攻击宣言过的次数
 			std::size_t attack_announced_count;
 			// 上一次攻击的回合号
-			turn_index_type attack_turn_index;
+			domain::TurnId attack_turn_id;
 			// 上一次攻击被无效的回合号
-			turn_index_type attack_canceled_turn_index;
+			domain::TurnId attack_canceled_turn_id;
 		};
 
 		class Target
@@ -86,7 +86,7 @@ namespace cg::engine
 		};
 
 		std::reference_wrapper<Duel> duel_;
-		card_instance_id_type instance_id_;
+		domain::CardInstanceId instance_id_;
 
 		std::reference_wrapper<const Prototype> prototype_;
 		CardState state_;
@@ -110,9 +110,9 @@ namespace cg::engine
 			[[nodiscard]] auto prototype_data() const noexcept -> const Prototype&;
 
 		public:
-			[[nodiscard]] auto code() const noexcept -> card_code_type;
-			[[nodiscard]] auto code_rule() const noexcept -> card_code_type;
-			[[nodiscard]] auto series() const noexcept -> std::array<series_code_type, Prototype::max_series_count>;
+			[[nodiscard]] auto code() const noexcept -> domain::CardCode;
+			[[nodiscard]] auto code_rule() const noexcept -> domain::CardCode;
+			[[nodiscard]] auto series() const noexcept -> std::array<domain::SeriesCode, Prototype::max_series_count>;
 			[[nodiscard]] auto card_type() const noexcept -> domain::CardTypeWrapper;
 			[[nodiscard]] auto attribute() const noexcept -> domain::AttributeWrapper;
 			[[nodiscard]] auto race() const noexcept -> domain::Race;
@@ -222,19 +222,19 @@ namespace cg::engine
 			auto set_kind(domain::SummonKind kind) noexcept -> void;
 			auto set_from_zone(domain::Zone from_zone) noexcept -> void;
 			auto set_player(domain::Player player) noexcept -> void;
-			auto set_turn_index(turn_index_type turn_index) noexcept -> void;
+			auto set_turn_id(domain::TurnId turn_id) noexcept -> void;
 			auto set_materials(Group group) noexcept -> void;
 
 			[[nodiscard]] auto kind() const noexcept -> domain::SummonKind;
 			[[nodiscard]] auto from_zone() const noexcept -> domain::Zone;
 			[[nodiscard]] auto player() const noexcept -> domain::Player;
-			[[nodiscard]] auto turn_index() const noexcept -> turn_index_type;
+			[[nodiscard]] auto turn_id() const noexcept -> domain::TurnId;
 			[[nodiscard]] auto materials() const noexcept -> View;
 
 			[[nodiscard]] auto is_kind(domain::SummonKind expected_kind) const noexcept -> bool;
 			[[nodiscard]] auto is_from_zone(domain::Zone expected_from_zone) const noexcept -> bool;
 			[[nodiscard]] auto is_player(domain::Player expected_player) const noexcept -> bool;
-			[[nodiscard]] auto is_turn_index(turn_index_type expected_turn_index) const noexcept -> bool;
+			[[nodiscard]] auto is_turn_id(domain::TurnId expected_turn_id) const noexcept -> bool;
 			[[nodiscard]] auto has_material(const Card& card) const noexcept -> bool;
 			[[nodiscard]] auto material_count() const noexcept -> std::size_t;
 		};
@@ -260,8 +260,8 @@ namespace cg::engine
 			[[nodiscard]] auto attacked_cards() const noexcept -> View;
 			[[nodiscard]] auto attacked_count() const noexcept -> std::size_t;
 			[[nodiscard]] auto attack_announced_count() const noexcept -> std::size_t;
-			[[nodiscard]] auto attack_turn_index() const noexcept -> turn_index_type;
-			[[nodiscard]] auto attack_canceled_turn_index() const noexcept -> turn_index_type;
+			[[nodiscard]] auto attack_turn_id() const noexcept -> domain::TurnId;
+			[[nodiscard]] auto attack_canceled_turn_id() const noexcept -> domain::TurnId;
 
 			[[nodiscard]] auto is_attacked_this_turn() const noexcept -> bool;
 			[[nodiscard]] auto is_attack_canceled_this_turn() const noexcept -> bool;
@@ -354,9 +354,9 @@ namespace cg::engine
 
 		// ==================== | ====================
 
-		Card(Duel& duel, card_instance_id_type instance_id, const Prototype& prototype) noexcept;
+		Card(Duel& duel, domain::CardInstanceId instance_id, const Prototype& prototype) noexcept;
 
-		[[nodiscard]] auto instance_id() const noexcept -> card_instance_id_type;
+		[[nodiscard]] auto instance_id() const noexcept -> domain::CardInstanceId;
 
 		[[nodiscard]] auto prototype() noexcept -> PrototypeHandler;
 		[[nodiscard]] auto property() noexcept -> PropertyHandler;

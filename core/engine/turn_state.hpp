@@ -2,11 +2,10 @@
 
 #include <core/domain/player.hpp>
 #include <core/domain/turn.hpp>
+#include <core/domain/id.hpp>
 
 namespace cg::engine
 {
-	using turn_index_type = std::uint32_t;
-
 	class TurnState
 	{
 	public:
@@ -14,7 +13,7 @@ namespace cg::engine
 		domain::Player player;
 		// 当前回合阶段
 		domain::Phase phase;
-		// 当前回合数
-		turn_index_type turn_index;
+		// 当前回合ID
+		domain::TurnId turn_id;
 	};
 }

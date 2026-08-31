@@ -1,5 +1,7 @@
 #pragma once
 
+#include <core/domain/id.hpp>
+
 #include <core/engine/effect_reference.hpp>
 
 namespace cg::engine
@@ -10,11 +12,11 @@ namespace cg::engine
 		//
 
 	private:
-		effect_instance_id_type instance_id_;
+		domain::EffectInstanceId instance_id_;
 
 		//
 
 	public:
-		[[nodiscard]] auto instance_id() const noexcept -> effect_instance_id_type;
+		[[nodiscard]] auto instance_id() const noexcept -> domain::EffectInstanceId;
 	};
 }

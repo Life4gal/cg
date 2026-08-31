@@ -4,8 +4,6 @@
 
 namespace cg::engine
 {
-	using effect_instance_id_type = std::uint64_t;
-
 	class Effect;
 
 	class EffectReference : public std::reference_wrapper<Effect>

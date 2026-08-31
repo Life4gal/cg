@@ -1,5 +1,6 @@
 #include <core/engine/field.hpp>
 
+#include <algorithm>
 #include <limits>
 
 #include <core/engine/card.hpp>
@@ -59,10 +60,11 @@ namespace cg::engine
 		return player_field(player).draw_count;
 	}
 
-	auto Field::PlaygroundHandler::update_life_point(const domain::Player player, const domain::life_point_delta_type delta) noexcept -> void
+	auto Field::PlaygroundHandler::update_life_point(const domain::Player player, const domain::life_point_type delta) noexcept -> void
 	{
 		auto& pf = player_field(player);
 
+		// 增加生命值
 		if (delta > 0)
 		{
 			if (const auto remaining = std::numeric_limits<domain::life_point_type>::max() - pf.life_point;
@@ -79,15 +81,16 @@ namespace cg::engine
 			return;
 		}
 
-		// 如果生命值足够
-		if (std::cmp_greater(pf.life_point, -delta))
-		{
-			pf.life_point += delta;
-			return;
-		}
+		// 减少生命值
+		pf.life_point += delta;
+		// 不会减少到负数
+		pf.life_point = std::ranges::max(pf.life_point, static_cast<domain::life_point_type>(0));
 
-		// 生命值不足
-		// todo: 决斗结束
+		if (pf.life_point == 0)
+		{
+			// 生命值不足
+			// todo: 决斗结束
+		}
 	}
 
 	auto Field::PlaygroundHandler::draw(const domain::Player player, const domain::zone_sequence_type count) noexcept -> void
