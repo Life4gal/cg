@@ -8,6 +8,7 @@ add_library(
 
 	${CMAKE_CURRENT_SOURCE_DIR}/utility/enum.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utility/string_hash.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utility/random.hpp
 				
 	# =============================
 	# dommain
