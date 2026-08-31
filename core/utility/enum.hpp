@@ -397,6 +397,11 @@ namespace cg::utility
 		// static_cast<T>(Enum)
 		// ==============================================================================
 
+		[[nodiscard]] constexpr explicit(false) operator enum_type() const noexcept
+		{
+			return enum_;
+		}
+
 		template<std::integral T>
 			requires(!std::is_same_v<T, value_type>)
 		[[nodiscard]] constexpr explicit operator T() const noexcept
