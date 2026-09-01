@@ -12,27 +12,23 @@ namespace cg::engine
 	class Prototype
 	{
 	public:
-		constexpr static auto origin_code = static_cast<domain::CardCode>(0);
-		constexpr static auto invalid_code = static_cast<domain::CardCode>(-1);
-
 		constexpr static auto max_series_count = static_cast<std::size_t>(4);
-		constexpr static auto invalid_series = static_cast<domain::SeriesCode>(-1);
 
 	private:
 		[[nodiscard]] constexpr static auto make_series() noexcept -> std::array<domain::SeriesCode, max_series_count>
 		{
 			std::array<domain::SeriesCode, max_series_count> s{};
-			s.fill(invalid_series);
+			s.fill(domain::SeriesCode::INVALID);
 			return s;
 		}
 
 	public:
 		// 卡密(卡片左下角的 8 位编号)
-		domain::CardCode code = invalid_code;
+		domain::CardCode code = domain::CardCode::INVALID;
 		// 规范卡密: 异画卡/同名卡指向的原卡(origin_code == 原卡)
-		domain::CardCode canonical_code = origin_code;
+		domain::CardCode canonical_code = domain::CardCode::ORIGIN;
 		// 规则替换卡密(origin_code == 无)
-		domain::CardCode rule_code = origin_code;
+		domain::CardCode rule_code = domain::CardCode::ORIGIN;
 
 		// 字段
 		std::array<domain::SeriesCode, max_series_count> series = make_series();
@@ -56,9 +52,9 @@ namespace cg::engine
 		};
 
 		// 攻击力
-		domain::attack_value_type attack = 0;
+		domain::attack_defense_value_type attack = 0;
 		// 防御力
-		domain::defense_value_type defense = 0;
+		domain::attack_defense_value_type defense = 0;
 		// 灵摆刻度(如果有)
 		domain::PendulumScale left_pendulum = domain::PendulumScale::PS0;
 		domain::PendulumScale right_pendulum = domain::PendulumScale::PS0;
@@ -72,7 +68,7 @@ namespace cg::engine
 		// 记载卡密(用于同名判定: 有canonical_code时为其值,否则为code)
 		[[nodiscard]] constexpr auto printed_code() const noexcept -> domain::CardCode
 		{
-			if (canonical_code != origin_code)
+			if (canonical_code != domain::CardCode::ORIGIN)
 			{
 				return canonical_code;
 			}
@@ -83,7 +79,7 @@ namespace cg::engine
 		// 决斗中实际使用的卡密(规则替换优先)
 		[[nodiscard]] constexpr auto duel_code() const noexcept -> domain::CardCode
 		{
-			if (rule_code != origin_code)
+			if (rule_code != domain::CardCode::ORIGIN)
 			{
 				return rule_code;
 			}
@@ -96,7 +92,7 @@ namespace cg::engine
 		{
 			for (const auto candidate: series)
 			{
-				if (candidate == invalid_series)
+				if (candidate == domain::SeriesCode::INVALID)
 				{
 					break;
 				}

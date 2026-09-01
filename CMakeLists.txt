@@ -45,13 +45,31 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/defines.cmake)
 # ===================================================================================================
 # DEPENDENCIES
 
-#find_package(xxx CONFIG REQUIRED)
+# spdlog
+find_package(spdlog CONFIG REQUIRED)
+
+# doctest
+find_package(doctest CONFIG REQUIRED)
+
+# python & pybind11
+#1> [CMake] -- Found Python: C:/workspace/vcpkg/installed/x64-windows/tools/python3/python.exe (found suitable version "3.12.9", minimum required is "3.9") found components: Interpreter Development.Module Development.Embed
+set(PYBIND11_FINDPYTHON OFF)
+set(Python_ROOT_DIR "C:/Program Files/Python314")
+set(Python_EXECUTABLE "${Python_ROOT_DIR}/python.exe" CACHE FILEPATH "" FORCE)
+set(Python_INCLUDE_DIR "${Python_ROOT_DIR}/include" CACHE PATH "" FORCE)
+set(Python_LIBRARY "${Python_ROOT_DIR}/libs/python314.lib" CACHE FILEPATH "" FORCE)
+find_package(pybind11 CONFIG REQUIRED)
 
 # ===================================================================================================
 # LIBRARY
 
 # cg-core
 add_subdirectory(core)
+
+# ===================================================================================================
+# TEST
+
+add_subdirectory(tests)
 
 # ===================================================================================================
 # EXECUTABLE
@@ -81,3 +99,15 @@ target_link_libraries(
 	
 	cg-core
 )
+
+# ===================================================================================================
+# SCRIPTS
+
+add_custom_target(
+	COPY_SCRIPTS
+	ALL
+	COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_SOURCE_DIR}/scripts scripts
+)
+
+add_dependencies(cg-tests COPY_SCRIPTS)
+add_dependencies(cg COPY_SCRIPTS)

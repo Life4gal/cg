@@ -62,6 +62,13 @@ add_library(
 
 	${CMAKE_CURRENT_SOURCE_DIR}/script/host.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/script/host.cpp
+				
+	# =============================
+	# host
+	# =============================
+
+	${CMAKE_CURRENT_SOURCE_DIR}/host/python.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/host/python.cpp
 )
 
 target_include_directories(
@@ -85,4 +92,12 @@ target_compile_features(
 	cg-core
 	PRIVATE
 	cxx_std_23
+)
+
+target_link_libraries(
+	cg-core
+	PRIVATE
+	
+	spdlog::spdlog
+	pybind11::module
 )

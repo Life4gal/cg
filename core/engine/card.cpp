@@ -90,12 +90,12 @@ namespace cg::engine
 		return prototype_data().link_marker;
 	}
 
-	auto Card::PrototypeHandler::attack() const noexcept -> domain::attack_value_type
+	auto Card::PrototypeHandler::attack() const noexcept -> domain::attack_defense_value_type
 	{
 		return prototype_data().attack;
 	}
 
-	auto Card::PrototypeHandler::defense() const noexcept -> domain::defense_value_type
+	auto Card::PrototypeHandler::defense() const noexcept -> domain::attack_defense_value_type
 	{
 		return prototype_data().defense;
 	}
@@ -211,7 +211,7 @@ namespace cg::engine
 		return link_marker;
 	}
 
-	auto Card::PropertyHandler::attack() const noexcept -> domain::attack_value_type
+	auto Card::PropertyHandler::attack() const noexcept -> domain::attack_defense_value_type
 	{
 		const auto prototype = card_.get().prototype();
 		auto attack = prototype.attack();
@@ -222,7 +222,7 @@ namespace cg::engine
 		return attack;
 	}
 
-	auto Card::PropertyHandler::defense() const noexcept -> domain::defense_value_type
+	auto Card::PropertyHandler::defense() const noexcept -> domain::attack_defense_value_type
 	{
 		const auto prototype = card_.get().prototype();
 		auto defense = prototype.defense();

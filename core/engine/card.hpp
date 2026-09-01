@@ -119,8 +119,8 @@ namespace cg::engine
 			[[nodiscard]] auto level() const noexcept -> domain::LevelWrapper;
 			[[nodiscard]] auto rank() const noexcept -> domain::Rank;
 			[[nodiscard]] auto link_marker() const noexcept -> domain::LinkMarkerWrapper;
-			[[nodiscard]] auto attack() const noexcept -> domain::attack_value_type;
-			[[nodiscard]] auto defense() const noexcept -> domain::defense_value_type;
+			[[nodiscard]] auto attack() const noexcept -> domain::attack_defense_value_type;
+			[[nodiscard]] auto defense() const noexcept -> domain::attack_defense_value_type;
 			[[nodiscard]] auto left_pendulum() const noexcept -> domain::PendulumScale;
 			[[nodiscard]] auto right_pendulum() const noexcept -> domain::PendulumScale;
 
@@ -145,8 +145,8 @@ namespace cg::engine
 			[[nodiscard]] auto level() const noexcept -> domain::LevelWrapper;
 			[[nodiscard]] auto rank() const noexcept -> domain::Rank;
 			[[nodiscard]] auto link_marker() const noexcept -> domain::LinkMarkerWrapper;
-			[[nodiscard]] auto attack() const noexcept -> domain::attack_value_type;
-			[[nodiscard]] auto defense() const noexcept -> domain::defense_value_type;
+			[[nodiscard]] auto attack() const noexcept -> domain::attack_defense_value_type;
+			[[nodiscard]] auto defense() const noexcept -> domain::attack_defense_value_type;
 			[[nodiscard]] auto left_pendulum() const noexcept -> domain::PendulumScale;
 			[[nodiscard]] auto right_pendulum() const noexcept -> domain::PendulumScale;
 

@@ -5,10 +5,17 @@
 namespace cg::domain
 {
 	// 卡密代码
-	enum class CardCode : std::uint32_t {};
+	enum class CardCode : std::uint32_t
+	{
+		ORIGIN = 0,
+		INVALID = static_cast<std::uint32_t>(-1)
+	};
 
 	// 字段代码
-	enum class SeriesCode : std::uint32_t {};
+	enum class SeriesCode : std::uint32_t
+	{
+		INVALID = static_cast<std::uint32_t>(-1)
+	};
 
 	// 卡片类型
 	enum class CardType : std::uint32_t
