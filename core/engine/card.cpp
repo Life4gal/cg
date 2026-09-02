@@ -5,125 +5,74 @@ namespace cg::engine
 	Card::PrototypeHandler::PrototypeHandler(Card& card) noexcept
 		: card_{card} {}
 
-	auto Card::PrototypeHandler::prototype_data() const noexcept -> const Prototype&
+	auto Card::PrototypeHandler::prototype() const noexcept -> const Prototype&
 	{
 		return card_.get().prototype_.get();
 	}
 
 	auto Card::PrototypeHandler::code() const noexcept -> domain::CardCode
 	{
-		return prototype_data().code;
+		return prototype().code();
 	}
 
 	auto Card::PrototypeHandler::code_rule() const noexcept -> domain::CardCode
 	{
-		return prototype_data().duel_code();
+		return prototype().code_rule();
 	}
 
 	auto Card::PrototypeHandler::series() const noexcept -> std::array<domain::SeriesCode, Prototype::max_series_count>
 	{
-		return prototype_data().series;
+		return prototype().series();
 	}
 
 	auto Card::PrototypeHandler::card_type() const noexcept -> domain::CardTypeWrapper
 	{
-		return prototype_data().card_type;
+		return prototype().card_type();
 	}
 
 	auto Card::PrototypeHandler::attribute() const noexcept -> domain::AttributeWrapper
 	{
-		return prototype_data().attribute;
+		return prototype().attribute();
 	}
 
 	auto Card::PrototypeHandler::race() const noexcept -> domain::Race
 	{
-		return prototype_data().race;
+		return prototype().race();
 	}
 
 	auto Card::PrototypeHandler::level() const noexcept -> domain::LevelWrapper
 	{
-		// 超量和连接卡没有等级
-		constexpr auto invalid_card_type = []
-		{
-			domain::CardTypeWrapper w{domain::CardType::NONE};
-
-			// 超量
-			w |= domain::CardType::XYZ;
-			// 连接
-			w |= domain::CardType::LINK;
-
-			return w;
-		}();
-
-		// todo: 如何处理?
-		if (has_card_type(invalid_card_type))
-		{
-			return {domain::Level{0}};
-		}
-
-		return prototype_data().level;
+		return prototype().level();
 	}
 
 	auto Card::PrototypeHandler::rank() const noexcept -> domain::Rank
 	{
-		// 只有超量卡有阶级
-
-		// todo: 如何处理?
-		if (!has_card_type({domain::CardType::XYZ}))
-		{
-			return domain::Rank::R1;
-		}
-
-		return prototype_data().rank;
+		return prototype().rank();
 	}
 
 	auto Card::PrototypeHandler::link_marker() const noexcept -> domain::LinkMarkerWrapper
 	{
-		// 只有连接卡有连接箭头
-
-		// todo: 如何处理?
-		if (!has_card_type({domain::CardType::LINK}))
-		{
-			return {domain::LinkMarker::TOP};
-		}
-
-		return prototype_data().link_marker;
+		return prototype().link_marker();
 	}
 
 	auto Card::PrototypeHandler::attack() const noexcept -> domain::attack_defense_value_type
 	{
-		return prototype_data().attack;
+		return prototype().attack();
 	}
 
 	auto Card::PrototypeHandler::defense() const noexcept -> domain::attack_defense_value_type
 	{
-		return prototype_data().defense;
+		return prototype().defense();
 	}
 
 	auto Card::PrototypeHandler::left_pendulum() const noexcept -> domain::PendulumScale
 	{
-		// 只有灵摆怪兽有灵摆刻度
-
-		// todo: 如何处理?
-		if (!has_card_type({domain::CardType::PENDULUM}))
-		{
-			return domain::PendulumScale::PS0;
-		}
-
-		return prototype_data().left_pendulum;
+		return prototype().left_pendulum();
 	}
 
 	auto Card::PrototypeHandler::right_pendulum() const noexcept -> domain::PendulumScale
 	{
-		// 只有灵摆怪兽有灵摆刻度
-
-		// todo: 如何处理?
-		if (!has_card_type({domain::CardType::PENDULUM}))
-		{
-			return domain::PendulumScale::PS0;
-		}
-
-		return prototype_data().right_pendulum;
+		return prototype().right_pendulum();
 	}
 
 	auto Card::PrototypeHandler::is_card_type(const domain::CardTypeWrapper expected_card_type) const noexcept -> bool
@@ -138,6 +87,11 @@ namespace cg::engine
 
 	Card::PropertyHandler::PropertyHandler(Card& card) noexcept
 		: card_{card} {}
+
+	auto Card::PropertyHandler::prototype() const noexcept -> PrototypeHandler
+	{
+		return card_.get().prototype();
+	}
 
 	auto Card::PropertyHandler::card_type() const noexcept -> domain::CardTypeWrapper
 	{
@@ -177,8 +131,26 @@ namespace cg::engine
 
 	auto Card::PropertyHandler::level() const noexcept -> domain::LevelWrapper
 	{
-		const auto prototype = card_.get().prototype();
-		auto level = prototype.level();
+		// 超量和连接卡没有等级
+		constexpr auto invalid_card_type = []
+		{
+			domain::CardTypeWrapper w{domain::CardType::NONE};
+
+			// 超量
+			w |= domain::CardType::XYZ;
+			// 连接
+			w |= domain::CardType::LINK;
+
+			return w;
+		}();
+
+		// todo: 如何处理?
+		if (has_card_type(invalid_card_type))
+		{
+			return {domain::Level{0}};
+		}
+
+		auto level = prototype().level();
 
 		// todo: 应用效果
 		level += domain::Level::L1;
@@ -188,8 +160,15 @@ namespace cg::engine
 
 	auto Card::PropertyHandler::rank() const noexcept -> domain::Rank
 	{
-		const auto prototype = card_.get().prototype();
-		auto rank = prototype.rank();
+		// 只有超量卡有阶级
+
+		// todo: 如何处理?
+		if (!has_card_type({domain::CardType::XYZ}))
+		{
+			return domain::Rank::R1;
+		}
+
+		auto rank = prototype().rank();
 
 		// todo: 应用效果
 		if (rank != domain::Rank::R1)
@@ -202,8 +181,15 @@ namespace cg::engine
 
 	auto Card::PropertyHandler::link_marker() const noexcept -> domain::LinkMarkerWrapper
 	{
-		const auto prototype = card_.get().prototype();
-		auto link_marker = prototype.link_marker();
+		// 只有连接卡有连接箭头
+
+		// todo: 如何处理?
+		if (!has_card_type({domain::CardType::LINK}))
+		{
+			return {domain::LinkMarker::TOP};
+		}
+
+		auto link_marker = prototype().link_marker();
 
 		// todo: 应用效果
 		link_marker |= domain::LinkMarker::TOP;
@@ -213,8 +199,7 @@ namespace cg::engine
 
 	auto Card::PropertyHandler::attack() const noexcept -> domain::attack_defense_value_type
 	{
-		const auto prototype = card_.get().prototype();
-		auto attack = prototype.attack();
+		auto attack = prototype().attack();
 
 		// todo: 应用效果
 		attack += 9990;
@@ -224,8 +209,7 @@ namespace cg::engine
 
 	auto Card::PropertyHandler::defense() const noexcept -> domain::attack_defense_value_type
 	{
-		const auto prototype = card_.get().prototype();
-		auto defense = prototype.defense();
+		auto defense = prototype().defense();
 
 		// todo: 应用效果
 		defense += 9990;
@@ -235,8 +219,15 @@ namespace cg::engine
 
 	auto Card::PropertyHandler::left_pendulum() const noexcept -> domain::PendulumScale
 	{
-		const auto prototype = card_.get().prototype();
-		auto left_pendulum = prototype.left_pendulum();
+		// 只有灵摆怪兽有灵摆刻度
+
+		// todo: 如何处理?
+		if (!has_card_type({domain::CardType::PENDULUM}))
+		{
+			return domain::PendulumScale::PS0;
+		}
+
+		auto left_pendulum = prototype().left_pendulum();
 
 		// todo: 应用效果
 		if (left_pendulum != domain::PendulumScale::PS0)
@@ -249,8 +240,15 @@ namespace cg::engine
 
 	auto Card::PropertyHandler::right_pendulum() const noexcept -> domain::PendulumScale
 	{
-		const auto prototype = card_.get().prototype();
-		auto right_pendulum = prototype.right_pendulum();
+		// 只有灵摆怪兽有灵摆刻度
+
+		// todo: 如何处理?
+		if (!has_card_type({domain::CardType::PENDULUM}))
+		{
+			return domain::PendulumScale::PS0;
+		}
+
+		auto right_pendulum = prototype().right_pendulum();
 
 		// todo: 应用效果
 		if (right_pendulum != domain::PendulumScale::PS0)
@@ -263,706 +261,467 @@ namespace cg::engine
 
 	auto Card::PropertyHandler::is_card_type(const domain::CardTypeWrapper expected_card_type) const noexcept -> bool
 	{
-		return card_type().all_of(expected_card_type);
+		return prototype().is_card_type(expected_card_type);
 	}
 
 	auto Card::PropertyHandler::has_card_type(const domain::CardTypeWrapper expected_card_type) const noexcept -> bool
 	{
-		return card_type().any_of(expected_card_type);
+		return prototype().has_card_type(expected_card_type);
 	}
 
 	Card::StateHandler::StateHandler(Card& card) noexcept
 		: card_{card} {}
 
-	auto Card::StateHandler::state_data() noexcept -> CardState&
+	auto Card::StateHandler::state() noexcept -> State&
 	{
 		return card_.get().state_;
 	}
 
-	auto Card::StateHandler::state_data() const noexcept -> const CardState&
+	auto Card::StateHandler::state() const noexcept -> const State&
 	{
 		return card_.get().state_;
 	}
 
 	auto Card::StateHandler::set_controller(const domain::Player controller) noexcept -> void
 	{
-		state_data().controller = controller;
+		state().set_controller(controller);
 	}
 
 	auto Card::StateHandler::set_zone(const domain::Zone zone) noexcept -> void
 	{
-		state_data().zone = zone;
+		state().set_zone(zone);
 	}
 
-	auto Card::StateHandler::set_zone_index(const domain::zone_sequence_type zone_index) noexcept -> void
+	auto Card::StateHandler::set_reason_player(const domain::Player reason_player) noexcept -> void
 	{
-		state_data().zone_index = zone_index;
+		state().set_reason_player(reason_player);
 	}
 
-	auto Card::StateHandler::set_field_zone(const domain::FieldZoneSequence field_zone) noexcept -> void
+	auto Card::StateHandler::set_reason_card(const CardOptional reason_card) noexcept -> void
 	{
-		state_data().field_zone = field_zone;
+		state().set_reason_card(reason_card);
 	}
 
-	auto Card::StateHandler::set_form(const domain::FieldZoneForm form) noexcept -> void
+	auto Card::StateHandler::set_reason_effect(const EffectOptional reason_effect) noexcept -> void
 	{
-		state_data().form = form;
-	}
-
-	auto Card::StateHandler::set_reason_player(const domain::Player player) noexcept -> void
-	{
-		state_data().reason_player = player;
-	}
-
-	auto Card::StateHandler::set_reason_card(const CardOptional card) noexcept -> void
-	{
-		state_data().reason_card = card;
-	}
-
-	auto Card::StateHandler::set_reason_effect(const EffectOptional effect) noexcept -> void
-	{
-		state_data().reason_effect = effect;
+		state().set_reason_effect(reason_effect);
 	}
 
 	auto Card::StateHandler::set_reason(const domain::ReasonWrapper reason) noexcept -> void
 	{
-		state_data().reason = reason;
+		state().set_reason(reason);
 	}
 
 	auto Card::StateHandler::controller() const noexcept -> domain::Player
 	{
-		return state_data().controller;
+		return state().controller();
 	}
 
 	auto Card::StateHandler::zone() const noexcept -> domain::Zone
 	{
-		return state_data().zone;
-	}
-
-	auto Card::StateHandler::zone_index() const noexcept -> domain::zone_sequence_type
-	{
-		return state_data().zone_index;
-	}
-
-	auto Card::StateHandler::field_zone() const noexcept -> domain::FieldZoneSequence
-	{
-		return state_data().field_zone;
-	}
-
-	auto Card::StateHandler::form() const noexcept -> domain::FieldZoneForm
-	{
-		return state_data().form;
+		return state().zone();
 	}
 
 	auto Card::StateHandler::reason_player() const noexcept -> domain::Player
 	{
-		return state_data().reason_player;
+		return state().reason_player();
 	}
 
 	auto Card::StateHandler::reason_card() const noexcept -> CardOptional
 	{
-		return state_data().reason_card;
+		return state().reason_card();
 	}
 
 	auto Card::StateHandler::reason_effect() const noexcept -> EffectOptional
 	{
-		return state_data().reason_effect;
+		return state().reason_effect();
 	}
 
 	auto Card::StateHandler::reason() const noexcept -> domain::ReasonWrapper
 	{
-		return state_data().reason;
+		return state().reason();
 	}
 
 	auto Card::StateHandler::is_controller(const domain::Player expected_player) const noexcept -> bool
 	{
-		return controller() == expected_player;
+		return state().is_controller(expected_player);
 	}
 
 	auto Card::StateHandler::is_zone(const domain::Zone expected_zone) const noexcept -> bool
 	{
-		return zone() == expected_zone;
-	}
-
-	auto Card::StateHandler::is_field_zone(const domain::FieldZoneSequence expected_field_zone) const noexcept -> bool
-	{
-		return field_zone() == expected_field_zone;
-	}
-
-	auto Card::StateHandler::is_form(const domain::FieldZoneForm expected_form) const noexcept -> bool
-	{
-		return form() == expected_form;
+		return state().is_zone(expected_zone);
 	}
 
 	auto Card::StateHandler::is_reason_player(const domain::Player expected_player) const noexcept -> bool
 	{
-		return reason_player() == expected_player;
+		return state().is_reason_player(expected_player);
 	}
 
 	auto Card::StateHandler::is_reason_card(const CardOptional expected_card) const noexcept -> bool
 	{
-		return reason_card() == expected_card;
+		return state().is_reason_card(expected_card);
 	}
 
 	auto Card::StateHandler::is_reason_effect(const EffectOptional expected_effect) const noexcept -> bool
 	{
-		return reason_effect() == expected_effect;
+		return state().is_reason_effect(expected_effect);
 	}
 
 	auto Card::StateHandler::is_reason(const domain::ReasonWrapper expected_reason) const noexcept -> bool
 	{
-		return reason().all_of(expected_reason);
+		return state().is_reason(expected_reason);
 	}
 
 	auto Card::StateHandler::has_reason(const domain::ReasonWrapper expected_reason) const noexcept -> bool
 	{
-		return reason().any_of(expected_reason);
+		return state().has_reason(expected_reason);
 	}
 
 	auto Card::StateHandler::is_field_zone() const noexcept -> bool
 	{
-		return domain::is_field_zone(zone());
+		return state().is_field_zone();
 	}
 
 	auto Card::StateHandler::is_face_up_form() const noexcept -> bool
 	{
-		return domain::is_face_up_form(form());
+		return state().is_face_up_form();
 	}
 
 	auto Card::StateHandler::is_face_down_form() const noexcept -> bool
 	{
-		return domain::is_face_down_form(form());
+		return state().is_face_down_form();
 	}
 
 	auto Card::StateHandler::is_attack_form() const noexcept -> bool
 	{
-		return domain::is_attack_form(form());
+		return state().is_attack_form();
 	}
 
 	auto Card::StateHandler::is_defense_form() const noexcept -> bool
 	{
-		return domain::is_defense_form(form());
+		return state().is_defense_form();
 	}
 
-	Card::SummonHandler::SummonHandler(Card& card) noexcept
+	Card::SummonInfoHandler::SummonInfoHandler(Card& card) noexcept
 		: card_{card} {}
 
-	auto Card::SummonHandler::summon_data() noexcept -> Summon&
+	auto Card::SummonInfoHandler::summon_info() noexcept -> SummonInfo&
 	{
 		return card_.get().summon_;
 	}
 
-	auto Card::SummonHandler::summon_data() const noexcept -> const Summon&
+	auto Card::SummonInfoHandler::summon_info() const noexcept -> const SummonInfo&
 	{
 		return card_.get().summon_;
 	}
 
-	auto Card::SummonHandler::set_kind(const domain::SummonKind kind) noexcept -> void
+	auto Card::SummonInfoHandler::set_kind(const domain::SummonKind kind) noexcept -> void
 	{
-		summon_data().kind = kind;
+		summon_info().set_kind(kind);
 	}
 
-	auto Card::SummonHandler::set_from_zone(const domain::Zone from_zone) noexcept -> void
+	auto Card::SummonInfoHandler::set_from_zone(const domain::Zone from_zone) noexcept -> void
 	{
-		summon_data().from_zone = from_zone;
+		summon_info().set_from_zone(from_zone);
 	}
 
-	auto Card::SummonHandler::set_player(const domain::Player player) noexcept -> void
+	auto Card::SummonInfoHandler::set_player(const domain::Player player) noexcept -> void
 	{
-		summon_data().player = player;
+		summon_info().set_player(player);
 	}
 
-	auto Card::SummonHandler::set_turn_id(const domain::TurnId turn_id) noexcept -> void
+	auto Card::SummonInfoHandler::set_turn_id(const domain::TurnId turn_id) noexcept -> void
 	{
-		summon_data().turn_id = turn_id;
+		summon_info().set_turn_id(turn_id);
 	}
 
-	auto Card::SummonHandler::set_materials(Group group) noexcept -> void
+	auto Card::SummonInfoHandler::set_materials(Group materials) noexcept -> void
 	{
-		summon_data().materials = std::move(group);
+		summon_info().set_materials(std::move(materials));
 	}
 
-	auto Card::SummonHandler::kind() const noexcept -> domain::SummonKind
+	auto Card::SummonInfoHandler::kind() const noexcept -> domain::SummonKind
 	{
-		return summon_data().kind;
+		return summon_info().kind();
 	}
 
-	auto Card::SummonHandler::from_zone() const noexcept -> domain::Zone
+	auto Card::SummonInfoHandler::from_zone() const noexcept -> domain::Zone
 	{
-		return summon_data().from_zone;
+		return summon_info().from_zone();
 	}
 
-	auto Card::SummonHandler::player() const noexcept -> domain::Player
+	auto Card::SummonInfoHandler::player() const noexcept -> domain::Player
 	{
-		return summon_data().player;
+		return summon_info().player();
 	}
 
-	auto Card::SummonHandler::turn_id() const noexcept -> domain::TurnId
+	auto Card::SummonInfoHandler::turn_id() const noexcept -> domain::TurnId
 	{
-		return summon_data().turn_id;
+		return summon_info().turn_id();
 	}
 
-	auto Card::SummonHandler::materials() const noexcept -> View
+	auto Card::SummonInfoHandler::materials() const noexcept -> View
 	{
-		return View{summon_data().materials};
+		return summon_info().materials();
 	}
 
-	auto Card::SummonHandler::is_kind(const domain::SummonKind expected_kind) const noexcept -> bool
+	auto Card::SummonInfoHandler::is_kind(const domain::SummonKind expected_kind) const noexcept -> bool
 	{
-		return kind() == expected_kind;
+		return summon_info().is_kind(expected_kind);
 	}
 
-	auto Card::SummonHandler::is_from_zone(const domain::Zone expected_from_zone) const noexcept -> bool
+	auto Card::SummonInfoHandler::is_from_zone(const domain::Zone expected_from_zone) const noexcept -> bool
 	{
-		return from_zone() == expected_from_zone;
+		return summon_info().is_from_zone(expected_from_zone);
 	}
 
-	auto Card::SummonHandler::is_player(const domain::Player expected_player) const noexcept -> bool
+	auto Card::SummonInfoHandler::is_player(const domain::Player expected_player) const noexcept -> bool
 	{
-		return player() == expected_player;
+		return summon_info().is_player(expected_player);
 	}
 
-	auto Card::SummonHandler::is_turn_id(const domain::TurnId expected_turn_id) const noexcept -> bool
+	auto Card::SummonInfoHandler::is_turn_id(const domain::TurnId expected_turn_id) const noexcept -> bool
 	{
-		return turn_id() == expected_turn_id;
+		return summon_info().is_turn_id(expected_turn_id);
 	}
 
-	auto Card::SummonHandler::has_material(const Card& card) const noexcept -> bool
+	auto Card::SummonInfoHandler::has_material(const Card& card) const noexcept -> bool
 	{
-		return summon_data().materials.contains(card);
+		return summon_info().has_material(card);
 	}
 
-	auto Card::SummonHandler::material_count() const noexcept -> std::size_t
+	auto Card::SummonInfoHandler::material_count() const noexcept -> std::size_t
 	{
-		return summon_data().materials.size();
+		return summon_info().material_count();
 	}
 
-	Card::BattleHandler::BattleHandler(Card& card) noexcept
+	Card::BattleInfoHandler::BattleInfoHandler(Card& card) noexcept
 		: card_{card} {}
 
-	auto Card::BattleHandler::battle_data() noexcept -> Battle&
+	auto Card::BattleInfoHandler::battle_info() noexcept -> BattleInfo&
 	{
 		return card_.get().battle_;
 	}
 
-	auto Card::BattleHandler::battle_data() const noexcept -> const Battle&
+	auto Card::BattleInfoHandler::battle_info() const noexcept -> const BattleInfo&
 	{
 		return card_.get().battle_;
 	}
 
-	auto Card::BattleHandler::record_attack_announced() noexcept -> void
+	auto Card::BattleInfoHandler::record_attack_announced() noexcept -> void
 	{
-		auto& bi = battle_data();
-
-		bi.attack_announced_count += 1;
-		// todo: 获取当前回合号
-		bi.attack_turn_id = static_cast<domain::TurnId>(0);
+		battle_info().record_attack_announced();
 	}
 
-	auto Card::BattleHandler::record_attack_canceled() noexcept -> void
+	auto Card::BattleInfoHandler::record_attack_canceled() noexcept -> void
 	{
-		auto& bi = battle_data();
-
-		// todo: 获取当前回合号
-		bi.attack_canceled_turn_id = static_cast<domain::TurnId>(0);
+		battle_info().record_attack_canceled();
 	}
 
-	auto Card::BattleHandler::record_attacked_card(Card& card) noexcept -> void
+	auto Card::BattleInfoHandler::record_attacked_card(Card& card) noexcept -> void
 	{
-		auto& b = battle_data();
-
-		b.attacked_cards.insert(card);
-		b.battled_cards.insert(card);
-		b.attacked_count += 1;
+		battle_info().record_attacked_card(card);
 	}
 
-	auto Card::BattleHandler::attacked_cards() const noexcept -> View
+	auto Card::BattleInfoHandler::attacked_cards() const noexcept -> View
 	{
-		return View{battle_data().attacked_cards};
+		return battle_info().attacked_cards();
 	}
 
-	auto Card::BattleHandler::attacked_count() const noexcept -> std::size_t
+	auto Card::BattleInfoHandler::attacked_count() const noexcept -> BattleInfo::size_type
 	{
-		return battle_data().attacked_count;
+		return battle_info().attacked_count();
 	}
 
-	auto Card::BattleHandler::attack_announced_count() const noexcept -> std::size_t
+	auto Card::BattleInfoHandler::attack_announced_count() const noexcept -> BattleInfo::size_type
 	{
-		return battle_data().attack_announced_count;
+		return battle_info().attack_announced_count();
 	}
 
-	auto Card::BattleHandler::attack_turn_id() const noexcept -> domain::TurnId
+	auto Card::BattleInfoHandler::attack_turn_id() const noexcept -> domain::TurnId
 	{
-		return battle_data().attack_turn_id;
+		return battle_info().attack_turn_id();
 	}
 
-	auto Card::BattleHandler::attack_canceled_turn_id() const noexcept -> domain::TurnId
+	auto Card::BattleInfoHandler::attack_canceled_turn_id() const noexcept -> domain::TurnId
 	{
-		return battle_data().attack_canceled_turn_id;
+		return battle_info().attack_canceled_turn_id();
 	}
 
-	auto Card::BattleHandler::is_attacked_this_turn() const noexcept -> bool
+	auto Card::BattleInfoHandler::is_attacked_this_turn() const noexcept -> bool
 	{
-		// todo: 获取当前回合号
-		return attack_turn_id() == static_cast<domain::TurnId>(0);
+		return battle_info().is_attacked_this_turn();
 	}
 
-	auto Card::BattleHandler::is_attack_canceled_this_turn() const noexcept -> bool
+	auto Card::BattleInfoHandler::is_attack_canceled_this_turn() const noexcept -> bool
 	{
-		// todo: 获取当前回合号
-		return attack_canceled_turn_id() == static_cast<domain::TurnId>(0);
+		return battle_info().is_attack_canceled_this_turn();
 	}
 
-	Card::TargetHandler::TargetHandler(Card& card) noexcept
+	Card::TargetInfoHandler::TargetInfoHandler(Card& card) noexcept
 		: card_{card} {}
 
-	auto Card::TargetHandler::target_data() noexcept -> Target&
+	auto Card::TargetInfoHandler::target_info() noexcept -> TargetInfo&
 	{
 		return card_.get().target_;
 	}
 
-	auto Card::TargetHandler::target_data() const noexcept -> const Target&
+	auto Card::TargetInfoHandler::target_info() const noexcept -> const TargetInfo&
 	{
 		return card_.get().target_;
 	}
 
-	auto Card::TargetHandler::set_owner_target(Card& card) noexcept -> bool
+	auto Card::TargetInfoHandler::set_target(Card& target) noexcept -> bool
 	{
-		return target_data().owner_targets.insert(card);
+		return target_info().set_target(target, card_);
 	}
 
-	auto Card::TargetHandler::cancel_owner_target(const Card& card) noexcept -> bool
+	auto Card::TargetInfoHandler::cancel_target(Card& target) noexcept -> bool
 	{
-		return target_data().owner_targets.erase(card);
+		return target_info().cancel_target(target, card_);
 	}
 
-	auto Card::TargetHandler::set_target(Card& card) noexcept -> bool
+	auto Card::TargetInfoHandler::card_targets() const noexcept -> View
 	{
-		if (target_data().card_targets.insert(card))
-		{
-			// 将本卡加入目标卡的"以本卡为对象的卡"列表中
-			card.target().set_owner_target(card_);
-
-			// TODO: 发出事件,广播该卡被设为目标
-
-			return true;
-		}
-
-		return false;
+		return target_info().card_targets();
 	}
 
-	auto Card::TargetHandler::cancel_target(Card& card) noexcept -> bool
+	auto Card::TargetInfoHandler::owner_targets() const noexcept -> View
 	{
-		if (target_data().card_targets.erase(card))
-		{
-			// 将本卡移出目标卡的"以本卡为对象的卡"列表中
-			card.target().cancel_owner_target(card_);
-
-			return true;
-		}
-
-		return false;
+		return target_info().owner_targets();
 	}
 
-	auto Card::TargetHandler::card_targets() const noexcept -> View
+	auto Card::TargetInfoHandler::has_target() const noexcept -> bool
 	{
-		return View{target_data().card_targets};
+		return target_info().has_target();
 	}
 
-	auto Card::TargetHandler::owner_targets() const noexcept -> View
+	auto Card::TargetInfoHandler::has_target(const Card& card) const noexcept -> bool
 	{
-		return View{target_data().owner_targets};
+		return target_info().has_target(card);
 	}
 
-	auto Card::TargetHandler::has_target() const noexcept -> bool
+	auto Card::TargetInfoHandler::target_count() const noexcept -> TargetInfo::size_type
 	{
-		return !target_data().card_targets.empty();
+		return target_info().target_count();
 	}
 
-	auto Card::TargetHandler::has_target(const Card& card) const noexcept -> bool
-	{
-		return target_data().card_targets.contains(card);
-	}
-
-	auto Card::TargetHandler::target_count() const noexcept -> std::size_t
-	{
-		return target_data().card_targets.size();
-	}
-
-	Card::XyzHandler::XyzHandler(Card& card) noexcept
+	Card::XyzInfoHandler::XyzInfoHandler(Card& card) noexcept
 		: card_{card} {}
 
-	auto Card::XyzHandler::xyz_data() noexcept -> Xyz&
+	auto Card::XyzInfoHandler::xyz_info() noexcept -> XyzInfo&
 	{
 		return card_.get().xyz_;
 	}
 
-	auto Card::XyzHandler::xyz_data() const noexcept -> const Xyz&
+	auto Card::XyzInfoHandler::xyz_info() const noexcept -> const XyzInfo&
 	{
 		return card_.get().xyz_;
 	}
 
-	auto Card::XyzHandler::add_overlay(Card& material) noexcept -> bool
+	// ReSharper disable once CppMemberFunctionMayBeConst
+	auto Card::XyzInfoHandler::add_overlay(Card& material) noexcept -> bool
 	{
-		// 检查是否已叠放
-		if (material.xyz().overlay_target() == &card_.get())
-		{
-			return true;
-		}
-
-		// 如果已经是别的卡的超量素材,将其从原宿主移除
-		if (const auto target = material.xyz().overlay_target();
-			target != nullptr)
-		{
-			auto target_xyz = target.get()->xyz();
-			target_xyz.remove_overlay(material);
-		}
-		else
-		{
-			// 如果不是别的卡的超量素材,将其从场上移除(作为超量素材附加到当前卡上)
-			// todo: 将其从场上移除
-		}
-
-		// 本卡当前已有素材数量作为新素材的序列位置
-		const auto zone_index = material_count();
-
-		// 将本卡作为超量素材的目标
-		material.xyz().xyz_data().overlay_target = CardOptional{&card_.get()};
-		// 将超量素材添加到超量素材列表
-		xyz_data().materials.push_back(material);
-
-		// 设置超量素材状态
-		auto material_state = material.state();
-		// 控制者设置为本卡的控制者
-		material_state.set_controller(card_.get().state().controller());
-		// 位置设置为叠放区
-		material_state.set_zone(domain::Zone::OVERLAY);
-		// 序列设置为本卡超量素材列表的位置
-		material_state.set_zone_index(static_cast<domain::zone_sequence_type>(zone_index));
-
-		// todo: 素材效果?
-
-		return true;
+		return XyzInfo::add_overlay(material, card_);
 	}
 
-	auto Card::XyzHandler::remove_overlay(Card& material) noexcept -> bool
+	// ReSharper disable once CppMemberFunctionMayBeConst
+	auto Card::XyzInfoHandler::remove_overlay(Card& material) noexcept -> bool
 	{
-		// 检查是否未叠放
-		if (material.xyz().overlay_target() != &card_.get())
-		{
-			return true;
-		}
-
-		// 将超量素材移除出超量素材列表
-		if (const auto erased = xyz_data().materials.erase(material);
-			!erased)
-		{
-			// 不存在该素材返回false
-			return false;
-		}
-		// 设置超量素材的叠放目标
-		material.xyz().xyz_data().overlay_target = CardOptional{nullptr};
-
-		// todo: 设置超量素材状态
-		// auto material_state = material.state();
-
-		// 重置其他素材的序列
-		for (auto begin = xyz_data().materials.begin(), it = begin; it != xyz_data().materials.end(); ++it)
-		{
-			const auto index = std::ranges::distance(begin, it);
-			it->get().state().set_zone_index(static_cast<domain::zone_sequence_type>(index));
-		}
-
-		// todo: 素材效果?
-
-		return true;
+		return XyzInfo::remove_overlay(material, card_);
 	}
 
-	auto Card::XyzHandler::materials() const noexcept -> View
+	auto Card::XyzInfoHandler::materials() const noexcept -> View
 	{
-		return View{xyz_data().materials};
+		return xyz_info().materials();
 	}
 
-	auto Card::XyzHandler::overlay_target() const noexcept -> CardOptional
+	auto Card::XyzInfoHandler::overlay_target() const noexcept -> CardOptional
 	{
-		return xyz_data().overlay_target;
+		return xyz_info().overlay_target();
 	}
 
-	auto Card::XyzHandler::has_material() const noexcept -> bool
+	auto Card::XyzInfoHandler::has_material() const noexcept -> bool
 	{
-		return !xyz_data().materials.empty();
+		return xyz_info().has_material();
 	}
 
-	auto Card::XyzHandler::has_material(const Card& card) const noexcept -> bool
+	auto Card::XyzInfoHandler::has_material(const Card& material) const noexcept -> bool
 	{
-		return xyz_data().materials.contains(card);
+		return xyz_info().has_material(material);
 	}
 
-	auto Card::XyzHandler::material_count() const noexcept -> std::size_t
+	auto Card::XyzInfoHandler::material_count() const noexcept -> XyzInfo::size_type
 	{
-		return xyz_data().materials.size();
+		return xyz_info().material_count();
 	}
 
-	Card::EquipHandler::EquipHandler(Card& card) noexcept
+	Card::EquipInfoHandler::EquipInfoHandler(Card& card) noexcept
 		: card_{card} {}
 
-	auto Card::EquipHandler::equip_data() noexcept -> Equip&
+	auto Card::EquipInfoHandler::equip_info() noexcept -> EquipInfo&
 	{
 		return card_.get().equip_;
 	}
 
-	auto Card::EquipHandler::equip_data() const noexcept -> const Equip&
+	auto Card::EquipInfoHandler::equip_info() const noexcept -> const EquipInfo&
 	{
 		return card_.get().equip_;
 	}
 
-	auto Card::EquipHandler::add_equip(Card& equip) noexcept -> bool
+	// ReSharper disable once CppMemberFunctionMayBeConst
+	auto Card::EquipInfoHandler::add_equip(Card& equip) noexcept -> bool
 	{
-		// 检查是否已装备
-		if (equip.equip().owner() == &card_.get())
-		{
-			return true;
-		}
-
-		// 如果已经是别的卡的装备,将其从原宿主移除
-		if (const auto owner = equip.equip().owner();
-			owner != nullptr)
-		{
-			auto owner_equip = owner.get()->equip();
-			owner_equip.remove_equip(equip);
-		}
-		else
-		{
-			// TODO: 移动装备卡位置?
-		}
-
-		// 将本卡作为装备的所有者
-		equip.equip().equip_data().owner = CardOptional{&card_.get()};
-		// 将装备添加到装备列表
-		equip_data().equips.insert(equip);
-
-		// todo: 装备效果?
-
-		return true;
+		return EquipInfo::add_equip(equip, card_);
 	}
 
-	auto Card::EquipHandler::remove_equip(Card& equip) noexcept -> bool
+	// ReSharper disable once CppMemberFunctionMayBeConst
+	auto Card::EquipInfoHandler::remove_equip(Card& equip) noexcept -> bool
 	{
-		// 检查是否未装备
-		if (equip.equip().owner() != &card_.get())
-		{
-			return true;
-		}
-
-		// 将装备移除出装备列表
-		if (const auto erased = equip_data().equips.erase(equip);
-			!erased)
-		{
-			// 不存在该装备返回false
-			return false;
-		}
-		// 设置装备的装备目标
-		equip.equip().equip_data().owner = CardOptional{nullptr};
-
-		// todo: 装备效果?
-
-		return true;
+		return EquipInfo::remove_equip(equip, card_);
 	}
 
-	auto Card::EquipHandler::equips() const noexcept -> View
+	auto Card::EquipInfoHandler::can_equip() const noexcept -> bool
 	{
-		return View{equip_data().equips};
+		return EquipInfo::can_equip(card_);
 	}
 
-	auto Card::EquipHandler::owner() const noexcept -> CardOptional
+	auto Card::EquipInfoHandler::equips() const noexcept -> View
 	{
-		return equip_data().owner;
+		return equip_info().equips();
 	}
 
-	auto Card::EquipHandler::has_equip() const noexcept -> bool
+	auto Card::EquipInfoHandler::owner() const noexcept -> CardOptional
 	{
-		return !equip_data().equips.empty();
+		return equip_info().owner();
 	}
 
-	auto Card::EquipHandler::has_equip(const Card& card) const noexcept -> bool
+	auto Card::EquipInfoHandler::has_equip() const noexcept -> bool
 	{
-		return equip_data().equips.contains(card);
+		return equip_info().has_equip();
 	}
 
-	auto Card::EquipHandler::equip_count() const noexcept -> std::size_t
+	auto Card::EquipInfoHandler::has_equip(const Card& equip) const noexcept -> bool
 	{
-		return equip_data().equips.size();
+		return equip_info().has_equip(equip);
 	}
 
-	auto Card::EquipHandler::equippable() const noexcept -> bool
+	auto Card::EquipInfoHandler::equip_count() const noexcept -> std::size_t
 	{
-		// 目标必须是:
-		// 1.在场上
-		// 2.表侧表示
-		// 3.不是衍生物
-		if (const auto target_state = card_.get().state();
-			!target_state.is_field_zone() or !target_state.is_face_up_form())
-		{
-			return false;
-		}
-		if (card_.get().prototype_.get().card_type.any_of(domain::CardType::TOKEN_MONSTER))
-		{
-			return false;
-		}
-
-		// todo: 不能成为卡的目标效果
-
-		return true;
+		return equip_info().equip_count();
 	}
 
-	Card::Card(Duel& duel, const domain::CardInstanceId instance_id, const Prototype& prototype) noexcept
+	Card::Card(Duel& duel, const domain::CardInstanceId instance_id, const domain::Player owner, const Prototype& prototype) noexcept
 		: duel_{duel},
 		  instance_id_{instance_id},
-		  prototype_{prototype},
-		  state_
-		  {
-				  .controller = domain::Player::FIRST,
-				  .zone = domain::Zone::DECK,
-				  .zone_index = 0,
-				  .field_zone = domain::FieldZoneSequence::MONSTER_MAIN_1,
-				  .form = domain::FieldZoneForm::FACE_UP_ATTACK,
-				  .reason_player = domain::Player::FIRST,
-				  .reason_card = CardOptional{},
-				  .reason_effect = EffectOptional{},
-				  .reason = {domain::Reason::NORMAL_SUMMON},
-		  },
-		  summon_
-		  {
-				  .kind = domain::SummonKind::NORMAL,
-				  .from_zone = domain::Zone::DECK,
-				  .player = domain::Player::FIRST,
-				  .turn_id = static_cast<domain::TurnId>(0),
-				  .materials = {},
-		  },
-		  battle_
-		  {
-				  .attacked_cards = {},
-				  .battled_cards = {},
-				  .attacked_count = 0,
-				  .attack_announced_count = 0,
-				  .attack_turn_id = static_cast<domain::TurnId>(0),
-				  .attack_canceled_turn_id = static_cast<domain::TurnId>(0),
-		  },
-		  target_
-		  {
-				  .card_targets = {},
-				  .owner_targets = {},
-		  },
-		  xyz_
-		  {
-				  .materials = {},
-				  .overlay_target = CardOptional{},
-		  },
-		  equip_
-		  {
-				  .equips = {},
-				  .owner = CardOptional{},
-		  }
+		  owner_{owner},
+		  prototype_{prototype}
+	// state_{},
+	// summon_{},
+	// battle_{},
+	// target_{},
+	// xyz_{},
+	// equip_{}
 	{
 		//
 	}
@@ -987,28 +746,28 @@ namespace cg::engine
 		return StateHandler{*this};
 	}
 
-	auto Card::summon() noexcept -> SummonHandler
+	auto Card::summon() noexcept -> SummonInfoHandler
 	{
-		return SummonHandler{*this};
+		return SummonInfoHandler{*this};
 	}
 
-	auto Card::battle() noexcept -> BattleHandler
+	auto Card::battle() noexcept -> BattleInfoHandler
 	{
-		return BattleHandler{*this};
+		return BattleInfoHandler{*this};
 	}
 
-	auto Card::target() noexcept -> TargetHandler
+	auto Card::target() noexcept -> TargetInfoHandler
 	{
-		return TargetHandler{*this};
+		return TargetInfoHandler{*this};
 	}
 
-	auto Card::xyz() noexcept -> XyzHandler
+	auto Card::xyz() noexcept -> XyzInfoHandler
 	{
-		return XyzHandler{*this};
+		return XyzInfoHandler{*this};
 	}
 
-	auto Card::equip() noexcept -> EquipHandler
+	auto Card::equip() noexcept -> EquipInfoHandler
 	{
-		return EquipHandler{*this};
+		return EquipInfoHandler{*this};
 	}
 }

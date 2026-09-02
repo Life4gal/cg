@@ -1,100 +1,54 @@
 #pragma once
 
-#include <core/domain/summon.hpp>
+#include <core/domain/id.hpp>
 
 #include <core/engine/prototype.hpp>
-#include <core/engine/card_state.hpp>
-#include <core/engine/turn_state.hpp>
-#include <core/engine/collection.hpp>
+#include <core/engine/state.hpp>
+#include <core/engine/summon_info.hpp>
+#include <core/engine/battle_info.hpp>
+#include <core/engine/target_info.hpp>
+#include <core/engine/xyz_info.hpp>
+#include <core/engine/equip_info.hpp>
 
 namespace cg::engine
 {
+	class Prototype;
 	class Duel;
 
 	class Card
 	{
+		friend State;
+		friend SummonInfo;
+		friend BattleInfo;
+		friend TargetInfo;
+		friend XyzInfo;
+		friend EquipInfo;
+
 	public:
-		class PrototypeHandler;
-		class PropertyHandler;
-		class StateHandler;
-		class SummonHandler;
-		class BattleHandler;
-		class TargetHandler;
-		class XyzHandler;
-		class EquipHandler;
+		//
 
 	private:
-		class Summon
-		{
-		public:
-			// 召唤的类型
-			domain::SummonKind kind;
-			// 从哪里召唤
-			domain::Zone from_zone;
-			// 召唤的玩家
-			domain::Player player;
-			// 召唤的回合
-			domain::TurnId turn_id;
-			// 召唤使用的材料
-			Group materials;
-		};
-
-		class Battle
-		{
-		public:
-			// 本回合攻击过的卡
-			Group attacked_cards;
-			// 本回合交战过的卡
-			Group battled_cards;
-			// 攻击过的次数
-			std::size_t attacked_count;
-			// 攻击宣言过的次数
-			std::size_t attack_announced_count;
-			// 上一次攻击的回合号
-			domain::TurnId attack_turn_id;
-			// 上一次攻击被无效的回合号
-			domain::TurnId attack_canceled_turn_id;
-		};
-
-		class Target
-		{
-		public:
-			// 本卡指定为对象的卡
-			Group card_targets;
-			// 以本卡为对象的卡
-			Group owner_targets;
-		};
-
-		class Xyz
-		{
-		public:
-			// 超量素材
-			// 需要基于CardState::zone_index获取卡,所以容器必须基于插入顺序有序(不能使用Group)
-			Sequence materials;
-			// 素材所属(如果当前卡是超量素材)
-			CardOptional overlay_target;
-		};
-
-		class Equip
-		{
-		public:
-			// 装备卡
-			// 基于CardState::field_zone获取卡,容器无需基于插入顺序有序
-			Group equips;
-			// 装备所属(如果当前卡是装备卡)
-			CardOptional owner;
-		};
-
+		// Duel实例引用
 		std::reference_wrapper<Duel> duel_;
+		// 卡牌实例ID,由Duel生成
 		domain::CardInstanceId instance_id_;
-
+		// 卡牌所有者,与控制者不同
+		domain::Player owner_;
+		// 卡牌原型
 		std::reference_wrapper<const Prototype> prototype_;
-		CardState state_;
-		Summon summon_;
-		Battle battle_;
-		Target target_;
-		Xyz xyz_;
-		Equip equip_;
+
+		// 卡牌状态
+		State state_;
+		// 卡牌召唤信息
+		SummonInfo summon_;
+		// 卡牌战斗信息
+		BattleInfo battle_;
+		// 卡牌对象信息
+		TargetInfo target_;
+		// 卡牌超量信息
+		XyzInfo xyz_;
+		// 卡牌装备信息
+		EquipInfo equip_;
 
 	public:
 		// ==================== 原型 ====================
@@ -107,7 +61,7 @@ namespace cg::engine
 
 			explicit PrototypeHandler(Card& card) noexcept;
 
-			[[nodiscard]] auto prototype_data() const noexcept -> const Prototype&;
+			[[nodiscard]] auto prototype() const noexcept -> const Prototype&;
 
 		public:
 			[[nodiscard]] auto code() const noexcept -> domain::CardCode;
@@ -138,6 +92,8 @@ namespace cg::engine
 
 			explicit PropertyHandler(Card& card) noexcept;
 
+			[[nodiscard]] auto prototype() const noexcept -> PrototypeHandler;
+
 		public:
 			[[nodiscard]] auto card_type() const noexcept -> domain::CardTypeWrapper;
 			[[nodiscard]] auto attribute() const noexcept -> domain::AttributeWrapper;
@@ -164,25 +120,20 @@ namespace cg::engine
 
 			explicit StateHandler(Card& card) noexcept;
 
-			[[nodiscard]] auto state_data() noexcept -> CardState&;
-			[[nodiscard]] auto state_data() const noexcept -> const CardState&;
+			// 传播const
+			[[nodiscard]] auto state() noexcept -> State&;
+			[[nodiscard]] auto state() const noexcept -> const State&;
 
 		public:
 			auto set_controller(domain::Player controller) noexcept -> void;
 			auto set_zone(domain::Zone zone) noexcept -> void;
-			auto set_zone_index(domain::zone_sequence_type zone_index) noexcept -> void;
-			auto set_field_zone(domain::FieldZoneSequence field_zone) noexcept -> void;
-			auto set_form(domain::FieldZoneForm form) noexcept -> void;
-			auto set_reason_player(domain::Player player) noexcept -> void;
-			auto set_reason_card(CardOptional card) noexcept -> void;
-			auto set_reason_effect(EffectOptional effect) noexcept -> void;
+			auto set_reason_player(domain::Player reason_player) noexcept -> void;
+			auto set_reason_card(CardOptional reason_card) noexcept -> void;
+			auto set_reason_effect(EffectOptional reason_effect) noexcept -> void;
 			auto set_reason(domain::ReasonWrapper reason) noexcept -> void;
 
 			[[nodiscard]] auto controller() const noexcept -> domain::Player;
 			[[nodiscard]] auto zone() const noexcept -> domain::Zone;
-			[[nodiscard]] auto zone_index() const noexcept -> domain::zone_sequence_type;
-			[[nodiscard]] auto field_zone() const noexcept -> domain::FieldZoneSequence;
-			[[nodiscard]] auto form() const noexcept -> domain::FieldZoneForm;
 			[[nodiscard]] auto reason_player() const noexcept -> domain::Player;
 			[[nodiscard]] auto reason_card() const noexcept -> CardOptional;
 			[[nodiscard]] auto reason_effect() const noexcept -> EffectOptional;
@@ -190,8 +141,6 @@ namespace cg::engine
 
 			[[nodiscard]] auto is_controller(domain::Player expected_player) const noexcept -> bool;
 			[[nodiscard]] auto is_zone(domain::Zone expected_zone) const noexcept -> bool;
-			[[nodiscard]] auto is_field_zone(domain::FieldZoneSequence expected_field_zone) const noexcept -> bool;
-			[[nodiscard]] auto is_form(domain::FieldZoneForm expected_form) const noexcept -> bool;
 			[[nodiscard]] auto is_reason_player(domain::Player expected_player) const noexcept -> bool;
 			[[nodiscard]] auto is_reason_card(CardOptional expected_card) const noexcept -> bool;
 			[[nodiscard]] auto is_reason_effect(EffectOptional expected_effect) const noexcept -> bool;
@@ -207,23 +156,24 @@ namespace cg::engine
 
 		// ==================== 召唤信息 ====================
 
-		class SummonHandler
+		class SummonInfoHandler
 		{
 			friend Card;
 
 			std::reference_wrapper<Card> card_;
 
-			explicit SummonHandler(Card& card) noexcept;
+			explicit SummonInfoHandler(Card& card) noexcept;
 
-			[[nodiscard]] auto summon_data() noexcept -> Summon&;
-			[[nodiscard]] auto summon_data() const noexcept -> const Summon&;
+			// 传播const
+			[[nodiscard]] auto summon_info() noexcept -> SummonInfo&;
+			[[nodiscard]] auto summon_info() const noexcept -> const SummonInfo&;
 
 		public:
 			auto set_kind(domain::SummonKind kind) noexcept -> void;
 			auto set_from_zone(domain::Zone from_zone) noexcept -> void;
 			auto set_player(domain::Player player) noexcept -> void;
 			auto set_turn_id(domain::TurnId turn_id) noexcept -> void;
-			auto set_materials(Group group) noexcept -> void;
+			auto set_materials(Group materials) noexcept -> void;
 
 			[[nodiscard]] auto kind() const noexcept -> domain::SummonKind;
 			[[nodiscard]] auto from_zone() const noexcept -> domain::Zone;
@@ -241,16 +191,17 @@ namespace cg::engine
 
 		// ==================== 战斗记录 ====================
 
-		class BattleHandler
+		class BattleInfoHandler
 		{
 			friend Card;
 
 			std::reference_wrapper<Card> card_;
 
-			explicit BattleHandler(Card& card) noexcept;
+			explicit BattleInfoHandler(Card& card) noexcept;
 
-			[[nodiscard]] auto battle_data() noexcept -> Battle&;
-			[[nodiscard]] auto battle_data() const noexcept -> const Battle&;
+			// 传播const
+			[[nodiscard]] auto battle_info() noexcept -> BattleInfo&;
+			[[nodiscard]] auto battle_info() const noexcept -> const BattleInfo&;
 
 		public:
 			auto record_attack_announced() noexcept -> void;
@@ -258,8 +209,8 @@ namespace cg::engine
 			auto record_attacked_card(Card& card) noexcept -> void;
 
 			[[nodiscard]] auto attacked_cards() const noexcept -> View;
-			[[nodiscard]] auto attacked_count() const noexcept -> std::size_t;
-			[[nodiscard]] auto attack_announced_count() const noexcept -> std::size_t;
+			[[nodiscard]] auto attacked_count() const noexcept -> BattleInfo::size_type;
+			[[nodiscard]] auto attack_announced_count() const noexcept -> BattleInfo::size_type;
 			[[nodiscard]] auto attack_turn_id() const noexcept -> domain::TurnId;
 			[[nodiscard]] auto attack_canceled_turn_id() const noexcept -> domain::TurnId;
 
@@ -269,44 +220,43 @@ namespace cg::engine
 
 		// ==================== 对象指定 ====================
 
-		class TargetHandler
+		class TargetInfoHandler
 		{
 			friend Card;
 
 			std::reference_wrapper<Card> card_;
 
-			explicit TargetHandler(Card& card) noexcept;
+			explicit TargetInfoHandler(Card& card) noexcept;
 
-			[[nodiscard]] auto target_data() noexcept -> Target&;
-			[[nodiscard]] auto target_data() const noexcept -> const Target&;
-
-			auto set_owner_target(Card& card) noexcept -> bool;
-			auto cancel_owner_target(const Card& card) noexcept -> bool;
+			// 传播const
+			[[nodiscard]] auto target_info() noexcept -> TargetInfo&;
+			[[nodiscard]] auto target_info() const noexcept -> const TargetInfo&;
 
 		public:
-			auto set_target(Card& card) noexcept -> bool;
-			auto cancel_target(Card& card) noexcept -> bool;
+			auto set_target(Card& target) noexcept -> bool;
+			auto cancel_target(Card& target) noexcept -> bool;
 
 			[[nodiscard]] auto card_targets() const noexcept -> View;
 			[[nodiscard]] auto owner_targets() const noexcept -> View;
 
 			[[nodiscard]] auto has_target() const noexcept -> bool;
 			[[nodiscard]] auto has_target(const Card& card) const noexcept -> bool;
-			[[nodiscard]] auto target_count() const noexcept -> std::size_t;
+			[[nodiscard]] auto target_count() const noexcept -> TargetInfo::size_type;
 		};
 
 		// ==================== 超量素材 ====================
 
-		class XyzHandler
+		class XyzInfoHandler
 		{
 			friend Card;
 
 			std::reference_wrapper<Card> card_;
 
-			explicit XyzHandler(Card& card) noexcept;
+			explicit XyzInfoHandler(Card& card) noexcept;
 
-			[[nodiscard]] auto xyz_data() noexcept -> Xyz&;
-			[[nodiscard]] auto xyz_data() const noexcept -> const Xyz&;
+			// 传播const
+			[[nodiscard]] auto xyz_info() noexcept -> XyzInfo&;
+			[[nodiscard]] auto xyz_info() const noexcept -> const XyzInfo&;
 
 		public:
 			// 将一张卡作为超量素材叠放到本卡(返回是否叠放成功)(如果已经是本卡超量素材返回true)
@@ -318,53 +268,53 @@ namespace cg::engine
 			[[nodiscard]] auto overlay_target() const noexcept -> CardOptional;
 
 			[[nodiscard]] auto has_material() const noexcept -> bool;
-			[[nodiscard]] auto has_material(const Card& card) const noexcept -> bool;
-			[[nodiscard]] auto material_count() const noexcept -> std::size_t;
+			[[nodiscard]] auto has_material(const Card& material) const noexcept -> bool;
+			[[nodiscard]] auto material_count() const noexcept -> XyzInfo::size_type;
 		};
 
 		// ==================== 装备 ====================
 
-		class EquipHandler
+		class EquipInfoHandler
 		{
 			friend Card;
 
 			std::reference_wrapper<Card> card_;
 
-			explicit EquipHandler(Card& card) noexcept;
+			explicit EquipInfoHandler(Card& card) noexcept;
 
-			[[nodiscard]] auto equip_data() noexcept -> Equip&;
-			[[nodiscard]] auto equip_data() const noexcept -> const Equip&;
+			// 传播const
+			[[nodiscard]] auto equip_info() noexcept -> EquipInfo&;
+			[[nodiscard]] auto equip_info() const noexcept -> const EquipInfo&;
 
 		public:
 			// 将一张卡作为装备卡装备到本卡(返回是否装备成功)(如果已经是本卡装备返回true)
 			auto add_equip(Card& equip) noexcept -> bool;
 			// 将一张作为本卡装备的卡移除(返回是否移除成功)(如果不是本卡装备返回true)
 			auto remove_equip(Card& equip) noexcept -> bool;
+			// 本卡是否可以是装备卡
+			[[nodiscard]] auto can_equip() const noexcept -> bool;
 
 			[[nodiscard]] auto equips() const noexcept -> View;
 			[[nodiscard]] auto owner() const noexcept -> CardOptional;
 
 			[[nodiscard]] auto has_equip() const noexcept -> bool;
-			[[nodiscard]] auto has_equip(const Card& card) const noexcept -> bool;
+			[[nodiscard]] auto has_equip(const Card& equip) const noexcept -> bool;
 			[[nodiscard]] auto equip_count() const noexcept -> std::size_t;
-
-			// 是否可以是装备卡
-			[[nodiscard]] auto equippable() const noexcept -> bool;
 		};
 
 		// ==================== | ====================
 
-		Card(Duel& duel, domain::CardInstanceId instance_id, const Prototype& prototype) noexcept;
+		Card(Duel& duel, domain::CardInstanceId instance_id, domain::Player owner, const Prototype& prototype) noexcept;
 
 		[[nodiscard]] auto instance_id() const noexcept -> domain::CardInstanceId;
 
 		[[nodiscard]] auto prototype() noexcept -> PrototypeHandler;
 		[[nodiscard]] auto property() noexcept -> PropertyHandler;
 		[[nodiscard]] auto state() noexcept -> StateHandler;
-		[[nodiscard]] auto summon() noexcept -> SummonHandler;
-		[[nodiscard]] auto battle() noexcept -> BattleHandler;
-		[[nodiscard]] auto target() noexcept -> TargetHandler;
-		[[nodiscard]] auto xyz() noexcept -> XyzHandler;
-		[[nodiscard]] auto equip() noexcept -> EquipHandler;
+		[[nodiscard]] auto summon() noexcept -> SummonInfoHandler;
+		[[nodiscard]] auto battle() noexcept -> BattleInfoHandler;
+		[[nodiscard]] auto target() noexcept -> TargetInfoHandler;
+		[[nodiscard]] auto xyz() noexcept -> XyzInfoHandler;
+		[[nodiscard]] auto equip() noexcept -> EquipInfoHandler;
 	};
 }

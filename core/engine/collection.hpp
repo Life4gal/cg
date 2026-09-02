@@ -172,7 +172,12 @@ namespace cg::engine
 
 		using iterator = container_type::iterator;
 		using const_iterator = container_type::const_iterator;
+
+		using reference = container_type::reference;
+		using const_reference = container_type::const_reference;
+
 		using size_type = container_type::size_type;
+		using difference_type = container_type::difference_type;
 
 	private:
 		container_type cards_;
@@ -243,6 +248,16 @@ namespace cg::engine
 			return cards_.back();
 		}
 
+		[[nodiscard]] constexpr auto operator[](const difference_type index) noexcept -> reference
+		{
+			return cards_[index];
+		}
+
+		[[nodiscard]] constexpr auto operator[](const difference_type index) const noexcept -> const_reference
+		{
+			return cards_[index];
+		}
+
 		// -------------------------------------------------
 		// 修改容器
 		// -------------------------------------------------
@@ -286,6 +301,18 @@ namespace cg::engine
 			}
 
 			return false;
+		}
+
+		constexpr auto erase(const difference_type index) noexcept -> bool
+		{
+			if (std::cmp_greater_equal(index, size()))
+			{
+				return false;
+			}
+
+			const auto it = begin() + index;
+			cards_.erase(it);
+			return true;
 		}
 
 		constexpr auto clear() noexcept -> void

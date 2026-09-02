@@ -9,13 +9,14 @@ add_library(
 	${CMAKE_CURRENT_SOURCE_DIR}/utility/enum.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utility/string_hash.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utility/random.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utility/functional.hpp
 				
 	# =============================
 	# dommain
 	# =============================
 	
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/player.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/domain/random.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/toss.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/card.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/attribute.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/race.hpp
@@ -27,30 +28,55 @@ add_library(
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/id.hpp
 				
 	# =============================
-	# dommain
+	# engine
 	# =============================
-
-	${CMAKE_CURRENT_SOURCE_DIR}/engine/series_registry.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/engine/series_registry.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/engine/prototype.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/engine/prototype_registry.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/engine/prototype_registry.cpp
 
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/card_reference.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/effect_reference.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/engine/card_state.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/engine/turn_state.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/card_order.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/card_order.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/collection.hpp
+
+	# =============== CARD ===============
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/prototype.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/prototype.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/state.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/state.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/summon_info.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/summon_info.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/battle_info.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/battle_info.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/target_info.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/target_info.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/xyz_info.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/xyz_info.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/equip_info.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/equip_info.cpp
+
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/card.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/card.cpp
+
+	# =============== EFFECT ===============
+
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/effect.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/effect.cpp
+
+	# =============== FIELD ===============
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/playground.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/playground.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/toss_info.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/toss_info.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/turn_info.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/turn_info.cpp
+
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/field.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/field.cpp
 
-	
+	# =============== DUEL ===============
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/series_registry.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/series_registry.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/prototype_registry.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/prototype_registry.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/api.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/api.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/duel.hpp

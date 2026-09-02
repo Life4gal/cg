@@ -243,10 +243,8 @@ namespace cg::host
 		}
 
 		// 转换原型
-		[[nodiscard]] auto build_prototype(const py::object& prototype, const std::vector<std::string>& fields) noexcept -> std::optional<engine::Prototype>
+		[[nodiscard]] auto build_prototype(engine::Prototype& out_prototype, const py::object& prototype, const std::vector<std::string>& fields) noexcept -> bool
 		{
-			engine::Prototype result{};
-
 			try
 			{
 				for (const auto& field: fields)
@@ -254,80 +252,79 @@ namespace cg::host
 					// 规范卡密
 					if (field == "canonical_code")
 					{
-						result.canonical_code = read_field<domain::CardCode>(prototype, field);
+						out_prototype.set_canonical_code(read_field<domain::CardCode>(prototype, field));
 					}
 					// 字段
 					else if (field == "series")
 					{
 						const auto list = prototype.attr("series").cast<py::list>();
-
-						std::size_t i = 0;
-						for (const auto item: list)
+						if (list.size() >= engine::Prototype::max_series_count)
 						{
-							if (i >= result.series.size())
-							{
-								SPDLOG_ERROR("字段过多: 最多{}个,实际{}个", result.series.size(), list.size());
-								return std::nullopt;
-							}
+							SPDLOG_ERROR("字段过多: 最多{}个,实际{}个", engine::Prototype::max_series_count, list.size());
+							return false;
+						}
 
-							result.series[i] = item.cast<domain::SeriesCode>();
-							i += 1;
+						engine::Prototype::series_type series{};
+						for (std::size_t i = 0; i < list.size(); ++i)
+						{
+							const auto& item = list[i];
+							series[i] = item.cast<domain::SeriesCode>();
 						}
 					}
 					// 卡牌类型
 					else if (field == "card_type")
 					{
-						result.card_type = {read_field<domain::CardType>(prototype, field)};
+						out_prototype.set_card_type(read_field<domain::CardType>(prototype, field));
 					}
 					// 属性
 					else if (field == "attribute")
 					{
-						result.attribute = {read_field<domain::Attribute>(prototype, field)};
+						out_prototype.set_attribute(read_field<domain::Attribute>(prototype, field));
 					}
 					// 种族
 					else if (field == "race")
 					{
-						result.race = read_field<domain::Race>(prototype, field);
+						out_prototype.set_race(read_field<domain::Race>(prototype, field));
 					}
 					// 等级
 					else if (field == "level")
 					{
-						result.level = {read_field<domain::Level>(prototype, field)};
+						out_prototype.set_level(read_field<domain::Level>(prototype, field));
 					}
 					// 阶级
 					else if (field == "rank")
 					{
-						result.rank = read_field<domain::Rank>(prototype, field);
+						out_prototype.set_rank(read_field<domain::Rank>(prototype, field));
 					}
 					// 链接箭头
 					else if (field == "link_marker")
 					{
-						result.link_marker = {read_field<domain::LinkMarker>(prototype, field)};
+						out_prototype.set_link_marker(read_field<domain::LinkMarker>(prototype, field));
 					}
 					// 攻击力
 					else if (field == "attack")
 					{
-						result.attack = read_field<domain::attack_defense_value_type>(prototype, field);
+						out_prototype.set_attack(read_field<domain::attack_defense_value_type>(prototype, field));
 					}
 					// 防御力
 					else if (field == "defense")
 					{
-						result.defense = read_field<domain::attack_defense_value_type>(prototype, field);
+						out_prototype.set_defense(read_field<domain::attack_defense_value_type>(prototype, field));
 					}
 					// 灵摆刻度
 					else if (field == "left_pendulum")
 					{
-						result.left_pendulum = read_field<domain::PendulumScale>(prototype, field);
+						out_prototype.set_left_pendulum(read_field<domain::PendulumScale>(prototype, field));
 					}
 					else if (field == "right_pendulum")
 					{
-						result.right_pendulum = read_field<domain::PendulumScale>(prototype, field);
+						out_prototype.set_right_pendulum(read_field<domain::PendulumScale>(prototype, field));
 					}
 					else
 					{
 						// 这应该不可能发生
 						SPDLOG_ERROR("未知字段: {}", field);
-						return std::nullopt;
+						return false;
 					}
 				}
 			}
@@ -335,10 +332,10 @@ namespace cg::host
 			{
 				SPDLOG_ERROR("构建原型失败: {}", e.what());
 				PyErr_Clear();
-				return std::nullopt;
+				return false;
 			}
 
-			return result;
+			return true;
 		}
 
 		// 校验数据范围
@@ -351,7 +348,7 @@ namespace cg::host
 					return value >= 0 || value == domain::unknown_attack_defense_value;
 				};
 
-				return valid(prototype.attack) && valid(prototype.defense);
+				return valid(prototype.attack()) && valid(prototype.defense());
 			};
 			const auto validate_level = [&prototype]() noexcept -> bool
 			{
@@ -364,7 +361,7 @@ namespace cg::host
 					return current >= min && current <= max;
 				};
 
-				return valid(prototype.level);
+				return valid(prototype.level());
 			};
 			const auto validate_rank = [&prototype]() noexcept -> bool
 			{
@@ -377,7 +374,7 @@ namespace cg::host
 					return current >= min && current <= max;
 				};
 
-				return valid(prototype.rank);
+				return valid(prototype.rank());
 			};
 			const auto validate_pendulum = [&prototype]() noexcept -> bool
 			{
@@ -390,7 +387,7 @@ namespace cg::host
 					return current >= min && current <= max;
 				};
 
-				return valid(prototype.left_pendulum) && valid(prototype.right_pendulum);
+				return valid(prototype.left_pendulum()) && valid(prototype.right_pendulum());
 			};
 
 			switch (kind)
@@ -537,20 +534,19 @@ namespace cg::host
 			}
 
 			// 构建原型
-			auto prototype = build_prototype(prototype_data, fields);
-			if (!prototype.has_value())
+			engine::Prototype prototype{code};
+			if (!build_prototype(prototype, prototype_data, fields))
 			{
 				return std::nullopt;
 			}
 
 			// 校验数值
-			if (!validate_ranges(*prototype, *kind))
+			if (!validate_ranges(prototype, *kind))
 			{
 				return std::nullopt;
 			}
 
 			// 返回原型
-			prototype->code = code;
 			return prototype;
 		}
 		catch (const py::error_already_set& e)

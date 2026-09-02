@@ -2,9 +2,11 @@
 
 namespace cg::engine
 {
-	auto PrototypeRegistry::register_prototype(const Prototype& prototype) noexcept -> void
+	auto PrototypeRegistry::register_prototype(const Prototype& prototype) noexcept -> const Prototype&
 	{
-		registered_prototype_[prototype.code] = prototype;
+		auto [it, inserted] = registered_prototype_.insert_or_assign(prototype.code(), prototype);
+
+		return it->second;
 	}
 
 	auto PrototypeRegistry::registered(const domain::CardCode code) const noexcept -> bool

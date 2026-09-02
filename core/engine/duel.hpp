@@ -50,6 +50,9 @@ namespace cg::engine
 		// 效果实例ID生成器
 		EffectInstanceIdWrapper effect_instance_id_generator_;
 
+		[[nodiscard]] auto make_card_instance_id() noexcept -> domain::CardInstanceId;
+		[[nodiscard]] auto make_effect_instance_id() noexcept -> domain::EffectInstanceId;
+
 	public:
 		explicit Duel(random_type::result_type seed) noexcept;
 
@@ -62,31 +65,29 @@ namespace cg::engine
 
 		~Duel() noexcept = default;
 
-		// ==================== duel ====================
+		// ==================== host ====================
 
 		// 绑定脚本宿主
 		auto bind_host(std::unique_ptr<script::Host> host) noexcept -> void;
 
-		// 开始决斗
-		auto start() noexcept -> void;
+		// 注册卡牌原型
+		auto register_prototype(domain::CardCode code) noexcept -> const Prototype*;
 
 		// ==================== random ====================
 
 		[[nodiscard]] auto random() const noexcept -> random_type&;
 
-		// ==================== prototype ====================
-
-		// 注册卡牌原型
-		auto register_prototype(domain::CardCode code) noexcept -> bool;
-
 		// ==================== field ====================
 
 		// 初始化玩家信息
-		auto set_player_info(domain::Player player, domain::life_point_type life_point, domain::zone_sequence_type start_hand, domain::zone_sequence_type draw_count) noexcept -> void;
+		auto set_player_info(domain::Player player, domain::life_point_type life_point, Field::size_type start_hand, Field::size_type draw_count) noexcept -> void;
 
-		// 添加卡牌实例到场上
-		auto register_card(domain::CardCode code, domain::Player player, domain::Zone zone, domain::FieldZoneSequence field_zone, domain::FieldZoneForm form) noexcept -> CardReference;
-		// 添加卡牌实例到非场上
+		// 添加卡牌实例到指定区域
 		auto register_card(domain::CardCode code, domain::Player player, domain::Zone zone) noexcept -> CardReference;
+
+		// ==================== DUEL! ====================
+
+		// 开始决斗
+		auto start() noexcept -> void;
 	};
 }

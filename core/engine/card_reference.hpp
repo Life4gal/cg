@@ -10,6 +10,12 @@ namespace cg::engine
 	{
 	public:
 		using reference_wrapper::reference_wrapper;
+
+		[[nodiscard]] constexpr auto operator==(const CardReference& other) const noexcept -> bool
+		{
+			// 必须引用同一个实例
+			return &get() == &other.get();
+		}
 	};
 
 	class CardOptional
@@ -22,17 +28,42 @@ namespace cg::engine
 
 	public:
 		constexpr CardOptional() noexcept
+			: CardOptional{nullptr} {}
+
+		constexpr explicit(false) CardOptional(std::nullptr_t) noexcept
 			: card_{nullptr} {}
 
 		constexpr explicit CardOptional(Card* card) noexcept
 			: card_{card} {}
 
-		constexpr explicit CardOptional(const CardReference reference) noexcept
+		constexpr explicit CardOptional(const CardReference& reference) noexcept
 			: card_{&reference.get()} {}
 
-		[[nodiscard]] constexpr auto get() const noexcept -> Card*
+		[[nodiscard]] constexpr auto operator*() const noexcept -> Card&
+		{
+			return *card_;
+		}
+
+		// 不传播const
+		// [[nodiscard]] constexpr auto operator*() const noexcept -> const Card&
+		// {
+		// 	return *card_;
+		// }
+
+		[[nodiscard]] constexpr auto operator->() const noexcept -> Card*
 		{
 			return card_;
+		}
+
+		// 不传播const
+		// [[nodiscard]] constexpr auto operator->() const noexcept -> const Card*
+		// {
+		// 	return card_;
+		// }
+
+		[[nodiscard]] constexpr explicit operator bool() const noexcept
+		{
+			return card_ != nullptr;
 		}
 
 		[[nodiscard]] constexpr auto operator==(const Card* other) const noexcept -> bool
@@ -45,6 +76,14 @@ namespace cg::engine
 			return *this == other.card_;
 		}
 
-		// todo
+		[[nodiscard]] constexpr auto operator==(const CardReference& other) const noexcept -> bool
+		{
+			return card_ != nullptr && card_ == &other.get();
+		}
+
+		[[nodiscard]] friend constexpr auto operator==(const CardReference& lhs, const CardOptional& rhs) noexcept -> bool
+		{
+			return rhs == lhs;
+		}
 	};
 }

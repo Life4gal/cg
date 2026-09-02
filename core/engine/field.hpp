@@ -1,99 +1,24 @@
 #pragma once
 
-#include <array>
-#include <span>
-
-#include <core/domain/numeric.hpp>
-#include <core/domain/zone.hpp>
-#include <core/domain/player.hpp>
-#include <core/domain/random.hpp>
-#include <core/domain/turn.hpp>
-
-#include <core/engine/collection.hpp>
+#include <core/engine/playground.hpp>
+#include <core/engine/toss_info.hpp>
+#include <core/engine/turn_info.hpp>
 
 namespace cg::engine
 {
 	class Duel;
 
-	class PlayerField
-	{
-	public:
-		// 不包含额外怪兽区
-		using monster_field_type = std::array<CardOptional, domain::field_monster_main_count>;
-		// 魔陷区+场地魔法区
-		using spell_trap_field_type = std::array<CardOptional, domain::field_spell_trap_count>;
-
-		// 玩家生命值
-		domain::life_point_type life_point;
-		// 玩家起始手牌数量
-		domain::zone_sequence_type start_hand;
-		// 玩家每回合抽牌数量
-		domain::zone_sequence_type draw_count;
-		// 卡组
-		Sequence deck;
-		// 额外卡组
-		Sequence extra_deck;
-		// 手牌
-		Sequence hand;
-		// 墓地
-		Sequence graveyard;
-		// 除外区
-		Sequence removed;
-		// 怪兽区
-		monster_field_type monster;
-		// 魔陷区
-		spell_trap_field_type spell_trap;
-	};
-
 	class Field
 	{
 	public:
-		class PlaygroundHandler;
-		class RandomHandler;
-		class TurnHandler;
+		using size_type = Playground::size_type;
 
 	private:
-		class Playground
-		{
-		public:
-			using player_fields_type = std::array<PlayerField, domain::player_count>;
-			using shared_extra_monster_field_type = std::array<CardOptional, domain::field_monster_extra_count>;
-
-			// 双方玩家场地
-			player_fields_type player_fields;
-			// 额外怪兽区
-			shared_extra_monster_field_type shared_extra_monster_field;
-		};
-
-		class Random
-		{
-		public:
-			std::vector<domain::DiceValue> dice_results;
-			std::vector<domain::CoinSide> coin_results;
-		};
-
-		class Turn
-		{
-		public:
-			// 当前回合数
-			domain::TurnId id;
-			// 当前阶段
-			domain::Phase phase;
-			// 当前玩家
-			domain::Player player;
-			// 当前回合是否允许攻击
-			bool can_battle;
-			// 当前回合是否可通常召唤
-			bool can_normal_summon;
-			// 当前回合是否可以特殊召唤
-			bool can_special_summon;
-		};
-
 		std::reference_wrapper<Duel> duel_;
 
 		Playground playground_;
-		Random random_;
-		Turn turn_;
+		TossInfo toss_;
+		TurnInfo turn_;
 
 		[[nodiscard]] auto duel() const noexcept -> Duel&;
 
@@ -108,28 +33,32 @@ namespace cg::engine
 
 			explicit PlaygroundHandler(Field& field) noexcept;
 
-			[[nodiscard]] auto playground_data() noexcept -> Playground&;
-			[[nodiscard]] auto playground_data() const noexcept -> const Playground&;
-
-			[[nodiscard]] auto player_field(domain::Player player) noexcept -> PlayerField&;
-			[[nodiscard]] auto player_field(domain::Player player) const noexcept -> const PlayerField&;
+			// 传播const
+			[[nodiscard]] auto playground() noexcept -> Playground&;
+			[[nodiscard]] auto playground() const noexcept -> const Playground&;
 
 		public:
+			// 设置玩家生命值
 			auto set_life_point(domain::Player player, domain::life_point_type life_point) noexcept -> void;
-			auto set_start_hand(domain::Player player, domain::zone_sequence_type start_hand) noexcept -> void;
-			auto set_draw_count(domain::Player player, domain::zone_sequence_type draw_count) noexcept -> void;
+			// 设置玩家起手手牌数量
+			auto set_start_hand(domain::Player player, size_type start_hand) noexcept -> void;
+			// 设置玩家每回合抽牌数量
+			auto set_draw_count(domain::Player player, size_type draw_count) noexcept -> void;
 
+			// 获取玩家生命值
 			[[nodiscard]] auto life_point(domain::Player player) const noexcept -> domain::life_point_type;
-			[[nodiscard]] auto start_hand(domain::Player player) const noexcept -> domain::zone_sequence_type;
-			[[nodiscard]] auto draw_count(domain::Player player) const noexcept -> domain::zone_sequence_type;
+			// 获取玩家起手手牌数量
+			[[nodiscard]] auto start_hand(domain::Player player) const noexcept -> size_type;
+			// 获取玩家每回合抽牌数量
+			[[nodiscard]] auto draw_count(domain::Player player) const noexcept -> size_type;
 
 			// 改变生命值
 			auto update_life_point(domain::Player player, domain::life_point_type delta) noexcept -> void;
 
-			// 起始出牌
+			// 起始抽牌
 			auto start_draw(domain::Player player) noexcept -> void;
 			// 从卡组抽牌
-			auto draw(domain::Player player, domain::zone_sequence_type count) noexcept -> void;
+			auto draw(domain::Player player, size_type count) noexcept -> void;
 			// 切洗卡组
 			auto shuffle_deck(domain::Player player) noexcept -> void;
 			// 反转卡组
@@ -139,39 +68,41 @@ namespace cg::engine
 			// 切洗手牌
 			auto shuffle_hand(domain::Player player) noexcept -> void;
 
-			// 检查指定场地区域是否被占用
-			[[nodiscard]] auto occupied(domain::Player player, domain::Zone zone, domain::FieldZoneSequence field_zone) const noexcept -> bool;
-			// 获取指定场地区域的卡牌
-			[[nodiscard]] auto select(domain::Player player, domain::Zone zone, domain::FieldZoneSequence field_zone) const noexcept -> CardOptional;
-			// 获取指定非场地区域的卡牌
-			[[nodiscard]] auto select(domain::Player player, domain::Zone zone, domain::zone_sequence_type zone_index) const noexcept -> CardOptional;
-			// 获取指定区域的卡牌数量
-			[[nodiscard]] auto count(domain::Player player, domain::Zone zone) const noexcept -> domain::zone_sequence_type;
+			// 检查指定区域是否被占用
+			[[nodiscard]] auto occupied(domain::Player player, domain::Zone zone) const noexcept -> bool;
 			// 获取指定区域的卡牌
-			[[nodiscard]] auto select(domain::Player player, domain::Zone zone) const noexcept -> View;
+			[[nodiscard]] auto select(domain::Player player, domain::Zone zone) const noexcept -> CardOptional;
+			// 获取指定区域的卡牌数量
+			[[nodiscard]] auto count(domain::Player player, domain::Zone zone) const noexcept -> size_type;
 			// 获取指定场地区域可用区域
-			[[nodiscard]] auto free_area(domain::Player player, domain::Zone zone) const noexcept -> std::vector<domain::FieldZoneSequence>;
+			[[nodiscard]] auto free_area(domain::Player player, domain::Zone zone) const noexcept -> std::vector<domain::Zone::size_type>;
+
+			// 将卡牌从其所在区域移除
+			auto remove_card(CardReference card) noexcept -> void;
+			// 将卡牌移动到指定位置
+			auto move_card(CardReference card, domain::Player player, domain::Zone zone) noexcept -> void;
 		};
 
-		// ==================== 随机 ====================
+		// ==================== 掷骰子/硬币 ====================
 
-		class RandomHandler
+		class TossInfoHandler
 		{
 			friend Field;
 
 			std::reference_wrapper<Field> field_;
 
-			explicit RandomHandler(Field& field) noexcept;
+			explicit TossInfoHandler(Field& field) noexcept;
 
-			[[nodiscard]] auto random_data() noexcept -> Random&;
-			[[nodiscard]] auto random_data() const noexcept -> const Random&;
+			// 传播const
+			[[nodiscard]] auto toss_info() noexcept -> TossInfo&;
+			[[nodiscard]] auto toss_info() const noexcept -> const TossInfo&;
 
 		public:
 			auto toss_dice(domain::Player player, std::size_t count) noexcept -> void;
 			auto toss_coin(domain::Player player, std::size_t count) noexcept -> void;
 
-			[[nodiscard]] auto dice_results(domain::Player player) const noexcept -> std::span<const domain::DiceValue>;
-			[[nodiscard]] auto coin_results(domain::Player player) const noexcept -> std::span<const domain::CoinSide>;
+			[[nodiscard]] auto get_dice(domain::Player player) const noexcept -> const TossInfo::dice_results_type&;
+			[[nodiscard]] auto get_coin(domain::Player player) const noexcept -> const TossInfo::coin_results_type&;
 		};
 
 		// ==================== 回合/阶段 ====================
@@ -184,8 +115,9 @@ namespace cg::engine
 
 			explicit TurnHandler(Field& field) noexcept;
 
-			[[nodiscard]] auto turn_data() noexcept -> Turn&;
-			[[nodiscard]] auto turn_data() const noexcept -> const Turn&;
+			// 传播const
+			[[nodiscard]] auto turn_info() noexcept -> TurnInfo&;
+			[[nodiscard]] auto turn_info() const noexcept -> const TurnInfo&;
 
 		public:
 			auto set_turn_id(domain::TurnId id) noexcept -> void;
@@ -224,7 +156,7 @@ namespace cg::engine
 		explicit Field(Duel& duel) noexcept;
 
 		[[nodiscard]] auto playground() noexcept -> PlaygroundHandler;
-		[[nodiscard]] auto random() noexcept -> RandomHandler;
+		[[nodiscard]] auto random() noexcept -> TossInfoHandler;
 		[[nodiscard]] auto turn() noexcept -> TurnHandler;
 	};
 }

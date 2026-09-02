@@ -5,13 +5,27 @@ namespace
 	using namespace cg;
 
 	constexpr auto card_instance_id_begin = static_cast<domain::CardInstanceId>(0);
-	constexpr auto card_instance_step = static_cast<domain::CardInstanceId>(1);
+	constexpr auto card_instance_id_step = static_cast<domain::CardInstanceId>(1);
 	constexpr auto effect_instance_id_begin = static_cast<domain::EffectInstanceId>(0);
 	constexpr auto effect_instance_id_step = static_cast<domain::EffectInstanceId>(1);
 }
 
 namespace cg::engine
 {
+	auto Duel::make_card_instance_id() noexcept -> domain::CardInstanceId
+	{
+		const auto id = card_instance_id_generator_;
+		card_instance_id_generator_ += card_instance_id_step;
+		return id;
+	}
+
+	auto Duel::make_effect_instance_id() noexcept -> domain::EffectInstanceId
+	{
+		const auto id = effect_instance_id_generator_;
+		effect_instance_id_generator_ += effect_instance_id_step;
+		return id;
+	}
+
 	Duel::Duel(const random_type::result_type seed) noexcept
 		: random_{seed},
 		  api_{*this},
@@ -27,7 +41,6 @@ namespace cg::engine
 		//
 	}
 
-
 	Duel::Duel() noexcept
 		: Duel{std::random_device{}()} {}
 
@@ -35,6 +48,62 @@ namespace cg::engine
 	{
 		host_ = std::move(host);
 		host_->bind_api(api_);
+	}
+
+	auto Duel::register_prototype(const domain::CardCode code) noexcept -> const Prototype*
+	{
+		if (host_ == nullptr)
+		{
+			return nullptr;
+		}
+
+		const auto prototype = host_->load_prototype(code);
+		if (!prototype.has_value())
+		{
+			return nullptr;
+		}
+
+		return &prototype_registry_.register_prototype(*prototype);
+	}
+
+	auto Duel::random() const noexcept -> random_type&
+	{
+		return random_;
+	}
+
+	auto Duel::set_player_info(
+		const domain::Player player,
+		const domain::life_point_type life_point,
+		const Field::size_type start_hand,
+		const Field::size_type draw_count
+	) noexcept -> void
+	{
+		auto playground = field_.playground();
+
+		playground.set_life_point(player, life_point);
+		playground.set_start_hand(player, start_hand);
+		playground.set_draw_count(player, draw_count);
+	}
+
+	auto Duel::register_card(const domain::CardCode code, const domain::Player player, const domain::Zone zone) noexcept -> CardReference
+	{
+		const auto* prototype = prototype_registry_.find_prototype(code);
+		if (prototype == nullptr)
+		{
+			// 原型注册失败
+			// todo: 怎么办?
+			static Prototype fallback{domain::CardCode::INVALID};
+			prototype = &fallback;
+		}
+
+		// 创建卡牌实例
+		auto& card = cards_.emplace_back(*this, make_card_instance_id(), player, *prototype);
+
+		// 移动到指定位置
+		auto field_playground = field_.playground();
+		field_playground.move_card(card, player, zone);
+
+		return card;
 	}
 
 	auto Duel::start() noexcept -> void
@@ -57,41 +126,5 @@ namespace cg::engine
 		field_turn.set_can_battle(false);
 
 		// todo: 广播决斗开始
-	}
-
-	auto Duel::random() const noexcept -> random_type&
-	{
-		return random_;
-	}
-
-	auto Duel::register_prototype(const domain::CardCode code) noexcept -> bool
-	{
-		if (host_ == nullptr)
-		{
-			return false;
-		}
-
-		const auto prototype = host_->load_prototype(code);
-		if (!prototype.has_value())
-		{
-			return false;
-		}
-
-		prototype_registry_.register_prototype(*prototype);
-		return true;
-	}
-
-	auto Duel::set_player_info(
-		const domain::Player player,
-		const domain::life_point_type life_point,
-		const domain::zone_sequence_type start_hand,
-		const domain::zone_sequence_type draw_count
-	) noexcept -> void
-	{
-		auto playground = field_.playground();
-
-		playground.set_life_point(player, life_point);
-		playground.set_start_hand(player, start_hand);
-		playground.set_draw_count(player, draw_count);
 	}
 }

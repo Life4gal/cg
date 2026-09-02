@@ -16,7 +16,8 @@ namespace cg::engine
 
 	public:
 		// 注册原型(如果已注册直接覆盖)
-		auto register_prototype(const Prototype& prototype) noexcept -> void;
+		// 不允许丢弃返回值 -> 必须使用注册表返回的原型,避免出问题
+		[[nodiscard]] auto register_prototype(const Prototype& prototype) noexcept -> const Prototype&;
 
 		// 检查原型是否已注册
 		[[nodiscard]] auto registered(domain::CardCode code) const noexcept -> bool;
