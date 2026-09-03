@@ -70,6 +70,10 @@ namespace cg::utility
 			return *this == other.enum_;
 		}
 
+		template<typename E>
+			requires(!supported<EnumSupport::EQUALITY>())
+		[[nodiscard]] constexpr auto operator==(const E& other) const noexcept -> bool = delete;
+
 		template<std::same_as<enum_type> E>
 			requires(supported<EnumSupport::EQUALITY>())
 		[[nodiscard]] constexpr auto operator!=(const E& other) const noexcept -> bool
@@ -83,6 +87,10 @@ namespace cg::utility
 		{
 			return !(*this == other);
 		}
+
+		template<typename E>
+			requires(!supported<EnumSupport::EQUALITY>())
+		[[nodiscard]] constexpr auto operator!=(const E& other) const noexcept -> bool = delete;
 
 		// ==============================================================================
 		// EnumSupport::COMPARISON
