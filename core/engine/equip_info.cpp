@@ -63,6 +63,23 @@ namespace cg::engine
 		return true;
 	}
 
+	auto EquipInfo::remove_equips(Card& target) noexcept -> void
+	{
+		auto& target_equips = target.equip_.equips_;
+
+		// 清除所有装备卡的目标
+		std::ranges::for_each(
+			target_equips,
+			[](const auto& equip) noexcept -> void
+			{
+				equip.get().equip_.owner_ = nullptr;
+			}
+		);
+
+		// 移除所有装备卡
+		target_equips.clear();
+	}
+
 	auto EquipInfo::can_equip(Card& card) noexcept -> bool
 	{
 		// 目标必须是:
@@ -84,9 +101,9 @@ namespace cg::engine
 		return true;
 	}
 
-	auto EquipInfo::equips() const noexcept -> View
+	auto EquipInfo::equips() const noexcept -> const Group&
 	{
-		return View{equips_};
+		return equips_;
 	}
 
 	auto EquipInfo::owner() const noexcept -> CardOptional

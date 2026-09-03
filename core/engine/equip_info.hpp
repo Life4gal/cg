@@ -23,10 +23,12 @@ namespace cg::engine
 		static auto add_equip(Card& equip, Card& target) noexcept -> bool;
 		// 将一张作为目标卡装备的卡移除(返回是否移除成功)(如果不是目标卡装备返回true)
 		static auto remove_equip(Card& equip, Card& target) noexcept -> bool;
+		// 将目标卡的所有装备卡清除
+		static auto remove_equips(Card& target) noexcept -> void;
 		// 目标卡是否可以是装备卡
 		[[nodiscard]] static auto can_equip(Card& card) noexcept -> bool;
 
-		[[nodiscard]] auto equips() const noexcept -> View;
+		[[nodiscard]] auto equips() const noexcept -> const Group&;
 		[[nodiscard]] auto owner() const noexcept -> CardOptional;
 
 		[[nodiscard]] auto has_equip() const noexcept -> bool;

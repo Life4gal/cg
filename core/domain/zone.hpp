@@ -17,7 +17,7 @@ namespace cg::domain
 
 		enum class MonsterPosition : size_type
 		{
-			MIAN_1 = 0,
+			MAIN_1 = 0,
 			MAIN_2 = 1,
 			MAIN_3 = 2,
 			MAIN_4 = 3,
@@ -301,7 +301,79 @@ namespace cg::domain
 		}
 	};
 
-	// 选卡区域
+	// 自动区域 -- 只设置目标区域,不设置具体位置(例如将卡牌移动到卡组/额外卡组/手牌/墓地/除外区,自动设置其所属位置)
+	enum class AutoZone : std::uint8_t
+	{
+		DECK,
+		EXTRA_DECK,
+		HAND,
+		GRAVEYARD,
+		REMOVED,
+	};
+
+	// 场地区域 -- 如怪兽区/额外怪兽区/魔法陷阱区
+	enum class FieldZone : std::uint8_t
+	{
+		MONSTER,
+		EXTRA_MONSTER,
+		SPELL_TRAP
+	};
+
+	template<auto>
+	struct zone_of;
+
+	template<>
+	struct zone_of<AutoZone::DECK>
+	{
+		using type = Zone::Deck;
+	};
+
+	template<>
+	struct zone_of<AutoZone::EXTRA_DECK>
+	{
+		using type = Zone::ExtraDeck;
+	};
+
+	template<>
+	struct zone_of<AutoZone::HAND>
+	{
+		using type = Zone::Hand;
+	};
+
+	template<>
+	struct zone_of<AutoZone::GRAVEYARD>
+	{
+		using type = Zone::Graveyard;
+	};
+
+	template<>
+	struct zone_of<AutoZone::REMOVED>
+	{
+		using type = Zone::Removed;
+	};
+
+	template<>
+	struct zone_of<FieldZone::MONSTER>
+	{
+		using type = Zone::Monster;
+	};
+
+	template<>
+	struct zone_of<FieldZone::EXTRA_MONSTER>
+	{
+		using type = Zone::ExtraMonster;
+	};
+
+	template<>
+	struct zone_of<FieldZone::SPELL_TRAP>
+	{
+		using type = Zone::SpellTrap;
+	};
+
+	template<AutoZone Z>
+	using zone_of_t = typename zone_of<Z>::type;
+
+	// 选择区域 -- 某些效果适用区域不止一个
 	enum class SelectZone : std::uint16_t
 	{
 		NONE = 0,
@@ -324,10 +396,6 @@ namespace cg::domain
 		EXTRA_DECK = 1 << 7,
 		// 超量素材
 		OVERLAY = 1 << 8,
-		// // 灵摆区域
-		// PENDULUM = 1 << 9,
-		// // 场地区域
-		// FIELD_SPELL = 1 << 10,
 	};
 
 	class SelectZoneWrapper : public utility::Enum<

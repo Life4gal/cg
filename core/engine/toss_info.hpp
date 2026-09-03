@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+#include <array>
 
 #include <core/utility/random.hpp>
 
@@ -8,23 +8,27 @@
 
 namespace cg::engine
 {
+	class Field;
+
 	class TossInfo
 	{
 	public:
-		using dice_results_type = std::vector<domain::DiceValue>;
-		using coin_results_type = std::vector<domain::CoinSide>;
+		using dices_type = std::array<domain::DiceValue, domain::dice_count_max>;
+		using coins_type = std::array<domain::CoinSide, domain::coin_count_max>;
 
-	private:
-		dice_results_type dice_results_;
-		coin_results_type coin_results_;
+		using dice_results_type = std::span<domain::DiceValue>;
+		using coin_results_type = std::span<domain::CoinSide>;
 
-	public:
+		using size_type = std::underlying_type_t<domain::DiceValue>;
+
+		dice_results_type dice_results;
+		coin_results_type coin_results;
+		size_type dice_count;
+		size_type coin_count;
+
 		TossInfo() noexcept;
 
-		auto toss_dice(std::size_t count, utility::Random& random) noexcept -> dice_results_type&;
-		auto toss_coin(std::size_t count, utility::Random& random) noexcept -> coin_results_type&;
-
-		[[nodiscard]] auto get_dice() const noexcept -> const dice_results_type&;
-		[[nodiscard]] auto get_coin() const noexcept -> const coin_results_type&;
+		auto toss_dice(size_type count, utility::Random& random) noexcept -> void;
+		auto toss_coin(size_type count, utility::Random& random) noexcept -> void;
 	};
 }

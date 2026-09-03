@@ -52,17 +52,18 @@ namespace cg::engine
 
 		using size_type = PlayerField::size_type;
 
-	private:
 		// 双方玩家场地
-		player_fields_type player_fields_;
+		player_fields_type player_fields;
 		// 额外怪兽区
-		shared_extra_monster_field_type shared_extra_monster_field_;
+		shared_extra_monster_field_type shared_extra_monster_field;
 
-		[[nodiscard]] auto player_field(domain::Player player) noexcept -> PlayerField&;
-		[[nodiscard]] auto player_field(domain::Player player) const noexcept -> const PlayerField&;
-
-	public:
 		Playground() noexcept;
+
+		// 获取指定玩家的PlayerField
+		[[nodiscard]] auto field_of(domain::Player player) noexcept -> PlayerField&;
+		[[nodiscard]] auto field_of(domain::Player player) const noexcept -> const PlayerField&;
+
+		// ---------- 基本信息 ----------
 
 		// 设置玩家生命值
 		auto set_life_point(domain::Player player, domain::life_point_type life_point) noexcept -> void;
@@ -78,34 +79,54 @@ namespace cg::engine
 		// 获取玩家每回合抽牌数量
 		[[nodiscard]] auto draw_count(domain::Player player) const noexcept -> size_type;
 
-		// 改变生命值
-		auto update_life_point(domain::Player player, domain::life_point_type delta) noexcept -> void;
+		// ---------- 生命值 ----------
 
-		// 起始抽牌
-		auto start_draw(domain::Player player) noexcept -> void;
-		// 从卡组抽牌
-		auto draw(domain::Player player, size_type count) noexcept -> void;
-		// 切洗卡组
-		auto shuffle_deck(domain::Player player, utility::Random& random) noexcept -> void;
-		// 反转卡组
-		auto reverse_deck(domain::Player player) noexcept -> void;
-		// 切洗额外卡组
-		auto shuffle_extra_deck(domain::Player player, utility::Random& random) noexcept -> void;
-		// 切洗手牌
-		auto shuffle_hand(domain::Player player, utility::Random& random) noexcept -> void;
+		// 可以承受指定生命值变化
+		[[nodiscard]] auto affordable(domain::Player player, domain::life_point_type delta) const noexcept -> bool;
+		// 承受指定生命值变化
+		auto afford(domain::Player player, domain::life_point_type delta) noexcept -> void;
 
+		// ---------- 抽牌 ----------
+
+		// 起始抽牌 -- 抽start_hand数量的卡牌
+		auto start_draw(domain::Player player) noexcept -> std::span<CardReference>;
+		// 抽取指定数量的卡牌 -- 返回抽取的卡牌
+		[[nodiscard]] auto draw(domain::Player player, size_type count) noexcept -> std::span<CardReference>;
+
+		// ---------- 卡组 ----------
+
+		// 往指定区域追加卡牌 -- 仅设置卡牌的控制者和其所在区域位置,一般用于初始化卡组/额外卡组
+		auto add(domain::Player player, Card& card, domain::AutoZone zone) noexcept -> void;
+
+		// 洗指定区域的牌
+		auto shuffle(domain::Player player, domain::AutoZone zone, utility::Random& random) noexcept -> void;
+		// 反转指定区域的牌
+		auto reverse(domain::Player player, domain::AutoZone zone) noexcept -> void;
+
+		// ---------- 区域 ----------
+
+		// 获取指定区域的牌
+		[[nodiscard]] auto select(domain::Player player, domain::Zone zone) const noexcept -> CardOptional;
 		// 检查指定区域是否被占用
 		[[nodiscard]] auto occupied(domain::Player player, domain::Zone zone) const noexcept -> bool;
-		// 获取指定区域的卡牌
-		[[nodiscard]] auto select(domain::Player player, domain::Zone zone) const noexcept -> CardOptional;
-		// 获取指定区域的卡牌数量
-		[[nodiscard]] auto count(domain::Player player, domain::Zone zone) const noexcept -> size_type;
-		// 获取指定场地区域可用区域
-		[[nodiscard]] auto free_area(domain::Player player, domain::Zone zone) const noexcept -> std::vector<domain::Zone::size_type>;
 
-		// 将卡牌从其所在区域移除
-		auto remove_card(CardReference card) noexcept -> bool;
-		// 将卡牌移动到指定位置
-		auto move_card(CardReference card, domain::Player player, domain::Zone zone) noexcept -> bool;
+		// 获取指定区域卡牌数量 -- zone只决定类型,一般不用这个接口
+		[[nodiscard]] auto count(domain::Player player, domain::Zone zone) const noexcept -> size_type;
+		// 获取指定自动区域卡牌数量
+		[[nodiscard]] auto count(domain::Player player, domain::AutoZone zone) const noexcept -> size_type;
+		// 获取指定场地区域卡牌数量
+		[[nodiscard]] auto count(domain::Player player, domain::FieldZone zone) const noexcept -> size_type;
+
+		// 获取指定区域所有可用位置 -- zone只决定类型,一般不用这个接口
+		[[nodiscard]] auto free(domain::Player player, domain::Zone zone) const noexcept -> std::vector<size_type>;
+		// 获取指定自动区域所有可用位置 -- 没有这个概念
+		//
+		// 获取指定场地区域所有可用位置
+		[[nodiscard]] auto free(domain::Player player, domain::FieldZone zone) const noexcept -> std::vector<size_type>;
+
+		// ---------- 移动卡牌 ----------
+
+		// 将卡牌从其所在位置移除 -- 仅从其所在区域移除,不做任何额外处理
+		[[nodiscard]] auto remove(CardReference card) noexcept -> bool;
 	};
 }

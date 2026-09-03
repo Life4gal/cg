@@ -1,8 +1,13 @@
 #pragma once
 
+#include <core/utility/random.hpp>
+
 #include <core/engine/playground.hpp>
 #include <core/engine/toss_info.hpp>
 #include <core/engine/turn_info.hpp>
+#include <core/engine/event.hpp>
+#include <core/engine/game_event.hpp>
+#include <core/engine/chain.hpp>
 
 namespace cg::engine
 {
@@ -19,6 +24,9 @@ namespace cg::engine
 		Playground playground_;
 		TossInfo toss_;
 		TurnInfo turn_;
+		Events events_;
+		GameEvents game_events_;
+		ChainLink chain_;
 
 		[[nodiscard]] auto duel() const noexcept -> Duel&;
 
@@ -38,6 +46,8 @@ namespace cg::engine
 			[[nodiscard]] auto playground() const noexcept -> const Playground&;
 
 		public:
+			// ---------- 起手 ----------
+
 			// 设置玩家生命值
 			auto set_life_point(domain::Player player, domain::life_point_type life_point) noexcept -> void;
 			// 设置玩家起手手牌数量
@@ -52,35 +62,67 @@ namespace cg::engine
 			// 获取玩家每回合抽牌数量
 			[[nodiscard]] auto draw_count(domain::Player player) const noexcept -> size_type;
 
-			// 改变生命值
-			auto update_life_point(domain::Player player, domain::life_point_type delta) noexcept -> void;
+			// ---------- 生命值 ----------
+
+			// 可以承受指定生命值变化
+			[[nodiscard]] auto affordable(domain::Player player, domain::life_point_type delta) const noexcept -> bool;
+			// 承受指定生命值变化
+			auto afford(domain::Player player, domain::life_point_type delta) noexcept -> void;
+
+			// ---------- 抽牌 ----------
 
 			// 起始抽牌
 			auto start_draw(domain::Player player) noexcept -> void;
 			// 从卡组抽牌
 			auto draw(domain::Player player, size_type count) noexcept -> void;
-			// 切洗卡组
-			auto shuffle_deck(domain::Player player) noexcept -> void;
-			// 反转卡组
-			auto reverse_deck(domain::Player player) noexcept -> void;
-			// 切洗额外卡组
-			auto shuffle_extra_deck(domain::Player player) noexcept -> void;
-			// 切洗手牌
-			auto shuffle_hand(domain::Player player) noexcept -> void;
 
+			// ---------- 卡组 ----------
+
+			// 往指定区域追加卡牌 -- 仅设置卡牌的控制者和其所在区域位置,一般用于初始化卡组/额外卡组
+			auto add(domain::Player player, Card& card, domain::AutoZone zone) noexcept -> void;
+
+			// 洗指定区域的牌
+			auto shuffle(domain::Player player, domain::AutoZone zone, utility::Random& random) noexcept -> void;
+			// 反转指定区域的牌
+			auto reverse(domain::Player player, domain::AutoZone zone) noexcept -> void;
+
+			// ---------- 区域 ----------
+
+			// 获取指定区域的牌
+			[[nodiscard]] auto select(domain::Player player, domain::Zone zone) const noexcept -> CardOptional;
 			// 检查指定区域是否被占用
 			[[nodiscard]] auto occupied(domain::Player player, domain::Zone zone) const noexcept -> bool;
-			// 获取指定区域的卡牌
-			[[nodiscard]] auto select(domain::Player player, domain::Zone zone) const noexcept -> CardOptional;
-			// 获取指定区域的卡牌数量
-			[[nodiscard]] auto count(domain::Player player, domain::Zone zone) const noexcept -> size_type;
-			// 获取指定场地区域可用区域
-			[[nodiscard]] auto free_area(domain::Player player, domain::Zone zone) const noexcept -> std::vector<domain::Zone::size_type>;
 
-			// 将卡牌从其所在区域移除
-			auto remove_card(CardReference card) noexcept -> void;
+			// 获取指定区域卡牌数量 -- zone只决定类型,一般不用这个接口
+			[[nodiscard]] auto count(domain::Player player, domain::Zone zone) const noexcept -> size_type;
+			// 获取指定自动区域卡牌数量
+			[[nodiscard]] auto count(domain::Player player, domain::AutoZone zone) const noexcept -> size_type;
+			// 获取指定场地区域卡牌数量
+			[[nodiscard]] auto count(domain::Player player, domain::FieldZone zone) const noexcept -> size_type;
+
+			// 获取指定区域所有可用位置 -- zone只决定类型,一般不用这个接口
+			[[nodiscard]] auto free(domain::Player player, domain::Zone zone) const noexcept -> std::vector<Playground::size_type>;
+			// 获取指定自动区域所有可用位置 -- 没有这个概念
+			//
+			// 获取指定场地区域所有可用位置
+			[[nodiscard]] auto free(domain::Player player, domain::FieldZone zone) const noexcept -> std::vector<Playground::size_type>;
+
+			// ---------- 移动卡牌 ----------
+
 			// 将卡牌移动到指定位置
-			auto move_card(CardReference card, domain::Player player, domain::Zone zone) noexcept -> void;
+			// todo: 如何设计?
+			//  - 衍生物 -> 直接移除(不进入任何区域)
+			//  - 怪兽卡:
+			//    - 有装备卡:
+			//      - 取消所有装备卡的装备目标
+			//      - 清空装备列表
+			//      - 将所有装备卡送入墓地
+			//    - 有超量素材:
+			//      - 取消所有超量素材的叠放目标
+			//      - 清空超量素材列表
+			//      - 将所有超量素材送入墓地
+			//  - 
+			auto move_card(CardReference card, domain::Player player, domain::Zone zone, domain::Reason reason) noexcept -> bool;
 		};
 
 		// ==================== 掷骰子/硬币 ====================
@@ -98,11 +140,8 @@ namespace cg::engine
 			[[nodiscard]] auto toss_info() const noexcept -> const TossInfo&;
 
 		public:
-			auto toss_dice(domain::Player player, std::size_t count) noexcept -> void;
-			auto toss_coin(domain::Player player, std::size_t count) noexcept -> void;
-
-			[[nodiscard]] auto get_dice(domain::Player player) const noexcept -> const TossInfo::dice_results_type&;
-			[[nodiscard]] auto get_coin(domain::Player player) const noexcept -> const TossInfo::coin_results_type&;
+			auto toss_dice(domain::Player player, TossInfo::size_type count, utility::Random& random) noexcept -> void;
+			auto toss_coin(domain::Player player, TossInfo::size_type count, utility::Random& random) noexcept -> void;
 		};
 
 		// ==================== 回合/阶段 ====================
@@ -151,6 +190,68 @@ namespace cg::engine
 			auto advance_phase(domain::TurnPhase turn_phase) noexcept -> void;
 		};
 
+		// ==================== 事件 ====================
+
+		class EventHandler
+		{
+			friend Field;
+
+			std::reference_wrapper<Field> field_;
+
+			explicit EventHandler(Field& field) noexcept;
+
+			// 传播const
+			[[nodiscard]] auto events() noexcept -> Events&;
+			[[nodiscard]] auto events() const noexcept -> const Events&;
+
+		public:
+			// 触发事件
+			auto raise(const Event& event) noexcept -> void;
+
+			// 目标类型事件是否被触发
+			[[nodiscard]] auto triggered(domain::EventType type) const noexcept -> bool;
+		};
+
+		// ==================== 游戏事件 ====================
+
+		class GameEventHandler
+		{
+			friend Field;
+
+			std::reference_wrapper<Field> field_;
+
+			explicit GameEventHandler(Field& field) noexcept;
+
+			// 传播const
+			[[nodiscard]] auto events() noexcept -> GameEvents&;
+			[[nodiscard]] auto events() const noexcept -> const GameEvents&;
+
+		public:
+			// 触发事件
+			auto emit(domain::GameEvent event) noexcept -> void;
+		};
+
+		// ==================== 连锁 ====================
+
+		class ChainHandler
+		{
+			friend Field;
+
+			std::reference_wrapper<Field> field_;
+
+			explicit ChainHandler(Field& field) noexcept;
+
+			// 传播const
+			[[nodiscard]] auto chain() noexcept -> ChainLink&;
+			[[nodiscard]] auto chain() const noexcept -> const ChainLink&;
+
+		public:
+			//
+		};
+
+		// ==================== 输入 ====================
+
+
 		// ==================== | ====================
 
 		explicit Field(Duel& duel) noexcept;
@@ -158,5 +259,7 @@ namespace cg::engine
 		[[nodiscard]] auto playground() noexcept -> PlaygroundHandler;
 		[[nodiscard]] auto random() noexcept -> TossInfoHandler;
 		[[nodiscard]] auto turn() noexcept -> TurnHandler;
+		[[nodiscard]] auto events() noexcept -> EventHandler;
+		[[nodiscard]] auto game_events() noexcept -> GameEventHandler;
 	};
 }

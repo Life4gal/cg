@@ -284,122 +284,122 @@ namespace cg::engine
 
 	auto Card::StateHandler::set_controller(const domain::Player controller) noexcept -> void
 	{
-		state().set_controller(controller);
+		state().controller = controller;
 	}
 
 	auto Card::StateHandler::set_zone(const domain::Zone zone) noexcept -> void
 	{
-		state().set_zone(zone);
+		state().zone = zone;
 	}
 
 	auto Card::StateHandler::set_reason_player(const domain::Player reason_player) noexcept -> void
 	{
-		state().set_reason_player(reason_player);
+		state().reason_player = reason_player;
 	}
 
 	auto Card::StateHandler::set_reason_card(const CardOptional reason_card) noexcept -> void
 	{
-		state().set_reason_card(reason_card);
+		state().reason_card = reason_card;
 	}
 
 	auto Card::StateHandler::set_reason_effect(const EffectOptional reason_effect) noexcept -> void
 	{
-		state().set_reason_effect(reason_effect);
+		state().reason_effect = reason_effect;
 	}
 
 	auto Card::StateHandler::set_reason(const domain::ReasonWrapper reason) noexcept -> void
 	{
-		state().set_reason(reason);
+		state().reason = reason;
 	}
 
 	auto Card::StateHandler::controller() const noexcept -> domain::Player
 	{
-		return state().controller();
+		return state().controller;
 	}
 
 	auto Card::StateHandler::zone() const noexcept -> domain::Zone
 	{
-		return state().zone();
+		return state().zone;
 	}
 
 	auto Card::StateHandler::reason_player() const noexcept -> domain::Player
 	{
-		return state().reason_player();
+		return state().reason_player;
 	}
 
 	auto Card::StateHandler::reason_card() const noexcept -> CardOptional
 	{
-		return state().reason_card();
+		return state().reason_card;
 	}
 
 	auto Card::StateHandler::reason_effect() const noexcept -> EffectOptional
 	{
-		return state().reason_effect();
+		return state().reason_effect;
 	}
 
 	auto Card::StateHandler::reason() const noexcept -> domain::ReasonWrapper
 	{
-		return state().reason();
+		return state().reason;
 	}
 
 	auto Card::StateHandler::is_controller(const domain::Player expected_player) const noexcept -> bool
 	{
-		return state().is_controller(expected_player);
+		return controller() == expected_player;
 	}
 
 	auto Card::StateHandler::is_zone(const domain::Zone expected_zone) const noexcept -> bool
 	{
-		return state().is_zone(expected_zone);
+		return zone() == expected_zone;
 	}
 
 	auto Card::StateHandler::is_reason_player(const domain::Player expected_player) const noexcept -> bool
 	{
-		return state().is_reason_player(expected_player);
+		return reason_player() == expected_player;
 	}
 
 	auto Card::StateHandler::is_reason_card(const CardOptional expected_card) const noexcept -> bool
 	{
-		return state().is_reason_card(expected_card);
+		return reason_card() == expected_card;
 	}
 
 	auto Card::StateHandler::is_reason_effect(const EffectOptional expected_effect) const noexcept -> bool
 	{
-		return state().is_reason_effect(expected_effect);
+		return reason_effect() == expected_effect;
 	}
 
 	auto Card::StateHandler::is_reason(const domain::ReasonWrapper expected_reason) const noexcept -> bool
 	{
-		return state().is_reason(expected_reason);
+		return reason().all_of(expected_reason);
 	}
 
 	auto Card::StateHandler::has_reason(const domain::ReasonWrapper expected_reason) const noexcept -> bool
 	{
-		return state().has_reason(expected_reason);
+		return reason().any_of(expected_reason);
 	}
 
 	auto Card::StateHandler::is_field_zone() const noexcept -> bool
 	{
-		return state().is_field_zone();
+		return zone().is_field_zone();
 	}
 
 	auto Card::StateHandler::is_face_up_form() const noexcept -> bool
 	{
-		return state().is_face_up_form();
+		return zone().is_face_up_form();
 	}
 
 	auto Card::StateHandler::is_face_down_form() const noexcept -> bool
 	{
-		return state().is_face_down_form();
+		return zone().is_face_down_form();
 	}
 
 	auto Card::StateHandler::is_attack_form() const noexcept -> bool
 	{
-		return state().is_attack_form();
+		return zone().is_attack_form();
 	}
 
 	auto Card::StateHandler::is_defense_form() const noexcept -> bool
 	{
-		return state().is_defense_form();
+		return zone().is_defense_form();
 	}
 
 	Card::SummonInfoHandler::SummonInfoHandler(Card& card) noexcept
@@ -417,82 +417,82 @@ namespace cg::engine
 
 	auto Card::SummonInfoHandler::set_kind(const domain::SummonKind kind) noexcept -> void
 	{
-		summon_info().set_kind(kind);
+		summon_info().kind = kind;
 	}
 
 	auto Card::SummonInfoHandler::set_from_zone(const domain::Zone from_zone) noexcept -> void
 	{
-		summon_info().set_from_zone(from_zone);
+		summon_info().from_zone = from_zone;
 	}
 
 	auto Card::SummonInfoHandler::set_player(const domain::Player player) noexcept -> void
 	{
-		summon_info().set_player(player);
+		summon_info().player = player;
 	}
 
 	auto Card::SummonInfoHandler::set_turn_id(const domain::TurnId turn_id) noexcept -> void
 	{
-		summon_info().set_turn_id(turn_id);
+		summon_info().turn_id = turn_id;
 	}
 
 	auto Card::SummonInfoHandler::set_materials(Group materials) noexcept -> void
 	{
-		summon_info().set_materials(std::move(materials));
+		summon_info().materials = std::move(materials);
 	}
 
 	auto Card::SummonInfoHandler::kind() const noexcept -> domain::SummonKind
 	{
-		return summon_info().kind();
+		return summon_info().kind;
 	}
 
 	auto Card::SummonInfoHandler::from_zone() const noexcept -> domain::Zone
 	{
-		return summon_info().from_zone();
+		return summon_info().from_zone;
 	}
 
 	auto Card::SummonInfoHandler::player() const noexcept -> domain::Player
 	{
-		return summon_info().player();
+		return summon_info().player;
 	}
 
 	auto Card::SummonInfoHandler::turn_id() const noexcept -> domain::TurnId
 	{
-		return summon_info().turn_id();
+		return summon_info().turn_id;
 	}
 
-	auto Card::SummonInfoHandler::materials() const noexcept -> View
+	auto Card::SummonInfoHandler::materials() const noexcept -> const Group&
 	{
-		return summon_info().materials();
+		return summon_info().materials;
 	}
 
 	auto Card::SummonInfoHandler::is_kind(const domain::SummonKind expected_kind) const noexcept -> bool
 	{
-		return summon_info().is_kind(expected_kind);
+		return kind() == expected_kind;
 	}
 
 	auto Card::SummonInfoHandler::is_from_zone(const domain::Zone expected_from_zone) const noexcept -> bool
 	{
-		return summon_info().is_from_zone(expected_from_zone);
+		return from_zone() == expected_from_zone;
 	}
 
 	auto Card::SummonInfoHandler::is_player(const domain::Player expected_player) const noexcept -> bool
 	{
-		return summon_info().is_player(expected_player);
+		return player() == expected_player;
 	}
 
 	auto Card::SummonInfoHandler::is_turn_id(const domain::TurnId expected_turn_id) const noexcept -> bool
 	{
-		return summon_info().is_turn_id(expected_turn_id);
+		return turn_id() == expected_turn_id;
 	}
 
 	auto Card::SummonInfoHandler::has_material(const Card& card) const noexcept -> bool
 	{
-		return summon_info().has_material(card);
+		return materials().contains(card);
 	}
 
 	auto Card::SummonInfoHandler::material_count() const noexcept -> std::size_t
 	{
-		return summon_info().material_count();
+		return materials().size();
 	}
 
 	Card::BattleInfoHandler::BattleInfoHandler(Card& card) noexcept
@@ -510,12 +510,14 @@ namespace cg::engine
 
 	auto Card::BattleInfoHandler::record_attack_announced() noexcept -> void
 	{
-		battle_info().record_attack_announced();
+		// todo: 获取当前回合号
+		battle_info().record_attack_announced(static_cast<domain::TurnId>(0));
 	}
 
 	auto Card::BattleInfoHandler::record_attack_canceled() noexcept -> void
 	{
-		battle_info().record_attack_canceled();
+		// todo: 获取当前回合号
+		battle_info().record_attack_canceled(static_cast<domain::TurnId>(0));
 	}
 
 	auto Card::BattleInfoHandler::record_attacked_card(Card& card) noexcept -> void
@@ -523,39 +525,41 @@ namespace cg::engine
 		battle_info().record_attacked_card(card);
 	}
 
-	auto Card::BattleInfoHandler::attacked_cards() const noexcept -> View
+	auto Card::BattleInfoHandler::attacked_cards() const noexcept -> const Group&
 	{
-		return battle_info().attacked_cards();
+		return battle_info().attacked_cards;
 	}
 
 	auto Card::BattleInfoHandler::attacked_count() const noexcept -> BattleInfo::size_type
 	{
-		return battle_info().attacked_count();
+		return battle_info().attacked_count;
 	}
 
 	auto Card::BattleInfoHandler::attack_announced_count() const noexcept -> BattleInfo::size_type
 	{
-		return battle_info().attack_announced_count();
+		return battle_info().attack_announced_count;
 	}
 
 	auto Card::BattleInfoHandler::attack_turn_id() const noexcept -> domain::TurnId
 	{
-		return battle_info().attack_turn_id();
+		return battle_info().attack_turn_id;
 	}
 
 	auto Card::BattleInfoHandler::attack_canceled_turn_id() const noexcept -> domain::TurnId
 	{
-		return battle_info().attack_canceled_turn_id();
+		return battle_info().attack_canceled_turn_id;
 	}
 
 	auto Card::BattleInfoHandler::is_attacked_this_turn() const noexcept -> bool
 	{
-		return battle_info().is_attacked_this_turn();
+		// todo: 获取当前回合号
+		return attack_turn_id() == static_cast<domain::TurnId>(0);
 	}
 
 	auto Card::BattleInfoHandler::is_attack_canceled_this_turn() const noexcept -> bool
 	{
-		return battle_info().is_attack_canceled_this_turn();
+		// todo: 获取当前回合号
+		return attack_canceled_turn_id() == static_cast<domain::TurnId>(0);
 	}
 
 	Card::TargetInfoHandler::TargetInfoHandler(Card& card) noexcept
@@ -581,29 +585,29 @@ namespace cg::engine
 		return target_info().cancel_target(target, card_);
 	}
 
-	auto Card::TargetInfoHandler::card_targets() const noexcept -> View
+	auto Card::TargetInfoHandler::card_targets() const noexcept -> const Group&
 	{
-		return target_info().card_targets();
+		return target_info().card_targets;
 	}
 
-	auto Card::TargetInfoHandler::owner_targets() const noexcept -> View
+	auto Card::TargetInfoHandler::owner_targets() const noexcept -> const Group&
 	{
-		return target_info().owner_targets();
+		return target_info().owner_targets;
 	}
 
 	auto Card::TargetInfoHandler::has_target() const noexcept -> bool
 	{
-		return target_info().has_target();
+		return !card_targets().empty();
 	}
 
 	auto Card::TargetInfoHandler::has_target(const Card& card) const noexcept -> bool
 	{
-		return target_info().has_target(card);
+		return card_targets().contains(card);
 	}
 
 	auto Card::TargetInfoHandler::target_count() const noexcept -> TargetInfo::size_type
 	{
-		return target_info().target_count();
+		return static_cast<TargetInfo::size_type>(card_targets().size());
 	}
 
 	Card::XyzInfoHandler::XyzInfoHandler(Card& card) noexcept
@@ -622,38 +626,44 @@ namespace cg::engine
 	// ReSharper disable once CppMemberFunctionMayBeConst
 	auto Card::XyzInfoHandler::add_overlay(Card& material) noexcept -> bool
 	{
-		return XyzInfo::add_overlay(material, card_);
+		return XyzInfo::add_overlay(card_, material);
 	}
 
 	// ReSharper disable once CppMemberFunctionMayBeConst
 	auto Card::XyzInfoHandler::remove_overlay(Card& material) noexcept -> bool
 	{
-		return XyzInfo::remove_overlay(material, card_);
+		return XyzInfo::remove_overlay(card_, material);
 	}
 
-	auto Card::XyzInfoHandler::materials() const noexcept -> View
+	// ReSharper disable once CppMemberFunctionMayBeConst
+	auto Card::XyzInfoHandler::remove_overlays() noexcept -> void
 	{
-		return xyz_info().materials();
+		XyzInfo::remove_overlays(card_);
+	}
+
+	auto Card::XyzInfoHandler::materials() const noexcept -> const Sequence&
+	{
+		return xyz_info().materials;
 	}
 
 	auto Card::XyzInfoHandler::overlay_target() const noexcept -> CardOptional
 	{
-		return xyz_info().overlay_target();
+		return xyz_info().overlay_target;
 	}
 
 	auto Card::XyzInfoHandler::has_material() const noexcept -> bool
 	{
-		return xyz_info().has_material();
+		return !materials().empty();
 	}
 
 	auto Card::XyzInfoHandler::has_material(const Card& material) const noexcept -> bool
 	{
-		return xyz_info().has_material(material);
+		return materials().contains(material);
 	}
 
 	auto Card::XyzInfoHandler::material_count() const noexcept -> XyzInfo::size_type
 	{
-		return xyz_info().material_count();
+		return static_cast<XyzInfo::size_type>(materials().size());
 	}
 
 	Card::EquipInfoHandler::EquipInfoHandler(Card& card) noexcept
@@ -681,12 +691,18 @@ namespace cg::engine
 		return EquipInfo::remove_equip(equip, card_);
 	}
 
+	// ReSharper disable once CppMemberFunctionMayBeConst
+	auto Card::EquipInfoHandler::remove_equips() noexcept -> void
+	{
+		EquipInfo::remove_equips(card_);
+	}
+
 	auto Card::EquipInfoHandler::can_equip() const noexcept -> bool
 	{
 		return EquipInfo::can_equip(card_);
 	}
 
-	auto Card::EquipInfoHandler::equips() const noexcept -> View
+	auto Card::EquipInfoHandler::equips() const noexcept -> const Group&
 	{
 		return equip_info().equips();
 	}

@@ -11,34 +11,23 @@ namespace cg::engine
 	public:
 		using size_type = std::uint32_t;
 
-	private:
 		// 本回合攻击过的卡
-		Group attacked_cards_;
+		Group attacked_cards;
 		// 本回合交战过的卡
-		Group battled_cards_;
+		Group battled_cards;
 		// 攻击过的次数
-		size_type attacked_count_;
+		size_type attacked_count;
 		// 攻击宣言过的次数
-		size_type attack_announced_count_;
+		size_type attack_announced_count;
 		// 上一次攻击的回合号
-		domain::TurnId attack_turn_id_;
+		domain::TurnId attack_turn_id;
 		// 上一次攻击被无效的回合号
-		domain::TurnId attack_canceled_turn_id_;
+		domain::TurnId attack_canceled_turn_id;
 
-	public:
 		BattleInfo() noexcept;
 
-		auto record_attack_announced() noexcept -> void;
-		auto record_attack_canceled() noexcept -> void;
+		auto record_attack_announced(domain::TurnId this_turn_id) noexcept -> void;
+		auto record_attack_canceled(domain::TurnId this_turn_id) noexcept -> void;
 		auto record_attacked_card(Card& card) noexcept -> void;
-
-		[[nodiscard]] auto attacked_cards() const noexcept -> View;
-		[[nodiscard]] auto attacked_count() const noexcept -> size_type;
-		[[nodiscard]] auto attack_announced_count() const noexcept -> size_type;
-		[[nodiscard]] auto attack_turn_id() const noexcept -> domain::TurnId;
-		[[nodiscard]] auto attack_canceled_turn_id() const noexcept -> domain::TurnId;
-
-		[[nodiscard]] auto is_attacked_this_turn() const noexcept -> bool;
-		[[nodiscard]] auto is_attack_canceled_this_turn() const noexcept -> bool;
 	};
 }

@@ -26,6 +26,10 @@ add_library(
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/zone.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/turn.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/domain/id.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/event.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/game_event.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/chain.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/domain/input.hpp
 				
 	# =============================
 	# engine
@@ -68,6 +72,14 @@ add_library(
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/toss_info.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/turn_info.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/turn_info.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/event.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/event.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/game_event.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/game_event.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/chain.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/chain.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/input.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/engine/input.cpp
 
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/field.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/engine/field.cpp

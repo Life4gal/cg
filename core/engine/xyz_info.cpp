@@ -11,10 +11,10 @@ namespace cg::engine
 	// 	//
 	// }
 
-	auto XyzInfo::add_overlay(Card& material, Card& target) noexcept -> bool
+	auto XyzInfo::add_overlay(Card& target, Card& material) noexcept -> bool
 	{
 		// 检查是否已叠放
-		if (material.xyz_.overlay_target_ == &target)
+		if (material.xyz_.overlay_target == &target)
 		{
 			return true;
 		}
@@ -32,12 +32,12 @@ namespace cg::engine
 		}
 
 		// 目标卡当前已有素材数量作为新素材的序列位置
-		const auto zone_index = target.xyz_.material_count();
+		const auto zone_index = target.xyz_.materials.size();
 
 		// 将目标卡作为超量素材的目标
-		material.xyz_.overlay_target_ = CardOptional{&target};
+		material.xyz_.overlay_target = CardOptional{&target};
 		// 将超量素材添加到超量素材列表
-		target.xyz_.materials_.push_back(material);
+		target.xyz_.materials.push_back(material);
 
 		// 设置超量素材状态
 		auto material_state = material.state();
@@ -51,7 +51,7 @@ namespace cg::engine
 		return true;
 	}
 
-	auto XyzInfo::remove_overlay(Card& material, Card& target) noexcept -> bool
+	auto XyzInfo::remove_overlay(Card& target, Card& material) noexcept -> bool
 	{
 		// 检查是否未叠放
 		if (material.xyz().overlay_target() != &target)
@@ -60,20 +60,20 @@ namespace cg::engine
 		}
 
 		// 将超量素材移除出超量素材列表
-		if (const auto erased = target.xyz_.materials_.erase(material);
+		if (const auto erased = target.xyz_.materials.erase(material);
 			!erased)
 		{
 			// 不存在该素材返回false
 			return false;
 		}
 		// 设置超量素材的叠放目标
-		material.xyz_.overlay_target_ = nullptr;
+		material.xyz_.overlay_target = nullptr;
 
 		// todo: 设置超量素材状态
 		// auto material_state = material.state();
 
 		// 重置其他素材的序列
-		for (auto begin = target.xyz_.materials_.begin(), it = begin; it != target.xyz_.materials_.end(); ++it)
+		for (auto begin = target.xyz_.materials.begin(), it = begin; it != target.xyz_.materials.end(); ++it)
 		{
 			const auto index = std::ranges::distance(begin, it);
 			it->get().state().set_zone(domain::Zone::Overlay{.index = static_cast<domain::Zone::size_type>(index)});
@@ -84,28 +84,20 @@ namespace cg::engine
 		return true;
 	}
 
-	auto XyzInfo::materials() const noexcept -> View
+	auto XyzInfo::remove_overlays(Card& target) noexcept -> void
 	{
-		return View{materials_};
-	}
+		auto& target_materials = target.xyz_.materials;
 
-	auto XyzInfo::overlay_target() const noexcept -> CardOptional
-	{
-		return overlay_target_;
-	}
+		// 清除所有超量素材的叠放目标
+		std::ranges::for_each(
+			target_materials,
+			[](const CardReference& material) noexcept -> void
+			{
+				material.get().xyz_.overlay_target = nullptr;
+			}
+		);
 
-	auto XyzInfo::has_material() const noexcept -> bool
-	{
-		return !materials_.empty();
-	}
-
-	auto XyzInfo::has_material(const Card& material) const noexcept -> bool
-	{
-		return materials_.contains(material);
-	}
-
-	auto XyzInfo::material_count() const noexcept -> size_type
-	{
-		return static_cast<size_type>(materials_.size());
+		// 移除所有超量素材
+		target_materials.clear();
 	}
 }

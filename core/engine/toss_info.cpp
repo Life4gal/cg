@@ -1,21 +1,24 @@
 #include <core/engine/toss_info.hpp>
 
+#include <algorithm>
+
+#include <core/engine/field.hpp>
+
 namespace cg::engine
 {
-	TossInfo::TossInfo() noexcept = default;
-	// 	: dice_results_{},
-	// 	  coin_results_{}
-	// {
-	// 	//
-	// }
+	TossInfo::TossInfo() noexcept
+		: //dice_results{},
+		//coin_results{},
+		dice_count{0},
+		coin_count{0} {}
 
-	auto TossInfo::toss_dice(const std::size_t count, utility::Random& random) noexcept -> dice_results_type&
+	auto TossInfo::toss_dice(size_type count, utility::Random& random) noexcept -> void
 	{
-		dice_results_.clear();
-		dice_results_.reserve(count);
+		count = std::ranges::min(count, domain::dice_count_max);
+		dice_count = count;
 
 		std::ranges::generate_n(
-			std::back_inserter(dice_results_),
+			dice_results.begin(),
 			static_cast<std::ptrdiff_t>(count),
 			[&random] noexcept -> domain::DiceValue
 			{
@@ -23,17 +26,15 @@ namespace cg::engine
 				return static_cast<domain::DiceValue>(value);
 			}
 		);
-
-		return dice_results_;
 	}
 
-	auto TossInfo::toss_coin(const std::size_t count, utility::Random& random) noexcept -> coin_results_type&
+	auto TossInfo::toss_coin(size_type count, utility::Random& random) noexcept -> void
 	{
-		coin_results_.clear();
-		coin_results_.reserve(count);
+		count = std::ranges::min(count, domain::coin_count_max);
+		coin_count = count;
 
 		std::ranges::generate_n(
-			std::back_inserter(coin_results_),
+			coin_results.begin(),
 			static_cast<std::ptrdiff_t>(count),
 			[&random] noexcept -> domain::CoinSide
 			{
@@ -41,17 +42,5 @@ namespace cg::engine
 				return static_cast<domain::CoinSide>(value);
 			}
 		);
-
-		return coin_results_;
-	}
-
-	auto TossInfo::get_dice() const noexcept -> const dice_results_type&
-	{
-		return dice_results_;
-	}
-
-	auto TossInfo::get_coin() const noexcept -> const coin_results_type&
-	{
-		return coin_results_;
 	}
 }

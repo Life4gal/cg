@@ -179,7 +179,7 @@ namespace cg::engine
 			[[nodiscard]] auto from_zone() const noexcept -> domain::Zone;
 			[[nodiscard]] auto player() const noexcept -> domain::Player;
 			[[nodiscard]] auto turn_id() const noexcept -> domain::TurnId;
-			[[nodiscard]] auto materials() const noexcept -> View;
+			[[nodiscard]] auto materials() const noexcept -> const Group&;
 
 			[[nodiscard]] auto is_kind(domain::SummonKind expected_kind) const noexcept -> bool;
 			[[nodiscard]] auto is_from_zone(domain::Zone expected_from_zone) const noexcept -> bool;
@@ -208,7 +208,7 @@ namespace cg::engine
 			auto record_attack_canceled() noexcept -> void;
 			auto record_attacked_card(Card& card) noexcept -> void;
 
-			[[nodiscard]] auto attacked_cards() const noexcept -> View;
+			[[nodiscard]] auto attacked_cards() const noexcept -> const Group&;
 			[[nodiscard]] auto attacked_count() const noexcept -> BattleInfo::size_type;
 			[[nodiscard]] auto attack_announced_count() const noexcept -> BattleInfo::size_type;
 			[[nodiscard]] auto attack_turn_id() const noexcept -> domain::TurnId;
@@ -236,8 +236,8 @@ namespace cg::engine
 			auto set_target(Card& target) noexcept -> bool;
 			auto cancel_target(Card& target) noexcept -> bool;
 
-			[[nodiscard]] auto card_targets() const noexcept -> View;
-			[[nodiscard]] auto owner_targets() const noexcept -> View;
+			[[nodiscard]] auto card_targets() const noexcept -> const Group&;
+			[[nodiscard]] auto owner_targets() const noexcept -> const Group&;
 
 			[[nodiscard]] auto has_target() const noexcept -> bool;
 			[[nodiscard]] auto has_target(const Card& card) const noexcept -> bool;
@@ -263,8 +263,10 @@ namespace cg::engine
 			auto add_overlay(Card& material) noexcept -> bool;
 			// 将一张作为本卡超量素材的卡移除(返回是否移除成功)(如果不是本卡超量素材返回true)
 			auto remove_overlay(Card& material) noexcept -> bool;
+			// 移除本卡的所有超量素材
+			auto remove_overlays() noexcept -> void;
 
-			[[nodiscard]] auto materials() const noexcept -> View;
+			[[nodiscard]] auto materials() const noexcept -> const Sequence&;
 			[[nodiscard]] auto overlay_target() const noexcept -> CardOptional;
 
 			[[nodiscard]] auto has_material() const noexcept -> bool;
@@ -291,10 +293,12 @@ namespace cg::engine
 			auto add_equip(Card& equip) noexcept -> bool;
 			// 将一张作为本卡装备的卡移除(返回是否移除成功)(如果不是本卡装备返回true)
 			auto remove_equip(Card& equip) noexcept -> bool;
+			// 将目标卡的所有装备卡清除
+			auto remove_equips() noexcept -> void;
 			// 本卡是否可以是装备卡
 			[[nodiscard]] auto can_equip() const noexcept -> bool;
 
-			[[nodiscard]] auto equips() const noexcept -> View;
+			[[nodiscard]] auto equips() const noexcept -> const Group&;
 			[[nodiscard]] auto owner() const noexcept -> CardOptional;
 
 			[[nodiscard]] auto has_equip() const noexcept -> bool;

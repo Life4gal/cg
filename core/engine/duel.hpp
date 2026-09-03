@@ -50,7 +50,13 @@ namespace cg::engine
 		// 效果实例ID生成器
 		EffectInstanceIdWrapper effect_instance_id_generator_;
 
+		// 注册卡牌原型
+		auto register_prototype(domain::CardCode code) noexcept -> const Prototype*;
+
+		// 获取卡牌实例ID
 		[[nodiscard]] auto make_card_instance_id() noexcept -> domain::CardInstanceId;
+
+		// 获取效果实例ID
 		[[nodiscard]] auto make_effect_instance_id() noexcept -> domain::EffectInstanceId;
 
 	public:
@@ -60,22 +66,15 @@ namespace cg::engine
 
 		Duel(const Duel&) noexcept = delete;
 		auto operator=(const Duel&) noexcept -> Duel& = delete;
-		Duel(Duel&&) noexcept = default;
-		auto operator=(Duel&&) noexcept -> Duel& = default;
+		Duel(Duel&&) noexcept;
+		auto operator=(Duel&&) noexcept -> Duel&;
 
-		~Duel() noexcept = default;
+		~Duel() noexcept;
 
 		// ==================== host ====================
 
 		// 绑定脚本宿主
 		auto bind_host(std::unique_ptr<script::Host> host) noexcept -> void;
-
-		// 注册卡牌原型
-		auto register_prototype(domain::CardCode code) noexcept -> const Prototype*;
-
-		// ==================== random ====================
-
-		[[nodiscard]] auto random() const noexcept -> random_type&;
 
 		// ==================== field ====================
 
@@ -83,7 +82,7 @@ namespace cg::engine
 		auto set_player_info(domain::Player player, domain::life_point_type life_point, Field::size_type start_hand, Field::size_type draw_count) noexcept -> void;
 
 		// 添加卡牌实例到指定区域
-		auto register_card(domain::CardCode code, domain::Player player, domain::Zone zone) noexcept -> CardReference;
+		auto register_card(domain::CardCode code, domain::Player player, domain::Zone zone) noexcept -> bool;
 
 		// ==================== DUEL! ====================
 

@@ -5,56 +5,31 @@
 
 namespace cg::engine
 {
+	class Field;
+
 	class TurnInfo
 	{
 	public:
-		//
-
-	private:
 		// 当前回合数
-		domain::TurnId id_;
+		domain::TurnId id;
 		// 当前阶段
-		domain::Phase phase_;
+		domain::Phase phase;
 		// 当前玩家
-		domain::Player player_;
+		domain::Player player;
 		// 当前回合是否允许攻击
-		bool can_battle_;
+		bool can_battle;
 		// 当前回合是否可通常召唤
-		bool can_normal_summon_;
+		bool can_normal_summon;
 		// 当前回合是否可以特殊召唤
-		bool can_special_summon_;
+		bool can_special_summon;
 
-	public:
 		TurnInfo() noexcept;
 
-		auto set_turn_id(domain::TurnId id) noexcept -> void;
-		auto set_phase(domain::Phase phase) noexcept -> void;
-		auto set_turn_phase(domain::TurnPhase turn_phase) noexcept -> void;
-		auto set_battle_step(domain::BattleStep battle_step) noexcept -> void;
-		auto set_damage_step(domain::DamageStep damage_step) noexcept -> void;
-		auto set_player(domain::Player player) noexcept -> void;
-		auto set_can_battle(bool can_battle) noexcept -> void;
-		auto set_can_normal_summon(bool can_normal_summon) noexcept -> void;
-		auto set_can_special_summon(bool can_special_summon) noexcept -> void;
-
-		[[nodiscard]] auto turn_id() const noexcept -> domain::TurnId;
-		[[nodiscard]] auto phase() const noexcept -> domain::Phase;
-		[[nodiscard]] auto turn_phase() const noexcept -> domain::TurnPhase;
-		[[nodiscard]] auto battle_step() const noexcept -> domain::BattleStep;
-		[[nodiscard]] auto damage_step() const noexcept -> domain::DamageStep;
-		[[nodiscard]] auto can_battle() const noexcept -> bool;
-		[[nodiscard]] auto can_normal_summon() const noexcept -> bool;
-		[[nodiscard]] auto can_special_summon() const noexcept -> bool;
-
-		[[nodiscard]] auto is_turn_id(domain::TurnId expected_id) const noexcept -> bool;
-		[[nodiscard]] auto is_phase(domain::Phase expected_phase) const noexcept -> bool;
-		[[nodiscard]] auto is_turn_phase(domain::TurnPhase expected_turn_phase) const noexcept -> bool;
-		[[nodiscard]] auto is_battle_step(domain::BattleStep expected_battle_step) const noexcept -> bool;
-		[[nodiscard]] auto is_damage_step(domain::DamageStep expected_damage_step) const noexcept -> bool;
-
-		// 开始下一回合
-		auto new_turn(domain::Player player) noexcept -> void;
-		// 前进到指定阶段(可用于跳过某个阶段)
+		// 指定玩家的回合结束
+		auto on_turn_end(domain::Player target_player) noexcept -> void;
+		// 指定玩家的回合开始
+		auto on_turn_begin(domain::Player target_player) noexcept -> void;
+		// 将当前的阶段前进到指定阶段
 		auto advance_phase(domain::TurnPhase turn_phase) noexcept -> void;
 	};
 }

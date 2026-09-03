@@ -12,6 +12,22 @@ namespace
 
 namespace cg::engine
 {
+	auto Duel::register_prototype(const domain::CardCode code) noexcept -> const Prototype*
+	{
+		if (host_ == nullptr)
+		{
+			return nullptr;
+		}
+
+		const auto prototype = host_->load_prototype(code);
+		if (!prototype.has_value())
+		{
+			return nullptr;
+		}
+
+		return &prototype_registry_.register_prototype(*prototype);
+	}
+
 	auto Duel::make_card_instance_id() noexcept -> domain::CardInstanceId
 	{
 		const auto id = card_instance_id_generator_;
@@ -44,31 +60,16 @@ namespace cg::engine
 	Duel::Duel() noexcept
 		: Duel{std::random_device{}()} {}
 
+	Duel::Duel(Duel&&) noexcept = default;
+
+	auto Duel::operator=(Duel&&) noexcept -> Duel& = default;
+
+	Duel::~Duel() noexcept = default;
+
 	auto Duel::bind_host(std::unique_ptr<script::Host> host) noexcept -> void
 	{
 		host_ = std::move(host);
 		host_->bind_api(api_);
-	}
-
-	auto Duel::register_prototype(const domain::CardCode code) noexcept -> const Prototype*
-	{
-		if (host_ == nullptr)
-		{
-			return nullptr;
-		}
-
-		const auto prototype = host_->load_prototype(code);
-		if (!prototype.has_value())
-		{
-			return nullptr;
-		}
-
-		return &prototype_registry_.register_prototype(*prototype);
-	}
-
-	auto Duel::random() const noexcept -> random_type&
-	{
-		return random_;
 	}
 
 	auto Duel::set_player_info(
@@ -85,15 +86,22 @@ namespace cg::engine
 		playground.set_draw_count(player, draw_count);
 	}
 
-	auto Duel::register_card(const domain::CardCode code, const domain::Player player, const domain::Zone zone) noexcept -> CardReference
+	auto Duel::register_card(const domain::CardCode code, const domain::Player player, const domain::Zone zone) noexcept -> bool
 	{
+		// 检查原型是否已注册
 		const auto* prototype = prototype_registry_.find_prototype(code);
 		if (prototype == nullptr)
 		{
-			// 原型注册失败
-			// todo: 怎么办?
-			static Prototype fallback{domain::CardCode::INVALID};
-			prototype = &fallback;
+			// 未注册则进行注册
+			prototype = register_prototype(code);
+
+			if (prototype == nullptr)
+			{
+				// 原型注册失败
+				// todo: 怎么办?
+				static Prototype fallback{domain::CardCode::INVALID};
+				prototype = &fallback;
+			}
 		}
 
 		// 创建卡牌实例
@@ -101,9 +109,7 @@ namespace cg::engine
 
 		// 移动到指定位置
 		auto field_playground = field_.playground();
-		field_playground.move_card(card, player, zone);
-
-		return card;
+		return field_playground.move_card(card, player, zone, domain::Reason::RULE);
 	}
 
 	auto Duel::start() noexcept -> void
@@ -112,8 +118,8 @@ namespace cg::engine
 		auto field_turn = field_.turn();
 
 		// 洗牌
-		field_playground.shuffle_deck(domain::Player::FIRST);
-		field_playground.shuffle_deck(domain::Player::SECOND);
+		field_playground.shuffle(domain::Player::FIRST, domain::AutoZone::DECK, random_);
+		field_playground.shuffle(domain::Player::SECOND, domain::AutoZone::DECK, random_);
 
 		// 抽牌
 		field_playground.start_draw(domain::Player::FIRST);
