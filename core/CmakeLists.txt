@@ -137,5 +137,6 @@ target_link_libraries(
 	PRIVATE
 	
 	spdlog::spdlog
+	libassert::assert
 	pybind11::module
 )

@@ -48,6 +48,9 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/defines.cmake)
 # spdlog
 find_package(spdlog CONFIG REQUIRED)
 
+# libassert
+find_package(libassert CONFIG REQUIRED)
+
 # doctest
 find_package(doctest CONFIG REQUIRED)
 
