@@ -28,6 +28,6 @@ namespace cg::engine
 
 		auto record_attack_announced(domain::TurnId this_turn_id) noexcept -> void;
 		auto record_attack_canceled(domain::TurnId this_turn_id) noexcept -> void;
-		auto record_attacked_card(Card& card) noexcept -> void;
+		auto record_attacked_card(CardReference card) noexcept -> void;
 	};
 }

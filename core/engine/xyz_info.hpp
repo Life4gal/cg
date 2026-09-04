@@ -7,21 +7,26 @@ namespace cg::engine
 	class XyzInfo
 	{
 	public:
-		using size_type = std::uint32_t;
+		// 当前超量信息所属卡牌 -- 冗余设计,简化接口
+		CardReference owner;
 
-		// 超量素材
-		// 需要基于State::zone().index获取卡,所以容器必须基于插入顺序有序(不能使用Group)
+		// 当前叠放的目标 -- 如果当前卡是超量素材
+		CardOptional target;
+		// 当前的超量素材 -- 当前必须不是超量素材,超量素材不能有超量素材
 		Sequence materials;
-		// 素材所属(如果当前卡是超量素材)
-		CardOptional overlay_target;
 
-		XyzInfo() noexcept;
+		explicit XyzInfo(CardReference owner) noexcept;
 
-		// 将一张卡作为超量素材叠放到目标卡(返回是否叠放成功)(如果已经是目标卡超量素材返回true)
-		static auto add_overlay(Card& target, Card& material) noexcept -> bool;
-		// 将一张作为目标卡超量素材的卡移除(返回是否移除成功)(如果不是目标卡超量素材返回true)
-		static auto remove_overlay(Card& target, Card& material) noexcept -> bool;
-		// 移除目标卡的所有超量素材
-		static auto remove_overlays(Card& target) noexcept -> void;
+	private:
+		auto do_take(CardReference material) noexcept -> void;
+		auto do_remove(CardReference material) noexcept -> void;
+
+	public:
+		// 将一张卡作为超量素材叠放到本卡 -- 不处理目标卡的超量素材
+		auto take(CardReference material) noexcept -> void;
+		// 将一张作为本卡超量素材的卡移除
+		auto remove(CardReference material) noexcept -> void;
+		// 将本卡的所有的超量素材移除
+		auto remove_all() noexcept -> void;
 	};
 }

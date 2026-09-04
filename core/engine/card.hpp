@@ -79,7 +79,9 @@ namespace cg::engine
 			[[nodiscard]] auto right_pendulum() const noexcept -> domain::PendulumScale;
 
 			[[nodiscard]] auto is_card_type(domain::CardTypeWrapper expected_card_type) const noexcept -> bool;
+			[[nodiscard]] auto is_card_type(domain::CardType expected_card_type) const noexcept -> bool;
 			[[nodiscard]] auto has_card_type(domain::CardTypeWrapper expected_card_type) const noexcept -> bool;
+			[[nodiscard]] auto has_card_type(domain::CardType expected_card_type) const noexcept -> bool;
 		};
 
 		// ==================== 属性 ====================
@@ -107,7 +109,9 @@ namespace cg::engine
 			[[nodiscard]] auto right_pendulum() const noexcept -> domain::PendulumScale;
 
 			[[nodiscard]] auto is_card_type(domain::CardTypeWrapper expected_card_type) const noexcept -> bool;
+			[[nodiscard]] auto is_card_type(domain::CardType expected_card_type) const noexcept -> bool;
 			[[nodiscard]] auto has_card_type(domain::CardTypeWrapper expected_card_type) const noexcept -> bool;
+			[[nodiscard]] auto has_card_type(domain::CardType expected_card_type) const noexcept -> bool;
 		};
 
 		// ==================== 运行时状态 ====================
@@ -233,15 +237,22 @@ namespace cg::engine
 			[[nodiscard]] auto target_info() const noexcept -> const TargetInfo&;
 
 		public:
-			auto set_target(Card& target) noexcept -> bool;
-			auto cancel_target(Card& target) noexcept -> bool;
+			// 将目标卡指定为本卡的对象
+			auto target_to(CardReference target) noexcept -> void;
+			// 取消目标卡为本卡的对象
+			auto cancel_target(CardReference target) noexcept -> void;
 
-			[[nodiscard]] auto card_targets() const noexcept -> const Group&;
-			[[nodiscard]] auto owner_targets() const noexcept -> const Group&;
+			// 本卡的所有对象
+			[[nodiscard]] auto targets_to() const noexcept -> const Group&;
+			// 所有以本卡为对象的卡
+			[[nodiscard]] auto targets_from() const noexcept -> const Group&;
 
+			// 本卡是否有任何对象
 			[[nodiscard]] auto has_target() const noexcept -> bool;
+			// 本卡是否有指定对象
 			[[nodiscard]] auto has_target(const Card& card) const noexcept -> bool;
-			[[nodiscard]] auto target_count() const noexcept -> TargetInfo::size_type;
+			// 本卡的对象数量
+			[[nodiscard]] auto target_count() const noexcept -> std::size_t;
 		};
 
 		// ==================== 超量素材 ====================
@@ -259,19 +270,26 @@ namespace cg::engine
 			[[nodiscard]] auto xyz_info() const noexcept -> const XyzInfo&;
 
 		public:
-			// 将一张卡作为超量素材叠放到本卡(返回是否叠放成功)(如果已经是本卡超量素材返回true)
-			auto add_overlay(Card& material) noexcept -> bool;
-			// 将一张作为本卡超量素材的卡移除(返回是否移除成功)(如果不是本卡超量素材返回true)
-			auto remove_overlay(Card& material) noexcept -> bool;
-			// 移除本卡的所有超量素材
-			auto remove_overlays() noexcept -> void;
+			// 将一张卡作为超量素材叠放到本卡 -- 不处理目标卡的超量素材
+			auto take(CardReference material) noexcept -> void;
+			// 将一张作为本卡超量素材的卡移除
+			auto remove(CardReference material) noexcept -> void;
+			// 将本卡的所有的超量素材移除
+			auto remove_all() noexcept -> void;
+			// 本卡是否可以是超量素材
+			[[nodiscard]] auto can_overlay() const noexcept -> bool;
 
-			[[nodiscard]] auto materials() const noexcept -> const Sequence&;
+			// 当前叠放目标 -- 如果当前是超量素材
 			[[nodiscard]] auto overlay_target() const noexcept -> CardOptional;
+			// 当前叠放的超量素材 -- 当前必须不是超量素材,超量素材不能叠放超量素材
+			[[nodiscard]] auto materials() const noexcept -> const Sequence&;
 
+			// 本卡是否有任何超量素材
 			[[nodiscard]] auto has_material() const noexcept -> bool;
-			[[nodiscard]] auto has_material(const Card& material) const noexcept -> bool;
-			[[nodiscard]] auto material_count() const noexcept -> XyzInfo::size_type;
+			// 本卡是否有指定超量素材
+			[[nodiscard]] auto has_material(CardReference material) const noexcept -> bool;
+			// 本卡的超量素材数量
+			[[nodiscard]] auto material_count() const noexcept -> std::size_t;
 		};
 
 		// ==================== 装备 ====================
@@ -289,20 +307,25 @@ namespace cg::engine
 			[[nodiscard]] auto equip_info() const noexcept -> const EquipInfo&;
 
 		public:
-			// 将一张卡作为装备卡装备到本卡(返回是否装备成功)(如果已经是本卡装备返回true)
-			auto add_equip(Card& equip) noexcept -> bool;
-			// 将一张作为本卡装备的卡移除(返回是否移除成功)(如果不是本卡装备返回true)
-			auto remove_equip(Card& equip) noexcept -> bool;
-			// 将目标卡的所有装备卡清除
-			auto remove_equips() noexcept -> void;
+			// 将一张卡作为装备卡装备到本卡
+			auto equip(CardReference equip) noexcept -> void;
+			// 将一张本卡的装备卡移除
+			auto unequip(CardReference equip) noexcept -> void;
+			// 将本卡的所有装备卡移除
+			auto unequip_all() noexcept -> void;
 			// 本卡是否可以是装备卡
 			[[nodiscard]] auto can_equip() const noexcept -> bool;
 
+			// 当前装备的目标 -- 如果当前卡是装备卡
+			[[nodiscard]] auto target() const noexcept -> CardOptional;
+			// 当前装备的装备卡牌 -- 当前必须不是装备卡,装备卡不能装备装备卡
 			[[nodiscard]] auto equips() const noexcept -> const Group&;
-			[[nodiscard]] auto owner() const noexcept -> CardOptional;
 
+			// 本卡是否有任何装备卡
 			[[nodiscard]] auto has_equip() const noexcept -> bool;
-			[[nodiscard]] auto has_equip(const Card& equip) const noexcept -> bool;
+			// 本卡是否有指定装备卡
+			[[nodiscard]] auto has_equip(CardReference equip) const noexcept -> bool;
+			// 本卡的装备卡数量
 			[[nodiscard]] auto equip_count() const noexcept -> std::size_t;
 		};
 

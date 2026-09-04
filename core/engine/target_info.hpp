@@ -7,21 +7,19 @@ namespace cg::engine
 	class TargetInfo
 	{
 	public:
-		using size_type = std::uint32_t;
+		// 当前对象信息所属卡牌 -- 冗余设计,简化接口
+		CardReference owner;
 
 		// 本卡指定为对象的卡
-		Group card_targets;
+		Group targets_to;
 		// 以本卡为对象的卡
-		Group owner_targets;
+		Group targets_from;
 
-	private:
-		auto set_owner_target(Card& card) noexcept -> bool;
-		auto cancel_owner_target(const Card& card) noexcept -> bool;
+		explicit TargetInfo(CardReference owner) noexcept;
 
-	public:
-		TargetInfo() noexcept;
-
-		auto set_target(Card& target, Card& owner) noexcept -> bool;
-		auto cancel_target(Card& target, const Card& owner) noexcept -> bool;
+		// 将目标卡指定为本卡的对象
+		auto target_to(CardReference target) noexcept -> void;
+		// 取消目标卡为本卡的对象
+		auto cancel_target(CardReference target) noexcept -> void;
 	};
 }

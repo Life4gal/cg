@@ -80,9 +80,19 @@ namespace cg::engine
 		return card_type().all_of(expected_card_type);
 	}
 
+	auto Card::PrototypeHandler::is_card_type(const domain::CardType expected_card_type) const noexcept -> bool
+	{
+		return card_type().all_of(expected_card_type);
+	}
+
 	auto Card::PrototypeHandler::has_card_type(const domain::CardTypeWrapper expected_card_type) const noexcept -> bool
 	{
 		return card_type().any_of(expected_card_type);
+	}
+
+	auto Card::PrototypeHandler::has_card_type(const domain::CardType expected_card_type) const noexcept -> bool
+	{
+		return card_type().all_of(expected_card_type);
 	}
 
 	Card::PropertyHandler::PropertyHandler(Card& card) noexcept
@@ -163,7 +173,7 @@ namespace cg::engine
 		// 只有超量卡有阶级
 
 		// todo: 如何处理?
-		if (!has_card_type({domain::CardType::XYZ}))
+		if (!has_card_type(domain::CardType::XYZ))
 		{
 			return domain::Rank::R1;
 		}
@@ -184,7 +194,7 @@ namespace cg::engine
 		// 只有连接卡有连接箭头
 
 		// todo: 如何处理?
-		if (!has_card_type({domain::CardType::LINK}))
+		if (!has_card_type(domain::CardType::LINK))
 		{
 			return {domain::LinkMarker::TOP};
 		}
@@ -222,7 +232,7 @@ namespace cg::engine
 		// 只有灵摆怪兽有灵摆刻度
 
 		// todo: 如何处理?
-		if (!has_card_type({domain::CardType::PENDULUM}))
+		if (!has_card_type(domain::CardType::PENDULUM))
 		{
 			return domain::PendulumScale::PS0;
 		}
@@ -243,7 +253,7 @@ namespace cg::engine
 		// 只有灵摆怪兽有灵摆刻度
 
 		// todo: 如何处理?
-		if (!has_card_type({domain::CardType::PENDULUM}))
+		if (!has_card_type(domain::CardType::PENDULUM))
 		{
 			return domain::PendulumScale::PS0;
 		}
@@ -264,7 +274,17 @@ namespace cg::engine
 		return prototype().is_card_type(expected_card_type);
 	}
 
+	auto Card::PropertyHandler::is_card_type(const domain::CardType expected_card_type) const noexcept -> bool
+	{
+		return prototype().is_card_type(expected_card_type);
+	}
+
 	auto Card::PropertyHandler::has_card_type(const domain::CardTypeWrapper expected_card_type) const noexcept -> bool
+	{
+		return prototype().has_card_type(expected_card_type);
+	}
+
+	auto Card::PropertyHandler::has_card_type(const domain::CardType expected_card_type) const noexcept -> bool
 	{
 		return prototype().has_card_type(expected_card_type);
 	}
@@ -575,39 +595,43 @@ namespace cg::engine
 		return card_.get().target_;
 	}
 
-	auto Card::TargetInfoHandler::set_target(Card& target) noexcept -> bool
+	auto Card::TargetInfoHandler::target_to(const CardReference target) noexcept -> void
 	{
-		return target_info().set_target(target, card_);
+		target_info().target_to(target);
+
+		// TODO: 发出事件,广播该卡被设为目标
 	}
 
-	auto Card::TargetInfoHandler::cancel_target(Card& target) noexcept -> bool
+	auto Card::TargetInfoHandler::cancel_target(const CardReference target) noexcept -> void
 	{
-		return target_info().cancel_target(target, card_);
+		target_info().cancel_target(target);
+
+		// TODO: 发出事件,广播该卡被取消设为目标
 	}
 
-	auto Card::TargetInfoHandler::card_targets() const noexcept -> const Group&
+	auto Card::TargetInfoHandler::targets_to() const noexcept -> const Group&
 	{
-		return target_info().card_targets;
+		return target_info().targets_to;
 	}
 
-	auto Card::TargetInfoHandler::owner_targets() const noexcept -> const Group&
+	auto Card::TargetInfoHandler::targets_from() const noexcept -> const Group&
 	{
-		return target_info().owner_targets;
+		return target_info().targets_from;
 	}
 
 	auto Card::TargetInfoHandler::has_target() const noexcept -> bool
 	{
-		return !card_targets().empty();
+		return !targets_to().empty();
 	}
 
 	auto Card::TargetInfoHandler::has_target(const Card& card) const noexcept -> bool
 	{
-		return card_targets().contains(card);
+		return targets_to().contains(card);
 	}
 
-	auto Card::TargetInfoHandler::target_count() const noexcept -> TargetInfo::size_type
+	auto Card::TargetInfoHandler::target_count() const noexcept -> std::size_t
 	{
-		return static_cast<TargetInfo::size_type>(card_targets().size());
+		return targets_to().size();
 	}
 
 	Card::XyzInfoHandler::XyzInfoHandler(Card& card) noexcept
@@ -623,22 +647,57 @@ namespace cg::engine
 		return card_.get().xyz_;
 	}
 
-	// ReSharper disable once CppMemberFunctionMayBeConst
-	auto Card::XyzInfoHandler::add_overlay(Card& material) noexcept -> bool
+	auto Card::XyzInfoHandler::take(const CardReference material) noexcept -> void
 	{
-		return XyzInfo::add_overlay(card_, material);
+		const auto zone_index = xyz_info().materials.size();
+		xyz_info().take(material);
+
+		// 设置超量素材状态
+		const auto owner_state = card_.get().state();
+		auto material_state = material.get().state();
+		// 控制者设置为目标卡的控制者
+		material_state.set_controller(owner_state.controller());
+		// 位置设置为叠放区
+		material_state.set_zone(domain::Zone::Overlay{.index = static_cast<domain::Zone::size_type>(zone_index)});
+
+		// todo: 素材效果?
 	}
 
-	// ReSharper disable once CppMemberFunctionMayBeConst
-	auto Card::XyzInfoHandler::remove_overlay(Card& material) noexcept -> bool
+	auto Card::XyzInfoHandler::remove(const CardReference material) noexcept -> void
 	{
-		return XyzInfo::remove_overlay(card_, material);
+		xyz_info().remove(material);
+
+		// 重置其他素材的序列
+		const auto owner_xyz = card_.get().xyz();
+		for (auto begin = owner_xyz.materials().begin(), it = begin; it != owner_xyz.materials().end(); ++it)
+		{
+			auto material_state = it->get().state();
+			const auto index = std::ranges::distance(begin, it);
+			material_state.set_zone(domain::Zone::Overlay{.index = static_cast<domain::Zone::size_type>(index)});
+		}
+
+		// todo: 素材效果?
 	}
 
-	// ReSharper disable once CppMemberFunctionMayBeConst
-	auto Card::XyzInfoHandler::remove_overlays() noexcept -> void
+	auto Card::XyzInfoHandler::remove_all() noexcept -> void
 	{
-		XyzInfo::remove_overlays(card_);
+		xyz_info().remove_all();
+	}
+
+	auto Card::XyzInfoHandler::can_overlay() const noexcept -> bool
+	{
+		// 本卡必须满足:
+		// 1.没有不能作为装备卡的效果限制
+
+		// todo: 效果限制?
+		std::ignore = this;
+
+		return true;
+	}
+
+	auto Card::XyzInfoHandler::overlay_target() const noexcept -> CardOptional
+	{
+		return xyz_info().target;
 	}
 
 	auto Card::XyzInfoHandler::materials() const noexcept -> const Sequence&
@@ -646,24 +705,19 @@ namespace cg::engine
 		return xyz_info().materials;
 	}
 
-	auto Card::XyzInfoHandler::overlay_target() const noexcept -> CardOptional
-	{
-		return xyz_info().overlay_target;
-	}
-
 	auto Card::XyzInfoHandler::has_material() const noexcept -> bool
 	{
 		return !materials().empty();
 	}
 
-	auto Card::XyzInfoHandler::has_material(const Card& material) const noexcept -> bool
+	auto Card::XyzInfoHandler::has_material(const CardReference material) const noexcept -> bool
 	{
 		return materials().contains(material);
 	}
 
-	auto Card::XyzInfoHandler::material_count() const noexcept -> XyzInfo::size_type
+	auto Card::XyzInfoHandler::material_count() const noexcept -> std::size_t
 	{
-		return static_cast<XyzInfo::size_type>(materials().size());
+		return materials().size();
 	}
 
 	Card::EquipInfoHandler::EquipInfoHandler(Card& card) noexcept
@@ -679,65 +733,91 @@ namespace cg::engine
 		return card_.get().equip_;
 	}
 
-	// ReSharper disable once CppMemberFunctionMayBeConst
-	auto Card::EquipInfoHandler::add_equip(Card& equip) noexcept -> bool
+	auto Card::EquipInfoHandler::equip(const CardReference equip) noexcept -> void
 	{
-		return EquipInfo::add_equip(equip, card_);
+		equip_info().equip(equip);
+
+		// todo: 装备效果?
 	}
 
-	// ReSharper disable once CppMemberFunctionMayBeConst
-	auto Card::EquipInfoHandler::remove_equip(Card& equip) noexcept -> bool
+	auto Card::EquipInfoHandler::unequip(const CardReference equip) noexcept -> void
 	{
-		return EquipInfo::remove_equip(equip, card_);
+		equip_info().unequip(equip);
+
+		// todo: 装备效果?
 	}
 
-	// ReSharper disable once CppMemberFunctionMayBeConst
-	auto Card::EquipInfoHandler::remove_equips() noexcept -> void
+	auto Card::EquipInfoHandler::unequip_all() noexcept -> void
 	{
-		EquipInfo::remove_equips(card_);
+		equip_info().unequip_all();
+
+		// todo: 装备效果?
 	}
 
 	auto Card::EquipInfoHandler::can_equip() const noexcept -> bool
 	{
-		return EquipInfo::can_equip(card_);
+		// 本卡必须满足:
+		// 1.在场上
+		// 2.表侧表示
+		// 3.不是衍生物
+		// 4.没有不能作为装备卡的效果限制
+		const auto state = card_.get().state();
+		const auto property = card_.get().property();
+
+		if (!state.is_field_zone())
+		{
+			return false;
+		}
+		if (!state.is_face_up_form())
+		{
+			return false;
+		}
+		if (property.is_card_type(domain::CardType::TOKEN_MONSTER))
+		{
+			return false;
+		}
+
+		// todo: 效果限制?
+
+		return true;
+	}
+
+	auto Card::EquipInfoHandler::target() const noexcept -> CardOptional
+	{
+		return equip_info().target;
 	}
 
 	auto Card::EquipInfoHandler::equips() const noexcept -> const Group&
 	{
-		return equip_info().equips();
-	}
-
-	auto Card::EquipInfoHandler::owner() const noexcept -> CardOptional
-	{
-		return equip_info().owner();
+		return equip_info().equips;
 	}
 
 	auto Card::EquipInfoHandler::has_equip() const noexcept -> bool
 	{
-		return equip_info().has_equip();
+		return !equips().empty();
 	}
 
-	auto Card::EquipInfoHandler::has_equip(const Card& equip) const noexcept -> bool
+	auto Card::EquipInfoHandler::has_equip(const CardReference equip) const noexcept -> bool
 	{
-		return equip_info().has_equip(equip);
+		return equips().contains(equip);
 	}
 
 	auto Card::EquipInfoHandler::equip_count() const noexcept -> std::size_t
 	{
-		return equip_info().equip_count();
+		return equips().size();
 	}
 
 	Card::Card(Duel& duel, const domain::CardInstanceId instance_id, const domain::Player owner, const Prototype& prototype) noexcept
 		: duel_{duel},
 		  instance_id_{instance_id},
 		  owner_{owner},
-		  prototype_{prototype}
-	// state_{},
-	// summon_{},
-	// battle_{},
-	// target_{},
-	// xyz_{},
-	// equip_{}
+		  prototype_{prototype},
+		  // state_{},
+		  // summon_{},
+		  // battle_{},
+		  target_{*this},
+		  xyz_{*this},
+		  equip_{*this}
 	{
 		//
 	}

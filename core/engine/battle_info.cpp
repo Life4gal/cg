@@ -24,7 +24,7 @@ namespace cg::engine
 		attack_canceled_turn_id = this_turn_id;
 	}
 
-	auto BattleInfo::record_attacked_card(Card& card) noexcept -> void
+	auto BattleInfo::record_attacked_card(const CardReference card) noexcept -> void
 	{
 		attacked_cards.insert(card);
 		battled_cards.insert(card);

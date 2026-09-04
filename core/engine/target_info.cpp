@@ -4,48 +4,29 @@
 
 namespace cg::engine
 {
-	auto TargetInfo::set_owner_target(Card& card) noexcept -> bool
+	TargetInfo::TargetInfo(const CardReference owner) noexcept
+		: owner{owner}
+	// targets_to{},
+	// targets_from{}
+	{}
+
+	auto TargetInfo::target_to(const CardReference target) noexcept -> void
 	{
-		return owner_targets.insert(card);
+		auto& target_target = target.get().target_;
+
+		// 将目标卡加入本卡的`本卡指定为对象的卡`
+		targets_to.insert(target);
+		// 将本卡加入目标卡的`以本卡为对象的卡`
+		target_target.targets_from.insert(owner);
 	}
 
-	auto TargetInfo::cancel_owner_target(const Card& card) noexcept -> bool
+	auto TargetInfo::cancel_target(const CardReference target) noexcept -> void
 	{
-		return owner_targets.erase(card);
-	}
+		auto& target_target = target.get().target_;
 
-	TargetInfo::TargetInfo() noexcept = default;
-	// 	: card_targets_{},
-	// 	  owner_targets_{}
-	// {
-	// 	//
-	// }
-
-	auto TargetInfo::set_target(Card& target, Card& owner) noexcept -> bool
-	{
-		if (card_targets.insert(target))
-		{
-			// 将本卡加入目标卡的"以本卡为对象的卡"列表中
-			target.target_.set_owner_target(owner);
-
-			// TODO: 发出事件,广播该卡被设为目标
-
-			return true;
-		}
-
-		return false;
-	}
-
-	auto TargetInfo::cancel_target(Card& target, const Card& owner) noexcept -> bool
-	{
-		if (card_targets.erase(target))
-		{
-			// 将本卡移出目标卡的"以本卡为对象的卡"列表中
-			target.target_.cancel_owner_target(owner);
-
-			return true;
-		}
-
-		return false;
+		// 将目标卡移出本卡的`本卡指定为对象的卡`
+		targets_to.erase(target);
+		// 将本卡移出目标卡的`以本卡为对象的卡`
+		target_target.targets_from.erase(owner);
 	}
 }
