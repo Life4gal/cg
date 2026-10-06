@@ -8,11 +8,9 @@ namespace cg::domain
 	enum class SummonMethod : std::uint8_t
 	{
 		// 通常召唤
-		NORMAL,
+		NORMAL = 0,
 		// 上级召唤
 		ADVANCE,
-		// 特殊召唤(不包括仪式、融合、同调、超量、灵摆、连接)
-		SPECIAL,
 		// 仪式召唤
 		RITUAL,
 		// 融合召唤
@@ -25,6 +23,8 @@ namespace cg::domain
 		PENDULUM,
 		// 连接召唤
 		LINK,
+		// 特殊召唤(不包括仪式、融合、同调、超量、灵摆、连接)
+		SPECIAL,
 	};
 
 	// 仪式召唤等级要求

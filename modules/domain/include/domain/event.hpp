@@ -115,6 +115,45 @@ namespace cg::domain
 		LEAVE_BANISHED,
 	};
 
+	// 卡牌移动/状态变化的原因
+	enum class Reason : std::uint32_t
+	{
+		// 因规则导致
+		RULE = 0,
+		// 因抽卡导致
+		DRAW = 1 << 1,
+		// 因COST导致
+		COST = 1 << 2,
+		// 因舍弃导致
+		DISCARD = 1 << 3,
+		// 因效果导致
+		EFFECT = 1 << 4,
+		// 因战斗导致
+		BATTLE = 1 << 5,
+		// 因破坏导致
+		DESTROY = 1 << 6,
+		// 因解放导致
+		RELEASE = 1 << 7,
+		// 因失去对象(如装备卡的装备对象离场)
+		LOST_TARGET = 1 << 8,
+		// 作为超量素材被取除导致
+		REMOVE_OVERLAY = 1 << 9,
+		// 代替破坏导致
+		REPLACE = 1 << 10,
+		// 因召唤手续导致
+		SUMMON = 1 << 11,
+		// 因作为仪式素材导致
+		RITUAL = 1 << 12,
+		// 因作为融合素材导致
+		FUSION = 1 << 13,
+		// 因作为同调素材导致
+		SYNCHRO = 1 << 14,
+		// 因作为超量素材导致
+		XYZ = 1 << 15,
+		// 因作为连接素材导致
+		LINK = 1 << 16,
+	};
+
 	// 时点
 	enum class Timing : std::uint8_t
 	{

@@ -1,4 +1,4 @@
-project(cg-domain)
+project(cg-utility)
 
 add_library(${PROJECT_NAME} INTERFACE)
 
@@ -7,14 +7,8 @@ target_sources(
 	FILE_SET HEADERS
 	BASE_DIRS include
 	FILES
-	include/domain/card.hpp
-	include/domain/effect.hpp
-	include/domain/event.hpp
-	include/domain/phase.hpp
-	include/domain/zone.hpp
-	include/domain/player.hpp
-	include/domain/summon.hpp
-	include/domain/chain.hpp
+	include/utility/enum.hpp
+	include/utility/functional.hpp
 )
 
 target_include_directories(
@@ -32,9 +26,4 @@ target_compile_options(
 target_compile_features(
 	${PROJECT_NAME} INTERFACE
 	cxx_std_23
-)
-
-target_link_libraries(
-	${PROJECT_NAME} INTERFACE
-	cg-utility
 )

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstdint>
+#include <utility/enum.hpp>
 
 namespace cg::domain
 {
@@ -143,6 +143,16 @@ namespace cg::domain
 		ILLUSION,
 	};
 
+	// 卡牌攻击力/守备力(怪兽卡)
+	// 不会为负数,但是使用有符号类型方便计算
+	enum class AttackDefense : std::int16_t {};
+
+	// 卡牌等级/阶级(怪兽卡)
+	enum class LevelRank : std::uint16_t {};
+
+	// 卡牌灵摆刻度
+	enum class PendulumScale : std::uint8_t {};
+
 	// 卡牌连接箭头(怪兽卡)
 	enum class LinkMarker : std::uint8_t
 	{
@@ -169,7 +179,7 @@ namespace cg::domain
 	{
 		// 攻击力
 		ATTACK,
-		// 防御力
+		// 守备力
 		DEFENSE,
 		// 等级
 		LEVEL,
@@ -197,4 +207,16 @@ namespace cg::domain
 	// 指示物
 	// = 对应字段名?
 	enum class Counter : std::uint32_t {};
+}
+
+namespace cg::utility
+{
+	template<>
+	struct is_flag<domain::CardType> : std::true_type {};
+
+	template<>
+	struct is_flag<domain::Attribute> : std::true_type {};
+
+	template<>
+	struct is_flag<domain::LinkMarker> : std::true_type {};
 }
