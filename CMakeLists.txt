@@ -45,11 +45,27 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/defines.cmake)
 # ===================================================================================================
 # DEPENDENCIES
 
+# =================
+# PUBLIC
+# =================
+
+# magic_enum
+find_package(magic_enum CONFIG REQUIRED)
+# nlohmann/json
+find_package(nlohmann_json CONFIG REQUIRED)
+
+# =================
+# PRIVATE
+# =================
+
 # spdlog
 find_package(spdlog CONFIG REQUIRED)
-
 # libassert
 find_package(libassert CONFIG REQUIRED)
+
+# =================
+# TEST
+# =================
 
 # doctest
 find_package(doctest CONFIG REQUIRED)
@@ -66,8 +82,14 @@ find_package(pybind11 CONFIG REQUIRED)
 # ===================================================================================================
 # LIBRARY
 
-# cg-core
+# cg-core --- 待删除
 add_subdirectory(core)
+
+# 内容转移到src
+add_subdirectory(modules)
+
+# 核心库
+add_subdirectory(src)
 
 # ===================================================================================================
 # TEST
@@ -76,6 +98,9 @@ add_subdirectory(tests)
 
 # ===================================================================================================
 # EXECUTABLE
+
+# APP
+add_subdirectory(app)
 
 add_executable(
 	cg
@@ -100,6 +125,7 @@ target_link_libraries(
 	cg
 	PRIVATE
 	
+	cg-domain
 	cg-core
 )
 
