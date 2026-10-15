@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include <cg/driver/action.hpp>
 
 namespace cg::driver
@@ -137,4 +139,15 @@ namespace cg::driver
 				// 
 				// ==========================================
 			> {};
+
+	[[nodiscard]] constexpr auto player_of(const Request& request) noexcept -> domain::Player
+	{
+		return std::visit(
+			[](const auto& any) noexcept -> domain::Player
+			{
+				return any.player;
+			},
+			request
+		);
+	}
 }

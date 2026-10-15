@@ -55,7 +55,7 @@ namespace cg::driver
 	public:
 		domain::MonsterLocation location;
 
-		[[nodiscard]] constexpr auto operator==(const SelectMonsterLocationResponse& other) const noexcept -> bool = default
+		[[nodiscard]] constexpr auto operator==(const SelectMonsterLocationResponse& other) const noexcept -> bool = default;
 	};
 
 	// 选择怪兽落点(包括额外怪兽区)
@@ -64,7 +64,7 @@ namespace cg::driver
 	public:
 		domain::AnyMonsterLocation location;
 
-		[[nodiscard]] constexpr auto operator==(const SelectMonsterLocationExResponse& other) const noexcept -> bool = default
+		[[nodiscard]] constexpr auto operator==(const SelectMonsterLocationExResponse& other) const noexcept -> bool = default;
 	};
 
 	// 选择怪兽表示形式
@@ -73,7 +73,7 @@ namespace cg::driver
 	public:
 		domain::Position position;
 
-		[[nodiscard]] constexpr auto operator==(const SelectMonsterPositionResponse& other) const noexcept -> bool = default
+		[[nodiscard]] constexpr auto operator==(const SelectMonsterPositionResponse& other) const noexcept -> bool = default;
 	};
 
 	// 选择魔陷落点
@@ -82,7 +82,7 @@ namespace cg::driver
 	public:
 		domain::SpellTrapLocation location;
 
-		[[nodiscard]] constexpr auto operator==(const SelectSpellTrapLocationResponse& other) const noexcept -> bool = default
+		[[nodiscard]] constexpr auto operator==(const SelectSpellTrapLocationResponse& other) const noexcept -> bool = default;
 	};
 
 	// 选择要发动的效果(如果同一时刻有多个效果可以发动)
@@ -91,7 +91,7 @@ namespace cg::driver
 	public:
 		state::EffectId select_effect;
 
-		[[nodiscard]] constexpr auto operator==(const SelectActivateEffectResponse& other) const noexcept -> bool = default
+		[[nodiscard]] constexpr auto operator==(const SelectActivateEffectResponse& other) const noexcept -> bool = default;
 	};
 
 	class Response : public std::variant<

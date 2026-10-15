@@ -4,9 +4,13 @@ add_library(
 	${PROJECT_NAME} STATIC
 
 	# ===================================
-	# DOMAIN
+	# SERVER
 	# ===================================
-	
+
+	src/server/deck_loader.cpp
+	src/server/codec.cpp
+	src/server/net_server.cpp
+
 	# ===================================
 	# STATE
 	# ===================================
@@ -61,6 +65,16 @@ target_sources(
 	include/cg/driver/request.hpp
 	include/cg/driver/response.hpp
 	include/cg/driver/driver.hpp
+	
+	# ===================================
+	# SERVER
+	# ===================================
+
+	include/cg/server/deck.hpp
+	include/cg/server/deck_loader.hpp
+	include/cg/server/codec.hpp
+	include/cg/server/server.hpp
+	include/cg/server/net_server.hpp
 
 	# ===================================
 	# STATE
@@ -110,4 +124,5 @@ target_link_libraries(
 	PRIVATE
 	libassert::assert
 	spdlog::spdlog
+	ixwebsocket::ixwebsocket
 )

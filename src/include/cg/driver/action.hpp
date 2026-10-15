@@ -3,6 +3,7 @@
 #include <vector>
 #include <optional>
 
+#include <cg/domain/player.hpp>
 #include <cg/domain/card.hpp>
 #include <cg/domain/field.hpp>
 #include <cg/domain/summon.hpp>

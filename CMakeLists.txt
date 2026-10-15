@@ -62,6 +62,8 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 # libassert
 find_package(libassert CONFIG REQUIRED)
+# ixwebsocket
+find_package(ixwebsocket CONFIG REQUIRED)
 
 # =================
 # TEST
