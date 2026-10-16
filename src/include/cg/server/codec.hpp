@@ -9,8 +9,6 @@
 
 namespace cg::server
 {
-	[[nodiscard]] auto encode_action(const driver::Action& action) noexcept -> nlohmann::json;
-
 	[[nodiscard]] auto encode_request(const driver::Request& request) noexcept -> nlohmann::json;
 
 	[[nodiscard]] auto decode_response(const driver::Request& request, const nlohmann::json& message) noexcept -> std::expected<driver::Response, std::string>;

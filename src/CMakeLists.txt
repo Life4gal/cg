@@ -42,6 +42,8 @@ target_sources(
 	include/cg/utility/flag.hpp
 	include/cg/utility/functional.hpp
 	include/cg/utility/opacity.hpp
+	include/cg/utility/type_list.hpp
+	include/cg/utility/variant.hpp
 
 	# ===================================
 	# DOMAIN

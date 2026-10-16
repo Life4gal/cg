@@ -24,7 +24,8 @@ namespace cg::driver
 	{
 	public:
 		state::CardInstanceId card;
-		domain::MonsterLocation placement;
+		// 要么表侧攻击表示,要么里侧守备表示
+		domain::MonsterPlacement placement;
 
 		[[nodiscard]] constexpr auto operator==(const NormalSummonAction& other) const noexcept -> bool = default;
 	};
@@ -34,8 +35,10 @@ namespace cg::driver
 	{
 	public:
 		state::CardInstanceId card;
+		// 祭品
 		std::vector<state::CardInstanceId> materials;
-		domain::MonsterLocation placement;
+		// 要么表侧攻击表示,要么里侧守备表示
+		domain::MonsterPlacement placement;
 
 		[[nodiscard]] constexpr auto operator==(const AdvanceSummonAction& other) const noexcept -> bool = default;
 	};
@@ -64,7 +67,10 @@ namespace cg::driver
 	public:
 		state::CardInstanceId card;
 		domain::SummonMethod method;
+		// 只指定素材来源
+		// 素材不在此时选择
 		domain::SummonMaterialSource material_source;
+		// 必须是表侧表示,可以在怪兽区和额外怪兽区
 		domain::AnyMonsterPlacement placement;
 
 		[[nodiscard]] constexpr auto operator==(const ExtraDeckSummonAction& other) const noexcept -> bool = default;
@@ -75,7 +81,7 @@ namespace cg::driver
 	{
 	public:
 		state::CardInstanceId card;
-		// 非额外卡组特招不能放置到额外怪兽区
+		// 必须是表侧表示,非额外卡组特招不能放置到额外怪兽区
 		domain::MonsterPlacement placement;
 		// controller决定placement是我方场地还是对方场地
 		domain::Player controller;
@@ -127,14 +133,14 @@ namespace cg::driver
 	};
 
 	// 放置魔陷
-	class SetSpellTrap
+	class SetSpellTrapAction
 	{
 	public:
 		state::CardInstanceId card;
 		// 使用location而不是placement,放置只能里侧,表侧是发动
 		domain::SpellTrapLocation location;
 
-		[[nodiscard]] constexpr auto operator==(const SetSpellTrap& other) const noexcept -> bool = default;
+		[[nodiscard]] constexpr auto operator==(const SetSpellTrapAction& other) const noexcept -> bool = default;
 	};
 
 	class Action : public std::variant<
@@ -149,7 +155,7 @@ namespace cg::driver
 				// ==========================================
 
 				NormalSummonAction,
-				AdvancePhaseAction,
+				AdvanceSummonAction,
 				FlipSummonAction,
 				DualSummonAction,
 				ExtraDeckSummonAction,
@@ -173,7 +179,7 @@ namespace cg::driver
 				// ==========================================
 
 				ActivatePendulumAction,
-				SetSpellTrap
+				SetSpellTrapAction
 
 				// ==========================================
 				// 

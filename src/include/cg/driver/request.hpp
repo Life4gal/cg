@@ -22,8 +22,8 @@ namespace cg::driver
 	public:
 		domain::Player player;
 		std::vector<state::CardInstanceId> candidates;
-		std::uint8_t min;
-		std::uint8_t max;
+		domain::DeckLocation::size_type min;
+		domain::DeckLocation::size_type max;
 
 		[[nodiscard]] constexpr auto operator==(const SelectCardRequest& other) const noexcept -> bool = default;
 	};
@@ -43,9 +43,11 @@ namespace cg::driver
 	class SelectNumberRequest
 	{
 	public:
+		using value_type = std::int64_t;
+
 		domain::Player player;
-		std::int64_t min;
-		std::int64_t max;
+		value_type min;
+		value_type max;
 
 		[[nodiscard]] constexpr auto operator==(const SelectNumberRequest& other) const noexcept -> bool = default;
 	};
