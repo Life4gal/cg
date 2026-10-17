@@ -400,11 +400,26 @@ namespace cg::server
 			decks.push_back(std::move(deck_content));
 		}
 
+		auto seats = nlohmann::json::array();
+		const auto write_seat = [&](const domain::Player player) noexcept -> void
+		{
+			auto& seat = seats[utility::to_string(player)];
+
+			seat["read"] = peers_[std::to_underlying(domain::Player::FIRST)].ready;
+			if (peers_[std::to_underlying(domain::Player::FIRST)].ready)
+			{
+				seat["deck_name"] = peers_[std::to_underlying(domain::Player::FIRST)].deck_name;
+			}
+		};
+		write_seat(domain::Player::FIRST);
+		write_seat(domain::Player::SECOND);
+
 		return
 		{
 				// 可选卡组
-				{"deck", std::move(decks)},
-				//
+				{"decks", std::move(decks)},
+				// 座位
+				{"seats", std::move(seats)},
 		};
 	}
 
@@ -426,7 +441,7 @@ namespace cg::server
 			peers_,
 			[](const Peer& peer) noexcept -> bool
 			{
-				return peer.joined && peer.chose_deck;
+				return peer.joined && peer.ready;
 			}
 		);
 
@@ -443,8 +458,8 @@ namespace cg::server
 		auto content = nlohmann::json::object();
 
 		content["type"] = "sync";
-		content["duel_started"] = duel_started_;
-		content["duel_finished"] = duel_finished_;
+		content["started"] = duel_started_;
+		content["finished"] = duel_finished_;
 		content["seats"][utility::to_string(domain::Player::FIRST)] = peers_[std::to_underlying(domain::Player::FIRST)].joined;
 		content["seats"][utility::to_string(domain::Player::SECOND)] = peers_[std::to_underlying(domain::Player::SECOND)].joined;
 
@@ -807,7 +822,7 @@ namespace cg::server
 				return;
 			}
 
-			const auto deck_name = message.value("deck", "");
+			auto deck_name = message.value("deck", "");
 			const auto deck_it = std::ranges::find(catalog_decks_, deck_name, &Deck::filename);
 			if (deck_it == catalog_decks_.end())
 			{
@@ -824,7 +839,9 @@ namespace cg::server
 			peer.main_deck = deck_it->main_deck;
 			peer.extra_deck = deck_it->extra_deck;
 			peer.side_deck = deck_it->side_deck;
-			peer.chose_deck = true;
+
+			peer.ready = true;
+			peer.deck_name = std::move(deck_name);
 
 			ready = check_lobby_both_ready_locked();
 		}

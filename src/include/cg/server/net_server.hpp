@@ -33,16 +33,16 @@ namespace cg::server
 		// 可用卡组目录
 		std::string decks_path;
 		// web资源路径
-		std::string web_path = "web/dist";
+		std::string web_path;
 		// 卡图目录
-		std::string pics_path = "pics";
+		std::string pics_path;
 		// 资源路径
-		std::string assets_path = "web/public/assets";
+		std::string assets_path;
 
 		// HOST
-		std::string host = "127.0.0.1";
+		std::string host;
 		// 端口
-		int port = 5678;
+		int port;
 	};
 
 	class NetServer final : public Server
@@ -55,7 +55,8 @@ namespace cg::server
 		public:
 			std::shared_ptr<ix::WebSocket> socket = nullptr;
 			bool joined = false;
-			bool chose_deck = false;
+			bool ready = false;
+			std::string deck_name;
 
 			nlohmann::json last_state = {};
 			nlohmann::json last_request = {};

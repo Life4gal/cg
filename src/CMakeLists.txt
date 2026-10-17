@@ -58,6 +58,8 @@ target_sources(
 	include/cg/domain/player.hpp
 	include/cg/domain/summon.hpp
 	include/cg/domain/card_definition.hpp
+	include/cg/domain/win.hpp
+	include/cg/domain/reject_reason.hpp
 	
 	# ===================================
 	# DRIVER

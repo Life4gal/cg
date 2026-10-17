@@ -22,13 +22,13 @@ namespace cg::state
 		using bag_zones_type = std::vector<CardInstanceId>;
 
 		// 生命值
-		std::underlying_type_t<domain::AttackDefense> life_point;
+		std::underlying_type_t<domain::AttackDefense> life_points;
 		// 主要怪兽区
 		field_zones_type monster_zones;
 		// 魔陷区
 		field_zones_type spell_trap_zones;
 		// 场地魔法区
-		CardInstanceId field_spell;
+		CardInstanceId field_spell_zone;
 		// 卡组
 		bag_zones_type deck_zones;
 		// 额外卡组

@@ -1,4 +1,4 @@
-project(cg-app-dummy)
+project(cg-app-server)
 
 add_executable(
 	${PROJECT_NAME}

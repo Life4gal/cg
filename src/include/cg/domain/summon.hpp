@@ -27,11 +27,22 @@ namespace cg::domain
 		SPECIAL,
 	};
 
+	// 通常召唤类型
+	enum class NormalSummonType : std::uint8_t
+	{
+		// 召唤 -- 表侧攻击表示
+		SUMMON,
+		// 盖放 -- 里侧守备表示
+		SET,
+	};
+
 	// 召唤素材来源
 	enum class SummonMaterialSource : std::uint8_t
 	{
 		// 手牌可以作为素材
 		HAND,
+		// 场上可以作为素材
+		FIELD,
 		// 墓地可以作为素材
 		GRAVEYARD,
 		// 对手场上可以作为素材

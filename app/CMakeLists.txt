@@ -1,2 +1,2 @@
-# DUMMY
-add_subdirectory(dummy)
+# SERVER
+add_subdirectory(server)

@@ -820,7 +820,7 @@ namespace cg::server
 			}
 			const auto material_source_it = json.find("material_source");
 			const auto& material_source_string = material_source_it.value().get_ref<const nlohmann::json::string_t&>();
-			const auto material_source = utility::from_string<domain::SummonMaterialSource>(material_source_string);
+			const auto material_source = utility::from_mask_string<domain::SummonMaterialSource>(material_source_string);
 			if (!material_source.has_value())
 			{
 				return std::nullopt;
@@ -1839,6 +1839,24 @@ namespace cg::server
 			return object;
 		}
 	};
+
+	template<typename T>
+	[[nodiscard]] auto valid(const nlohmann::json& json) noexcept -> bool
+	{
+		return ValueCodec<T>::valid(json);
+	}
+
+	template<typename T>
+	[[nodiscard]] auto decode(const nlohmann::json& json) noexcept -> std::optional<T>
+	{
+		return ValueCodec<T>::decode(json);
+	}
+
+	template<typename T>
+	[[nodiscard]] auto encode(const T& data) noexcept -> nlohmann::json
+	{
+		return ValueCodec<T>::encode(data);
+	}
 
 	template<typename T>
 	class FieldCodec

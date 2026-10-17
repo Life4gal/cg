@@ -3,7 +3,7 @@
 #include <bit>
 #include <utility>
 
-#include <magic_enum/magic_enum.hpp>
+#include <magic_enum/magic_enum_flags.hpp>
 
 namespace cg::utility
 {
@@ -48,6 +48,22 @@ namespace cg::utility
 		requires std::is_scoped_enum_v<EnumType>
 	class EnumMask
 	{
+		constexpr static auto values_are_contiguous() noexcept -> bool
+		{
+			std::underlying_type_t<EnumType> i = 0;
+			for (const auto value: magic_enum::enum_values<EnumType>())
+			{
+				if (std::to_underlying(value) != i)
+				{
+					return false;
+				}
+				i += 1;
+			}
+			return true;
+		}
+
+		static_assert(values_are_contiguous());
+
 	public:
 		using enum_type = EnumType;
 
@@ -62,7 +78,7 @@ namespace cg::utility
 		using value_type = enum_detail::select_type_t<enums_count>;
 
 		// 所有枚举值皆有时的值 -- 不支持空位
-		constexpr static auto all_enums_value = static_cast<value_type>(1) << (enums_count - 1);
+		constexpr static auto all_enums_value = static_cast<value_type>((static_cast<value_type>(1) << enums_count) - 1);
 
 		// 默认值 - 0
 		constexpr static auto default_value = value_type{0};
@@ -72,7 +88,7 @@ namespace cg::utility
 
 		[[nodiscard]] constexpr static auto bit_of(const enum_type e) noexcept -> value_type
 		{
-			return value_type{1} << static_cast<value_type>(e);
+			return static_cast<value_type>(value_type{1} << static_cast<value_type>(e));
 		}
 
 	public:
@@ -85,9 +101,25 @@ namespace cg::utility
 			EnumMask::add(e);
 		}
 
+		// template<std::same_as<enum_type>... Es>
+		// constexpr explicit(false) EnumMask(Es... es) noexcept
+		// 	: EnumMask{}
+		// {
+		// 	(EnumMask::add(es), ...);
+		// }
+
+		constexpr explicit(false) EnumMask(const std::initializer_list<enum_type> list) noexcept
+			: EnumMask{}
+		{
+			for (const auto e: list)
+			{
+				EnumMask::add(e);
+			}
+		}
+
 		[[nodiscard]] constexpr auto contains(const enum_type e) const noexcept -> bool
 		{
-			return (bits_ | EnumMask::bit_of(e)) != value_type{0};
+			return (bits_ & EnumMask::bit_of(e)) != value_type{0};
 		}
 
 		constexpr auto add(const enum_type e) noexcept -> void
@@ -225,8 +257,76 @@ namespace cg::utility
 
 	template<typename EnumType>
 		requires std::is_enum_v<EnumType>
+	[[nodiscard]] constexpr auto to_flags_string(const EnumType e) noexcept -> std::string
+	{
+		return magic_enum::enum_flags_name(e);
+	}
+
+	template<typename EnumType>
+	[[nodiscard]] constexpr auto to_string(const EnumMask<EnumType>& mask) noexcept -> std::string
+	{
+		std::string name;
+		mask.for_each(
+			[&name](const EnumType e) noexcept -> void
+			{
+				if (!name.empty())
+				{
+					name.append(1, '|');
+				}
+				name.append_range(utility::to_string(e));
+			}
+		);
+		return name;
+	}
+
+	template<typename EnumType>
+		requires std::is_enum_v<EnumType>
 	[[nodiscard]] constexpr auto from_string(const std::string_view e) noexcept -> std::optional<EnumType>
 	{
 		return magic_enum::enum_cast<EnumType>(e);
+	}
+
+	template<typename EnumType>
+		requires std::is_enum_v<EnumType>
+	[[nodiscard]] constexpr auto from_flags_string(const std::string_view e) noexcept -> std::optional<EnumType>
+	{
+		return magic_enum::enum_flags_cast<EnumType>(e);
+	}
+
+	template<typename EnumType>
+	[[nodiscard]] constexpr auto from_mask_string(std::string_view mask) noexcept -> std::optional<EnumMask<EnumType>>
+	{
+		EnumMask<EnumType> result{};
+		while (!mask.empty())
+		{
+			const auto d = mask.find('|');
+			const auto s = (d == std::string_view::npos) ? mask : mask.substr(0, d);
+			bool found = false;
+			for (std::size_t i = 0; i < magic_enum::enum_count<EnumType>(); ++i)
+			{
+				if (const auto e = static_cast<EnumType>(i);
+					s == magic_enum::enum_name(e))
+				{
+					result.add(e);
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+			{
+				return std::nullopt;
+			}
+			if (d == std::string_view::npos)
+			{
+				mask.remove_prefix(mask.size());
+			}
+			else
+			{
+				mask.remove_prefix(d + 1);
+			}
+		}
+
+		return result;
 	}
 }

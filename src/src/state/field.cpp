@@ -46,7 +46,7 @@ namespace cg::state
 				return domain::Zone::SPELL_TRAP;
 			}
 			//场地魔法区
-			if (player_zone.field_spell == card)
+			if (player_zone.field_spell_zone == card)
 			{
 				return domain::Zone::FIELD_SPELL;
 			}
@@ -117,7 +117,7 @@ namespace cg::state
 			}
 
 			// 场地魔法区
-			if (player_zone.field_spell == card)
+			if (player_zone.field_spell_zone == card)
 			{
 				constexpr auto location = domain::FieldSpellLocation{};
 
@@ -237,7 +237,7 @@ namespace cg::state
 	{
 		const auto& player_zone = player_zone_of(player);
 
-		return !player_zone.field_spell.valid();
+		return !player_zone.field_spell_zone.valid();
 	}
 
 	auto Field::is_zones_empty(const domain::Player player, const utility::EnumMask<domain::Zone> zone) const noexcept -> bool
@@ -427,7 +427,7 @@ namespace cg::state
 	auto Field::count_field_spell_zones_card(const domain::Player player) const noexcept -> size_type
 	{
 		if (const auto& player_zone = player_zone_of(player);
-			!player_zone.field_spell.valid())
+			!player_zone.field_spell_zone.valid())
 		{
 			return 0;
 		}
@@ -662,9 +662,9 @@ namespace cg::state
 		// 场地魔法区
 		if (zone.contains(domain::Zone::FIELD_SPELL))
 		{
-			if (player_zone.field_spell.valid())
+			if (player_zone.field_spell_zone.valid())
 			{
-				out.push_back(player_zone.field_spell);
+				out.push_back(player_zone.field_spell_zone);
 			}
 		}
 	}
@@ -716,9 +716,9 @@ namespace cg::state
 		// 场地魔法区
 		if (zone.contains(domain::Zone::FIELD_SPELL))
 		{
-			if (player_zone.field_spell.valid())
+			if (player_zone.field_spell_zone.valid())
 			{
-				out.push_back(player_zone.field_spell);
+				out.push_back(player_zone.field_spell_zone);
 			}
 		}
 	}
@@ -848,9 +848,9 @@ namespace cg::state
 	auto Field::collect_field_spell_zones_card(const domain::Player player) const noexcept -> std::vector<CardInstanceId>
 	{
 		if (const auto& player_zone = player_zone_of(player);
-			player_zone.field_spell.valid())
+			player_zone.field_spell_zone.valid())
 		{
-			return {player_zone.field_spell};
+			return {player_zone.field_spell_zone};
 		}
 
 		return {};
@@ -944,7 +944,7 @@ namespace cg::state
 	{
 		const auto& player_zone = player_zone_of(player);
 
-		return !player_zone.field_spell.valid();
+		return !player_zone.field_spell_zone.valid();
 	}
 
 	auto Field::is_location_empty(const domain::Player player, const domain::Location location) const noexcept -> bool
@@ -1047,7 +1047,7 @@ namespace cg::state
 	{
 		const auto& player_zone = player_zone_of(player);
 
-		return player_zone.field_spell;
+		return player_zone.field_spell_zone;
 	}
 
 	auto Field::select_location_card(const domain::Player player, const domain::Location location) const noexcept -> CardInstanceId
