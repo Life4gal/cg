@@ -1,10 +1,10 @@
 #pragma once
 
-#include <cg/domain/card.hpp>
-
 #include <cg/utility/enum.hpp>
 
-namespace cg::domain
+#include <cg/domain/card.hpp>
+
+namespace cg::state
 {
 	// 卡牌定义
 	class CardDefinition
@@ -22,20 +22,20 @@ namespace cg::domain
 			};
 
 			// 属性
-			Attribute attribute;
+			domain::Attribute attribute;
 			// 种族
-			Race race;
+			domain::Race race;
 			// 等级/阶级
-			std::underlying_type_t<LevelRank> level;
+			std::underlying_type_t<domain::LevelRank> level;
 			// 攻击力
-			std::underlying_type_t<AttackDefense> attack;
+			std::underlying_type_t<domain::AttackDefense> attack;
 			// 守备力
-			std::underlying_type_t<AttackDefense> defense;
+			std::underlying_type_t<domain::AttackDefense> defense;
 
 			// 灵摆刻度 -- 如果是怪兽卡且是灵摆怪兽
 			std::optional<PendulumScale> pendulum_scale;
 			// 连接箭头 -- 如果是怪兽卡且是连接怪兽
-			std::optional<LinkMarker> link_marker;
+			std::optional<domain::LinkMarker> link_marker;
 		};
 
 		// 魔法卡数据
@@ -53,12 +53,12 @@ namespace cg::domain
 		};
 
 		// 卡密
-		CardCode code;
+		domain::CardCode code;
 		// 主类型(怪兽/魔法/陷阱)
 		// 实卡目前仅存在"陷阱怪兽"一种复合类型
-		utility::EnumMask<CardType> kind;
+		utility::EnumMask<domain::CardType> kind;
 		// 子类型
-		utility::EnumMask<CardSubtype> subtypes;
+		utility::EnumMask<domain::CardSubtype> subtypes;
 
 		// 怪兽数据 -- 如果是怪兽卡
 		std::optional<Monster> monster;

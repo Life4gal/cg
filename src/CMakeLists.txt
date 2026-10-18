@@ -59,7 +59,6 @@ target_sources(
 	include/cg/domain/field.hpp
 	include/cg/domain/player.hpp
 	include/cg/domain/summon.hpp
-	include/cg/domain/card_definition.hpp
 	include/cg/domain/win.hpp
 	include/cg/domain/reject_reason.hpp
 	
@@ -89,6 +88,7 @@ target_sources(
 	# ===================================
 
 	include/cg/state/id.hpp
+	include/cg/state/card_definition.hpp
 	include/cg/state/card.hpp
 	include/cg/state/field.hpp
 	include/cg/state/game.hpp

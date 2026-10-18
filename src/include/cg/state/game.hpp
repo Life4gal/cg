@@ -3,8 +3,6 @@
 #include <map>
 #include <vector>
 
-#include <cg/domain/card_definition.hpp>
-
 #include <cg/state/id.hpp>
 #include <cg/state/card.hpp>
 #include <cg/state/field.hpp>
@@ -14,7 +12,7 @@ namespace cg::state
 	class Game
 	{
 	public:
-		using card_definitions_type = std::map<domain::CardCode, domain::CardDefinition>;
+		using card_definitions_type = std::map<domain::CardCode, state::CardDefinition>;
 		using card_instances_type = std::vector<CardInstance>;
 
 		// 游戏中所有卡牌的定义
@@ -28,7 +26,7 @@ namespace cg::state
 		[[nodiscard]] auto has_definition(domain::CardCode code) const noexcept -> bool;
 
 		// 获取指定卡密所属卡牌的定义
-		[[nodiscard]] auto find_definition(domain::CardCode code) const noexcept -> const domain::CardDefinition*;
+		[[nodiscard]] auto find_definition(domain::CardCode code) const noexcept -> const CardDefinition*;
 
 		// 指定实例ID所属实例是否存在
 		[[nodiscard]] auto has_instance(CardInstanceId card) const noexcept -> bool;

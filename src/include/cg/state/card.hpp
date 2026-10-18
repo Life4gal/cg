@@ -6,9 +6,9 @@
 #include <cg/domain/field.hpp>
 #include <cg/domain/reason.hpp>
 #include <cg/domain/summon.hpp>
-#include <cg/domain/card_definition.hpp>
 
 #include <cg/state/id.hpp>
+#include <cg/state/card_definition.hpp>
 
 namespace cg::state
 {
@@ -71,7 +71,7 @@ namespace cg::state
 
 	private:
 		// 卡牌定义的引用
-		std::reference_wrapper<const domain::CardDefinition> definition_;
+		std::reference_wrapper<const CardDefinition> definition_;
 
 		// 实例ID
 		CardInstanceId id_;
@@ -93,7 +93,7 @@ namespace cg::state
 		Form form_;
 
 	public:
-		CardInstance(CardInstanceId id, const domain::CardDefinition& definition) noexcept;
+		CardInstance(CardInstanceId id, const CardDefinition& definition) noexcept;
 
 		// ================================================================
 		// 实例信息

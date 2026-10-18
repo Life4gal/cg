@@ -35,7 +35,7 @@ namespace cg::state
 				return result;
 			}
 
-			domain::CardDefinition definition{};
+			CardDefinition definition{};
 
 			// TODO
 			std::ignore = json;
@@ -125,7 +125,7 @@ namespace cg::state
 
 	auto Db::load_file(const std::filesystem::path& file) noexcept -> bool
 	{
-		if (const auto result = parse(file);
+		if (auto result = parse(file);
 			result.definition.has_value())
 		{
 			const auto code = result.definition->code;
@@ -205,7 +205,7 @@ namespace cg::state
 		return definitions_.contains(code);
 	}
 
-	auto Db::find(const domain::CardCode code) noexcept -> const domain::CardDefinition*
+	auto Db::find(const domain::CardCode code) noexcept -> const CardDefinition*
 	{
 		const auto it = definitions_.find(code);
 		if (it == definitions_.end())

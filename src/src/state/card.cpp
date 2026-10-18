@@ -2,7 +2,7 @@
 
 namespace cg::state
 {
-	CardInstance::CardInstance(const CardInstanceId id, const domain::CardDefinition& definition) noexcept
+	CardInstance::CardInstance(const CardInstanceId id, const CardDefinition& definition) noexcept
 		: definition_{definition},
 		  id_{id},
 		  owner_{domain::Player::FIRST},

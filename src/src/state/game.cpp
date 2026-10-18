@@ -11,7 +11,7 @@ namespace cg::state
 		return card_definitions.contains(code);
 	}
 
-	auto Game::find_definition(const domain::CardCode code) const noexcept -> const domain::CardDefinition*
+	auto Game::find_definition(const domain::CardCode code) const noexcept -> const CardDefinition*
 	{
 		if (const auto it = card_definitions.find(code);
 			it != card_definitions.end())

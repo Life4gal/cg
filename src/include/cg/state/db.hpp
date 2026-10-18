@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <span>
 
-#include <cg/domain/card_definition.hpp>
+#include <cg/state/card_definition.hpp>
 
 namespace cg::state
 {
@@ -20,7 +20,7 @@ namespace cg::state
 	{
 	public:
 		// 成功 -> 非null-opt
-		std::optional<domain::CardDefinition> definition;
+		std::optional<CardDefinition> definition;
 		// 失败 -> 非空
 		std::vector<DbError> errors;
 	};
@@ -28,10 +28,10 @@ namespace cg::state
 	class Db
 	{
 	public:
-		using definitions_type = std::unordered_map<domain::CardCode, domain::CardDefinition>;
+		using definitions_type = std::unordered_map<domain::CardCode, CardDefinition>;
 
 	private:
-		std::unordered_map<domain::CardCode, domain::CardDefinition> definitions_;
+		std::unordered_map<domain::CardCode, CardDefinition> definitions_;
 		std::vector<DbError> errors_;
 
 		static auto parse(const std::filesystem::path& file) noexcept -> DefinitionLoadResult;
@@ -48,6 +48,6 @@ namespace cg::state
 
 		[[nodiscard]] auto contains(domain::CardCode code) const noexcept -> bool;
 
-		[[nodiscard]] auto find(domain::CardCode code) noexcept -> const domain::CardDefinition*;
+		[[nodiscard]] auto find(domain::CardCode code) noexcept -> const CardDefinition*;
 	};
 }
