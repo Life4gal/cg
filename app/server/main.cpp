@@ -1,7 +1,6 @@
 #include <print>
 
 #include <cg/server/net_server.hpp>
-#include <cg/domain/win.hpp>
 
 // TODO: ixwebsocket -> mbedTLS -> bcrypt.lib
 #ifdef _WIN32
@@ -25,8 +24,11 @@ auto main() noexcept -> int
 
 	server::NetOptions options
 	{
-			.cards_path = "cards",
-			.decks_path = "decks",
+			.room_options =
+			{
+					.cards_path = "cards",
+					.decks_path = "decks",
+			},
 			.web_path = "web/dist",
 			.pics_path = "pics",
 			.assets_path = "web/public/assets",

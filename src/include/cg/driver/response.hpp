@@ -2,6 +2,7 @@
 
 #include <map>
 
+#include <cg/domain/phase.hpp>
 #include <cg/domain/reject_reason.hpp>
 
 #include <cg/driver/action.hpp>
@@ -13,6 +14,20 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询可用动作
+	// JSON:
+	// {
+	//     "candidates": [
+	//         {
+	//             "card": 1000,
+	//             "placement": {
+	//                 "column": 0,
+	//                 "position": "FACE_UP_ATTACK"
+	//             },
+	//             "variant_index": 1,
+	//             "type": "normal_summon"
+	//         }
+	//     ]
+	// }
 	class QueryIdleCommand
 	{
 	public:
@@ -21,6 +36,10 @@ namespace cg::driver::response
 	};
 
 	// 提交动作
+	// JSON:
+	// {
+	//     "reject": "WRONG_PHASE"
+	// }
 	class SubmitAction
 	{
 	public:
@@ -36,6 +55,10 @@ namespace cg::driver::response
 	// class SelectCard {};
 
 	// 从候选集中选择[min, max]张卡牌
+	// JSON:
+	// {
+	//     "reject": "INVALID_TARGET"
+	// }
 	class SelectCards
 	{
 	public:
@@ -44,6 +67,10 @@ namespace cg::driver::response
 	};
 
 	// 是/否选择
+	// JSON:
+	// {
+	//     "reject": "CANCELLED"
+	// }
 	class SelectYesNo
 	{
 	public:
@@ -52,6 +79,10 @@ namespace cg::driver::response
 	};
 
 	// 对指定卡牌进行排序
+	// JSON:
+	// {
+	//     "reject": "INVALID_TARGET"
+	// }
 	class OrderCards
 	{
 	public:
@@ -64,6 +95,10 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 选择主要怪兽区落点
+	// JSON:
+	// {
+	//     "reject": "ZONE_OCCUPIED"
+	// }
 	class SelectMonsterZoneLocation
 	{
 	public:
@@ -72,6 +107,10 @@ namespace cg::driver::response
 	};
 
 	// 选择任意怪兽区落点
+	// JSON:
+	// {
+	//     "reject": "ZONE_OCCUPIED"
+	// }
 	class SelectAnyMonsterZoneLocation
 	{
 	public:
@@ -80,6 +119,10 @@ namespace cg::driver::response
 	};
 
 	// 选择怪兽表示形式
+	// JSON:
+	// {
+	//     "reject": "WRONG_POSITION"
+	// }
 	class SelectMonsterPosition
 	{
 	public:
@@ -88,6 +131,10 @@ namespace cg::driver::response
 	};
 
 	// 选择魔陷区落点
+	// JSON:
+	// {
+	//     "reject": "ZONE_OCCUPIED"
+	// }
 	class SelectSpellTrapLocation
 	{
 	public:
@@ -100,6 +147,13 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询可变更表示形式的怪兽
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryPositionChangeableCards
 	{
 	public:
@@ -108,6 +162,13 @@ namespace cg::driver::response
 	};
 
 	// 查询目标怪兽可变更的表示形式
+	// JSON:
+	// {
+	//     "candidates": [
+	//         "FACE_UP_ATTACK",
+	//         "FACE_UP_DEFENSE"
+	//     ]
+	// }
 	class QueryPositionChangeablePositions
 	{
 	public:
@@ -122,6 +183,13 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询可以通常召唤的手卡
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryNormalSummonableCards
 	{
 	public:
@@ -130,6 +198,13 @@ namespace cg::driver::response
 	};
 
 	// 查询可用的通常召唤类型
+	// JSON:
+	// {
+	//     "candidates": [
+	//         "SUMMON",
+	//         "SET"
+	//     ]
+	// }
 	class QueryNormalSummonType
 	{
 	public:
@@ -138,6 +213,10 @@ namespace cg::driver::response
 	};
 
 	// 查询目标卡是否可以按照指定类型召唤
+	// JSON:
+	// {
+	//     "reject": "WRONG_PHASE"
+	// }
 	class CheckNormalSummonType
 	{
 	public:
@@ -146,6 +225,14 @@ namespace cg::driver::response
 	};
 
 	// 查询可用的通常召唤落点
+	// JSON:
+	// {
+	//     "candidates": [
+	//         0,
+	//         1,
+	//         2
+	//     ]
+	// }
 	class QueryNormalSummonLocation
 	{
 	public:
@@ -154,6 +241,19 @@ namespace cg::driver::response
 	};
 
 	// 查询可用的通常召唤落点
+	// JSON:
+	// {
+	//     "candidates": [
+	//         {
+	//             "column": 0,
+	//             "position": "FACE_UP_ATTACK"
+	//         },
+	//         {
+	//             "column": 1,
+	//             "position": "FACE_DOWN_DEFENSE"
+	//         }
+	//     ]
+	// }
 	class QueryNormalSummonPlacement
 	{
 	public:
@@ -168,6 +268,13 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询可以上级召唤的手卡
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryAdvanceSummonableCards
 	{
 	public:
@@ -176,6 +283,13 @@ namespace cg::driver::response
 	};
 
 	// 查询指定卡上级召唤可解放的祭品
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryAdvanceCandidates
 	{
 	public:
@@ -184,6 +298,13 @@ namespace cg::driver::response
 	};
 
 	// 查询可用的上级召唤类型
+	// JSON:
+	// {
+	//     "candidates": [
+	//         "SUMMON",
+	//         "SET"
+	//     ]
+	// }
 	class QueryAdvanceSummonType
 	{
 	public:
@@ -192,6 +313,10 @@ namespace cg::driver::response
 	};
 
 	// 查询目标卡是否可以按照指定类型上级召唤
+	// JSON:
+	// {
+	//     "reject": "WRONG_PHASE"
+	// }
 	class CheckAdvanceSummonType
 	{
 	public:
@@ -200,6 +325,10 @@ namespace cg::driver::response
 	};
 
 	// 选择上级召唤祭品
+	// JSON:
+	// {
+	//     "reject": "INVALID_TARGET"
+	// }
 	class SelectAdvanceTributes
 	{
 	public:
@@ -208,6 +337,14 @@ namespace cg::driver::response
 	};
 
 	// 查询上级召唤可用的落点
+	// JSON:
+	// {
+	//     "candidates": [
+	//         0,
+	//         1,
+	//         2
+	//     ]
+	// }
 	class QueryAdvanceSummonLocation
 	{
 	public:
@@ -220,6 +357,13 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询可以反转召唤的怪兽
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryFlipSummonableCards
 	{
 	public:
@@ -228,6 +372,13 @@ namespace cg::driver::response
 	};
 
 	// 查询可以二重召唤的怪兽
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryDualSummonableCards
 	{
 	public:
@@ -242,6 +393,13 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询可以额外卡组特招的卡
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryExtraDeckSummonableCards
 	{
 	public:
@@ -250,6 +408,14 @@ namespace cg::driver::response
 	};
 
 	// 查询指定卡可用的素材来源
+	// JSON:
+	// {
+	//     "candidates": [
+	//         "HAND",
+	//         "FIELD",
+	//         "GRAVEYARD"
+	//     ]
+	// }
 	class QueryExtraDeckSummonMaterialSources
 	{
 	public:
@@ -258,6 +424,13 @@ namespace cg::driver::response
 	};
 
 	// 查询指定额外卡组怪兽在指定来源下可用的素材候选
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryExtraDeckSummonMaterials
 	{
 	public:
@@ -266,6 +439,22 @@ namespace cg::driver::response
 	};
 
 	// 查询指定卡可用的额外卡组特招落点
+	// JSON:
+	// {
+	//     "player": "FIRST",
+	//     "candidates": [
+	//         {
+	//             "column": 0,
+	//             "variant_index": 0,
+	//             "type": "monster"
+	//         },
+	//         {
+	//             "column": 2,
+	//             "variant_index": 1,
+	//             "type": "extra_monster"
+	//         }
+	//     ]
+	// }
 	class QueryExtraDeckSummonLocation
 	{
 	public:
@@ -279,6 +468,13 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询当前可进行的灵摆召唤候选
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryPendulumSummonableCards
 	{
 	public:
@@ -291,6 +487,13 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询可以规则/效果特招的卡
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QuerySpecialSummonableCards
 	{
 	public:
@@ -299,6 +502,14 @@ namespace cg::driver::response
 	};
 
 	// 查询指定卡可用的规则/效果特招落点
+	// JSON:
+	// {
+	//     "candidates": [
+	//         0,
+	//         1,
+	//         2
+	//     ]
+	// }
 	class QuerySpecialSummonLocation
 	{
 	public:
@@ -307,6 +518,19 @@ namespace cg::driver::response
 	};
 
 	// 查询指定卡可用的规则/效果特招落点(含表示形式)
+	// JSON:
+	// {
+	//     "candidates": [
+	//         {
+	//             "column": 0,
+	//             "position": "FACE_UP_ATTACK"
+	//         },
+	//         {
+	//             "column": 1,
+	//             "position": "FACE_DOWN_DEFENSE"
+	//         }
+	//     ]
+	// }
 	class QuerySpecialSummonPlacements
 	{
 	public:
@@ -321,6 +545,13 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询可盖放的魔法/陷阱手卡
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QuerySetSpellTrapCards
 	{
 	public:
@@ -329,6 +560,13 @@ namespace cg::driver::response
 	};
 
 	// 查询可用的魔法/陷阱盖放落点
+	// JSON:
+	// {
+	//     "candidates": [
+	//         0,
+	//         1
+	//     ]
+	// }
 	class QuerySpellTrapSetLocation
 	{
 	public:
@@ -337,6 +575,13 @@ namespace cg::driver::response
 	};
 
 	// 查询可以放置到灵摆区的卡
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryActivatePendulumCards
 	{
 	public:
@@ -345,6 +590,13 @@ namespace cg::driver::response
 	};
 
 	// 查询指定卡可用的灵摆侧
+	// JSON:
+	// {
+	//     "candidates": [
+	//         "LEFT",
+	//         "RIGHT"
+	//     ]
+	// }
 	class QueryActivatePendulumSide
 	{
 	public:
@@ -357,6 +609,18 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询可发动的效果
+	// JSON:
+	// {
+	//     "candidates": {
+	//         "1000": [
+	//             1,
+	//             2
+	//         ],
+	//         "1001": [
+	//             3
+	//         ]
+	//     }
+	// }
 	class QueryActivatableEffects
 	{
 	public:
@@ -365,6 +629,15 @@ namespace cg::driver::response
 	};
 
 	// 查询指定效果的可选对象
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ],
+	//     "min": 1,
+	//     "max": 1
+	// }
 	class QueryEffectTargets
 	{
 	public:
@@ -376,6 +649,10 @@ namespace cg::driver::response
 	};
 
 	// 选择发动效果
+	// JSON:
+	// {
+	//     "reject": "CANNOT_ACTIVATE"
+	// }
 	class SelectEffectActivation
 	{
 	public:
@@ -384,6 +661,10 @@ namespace cg::driver::response
 	};
 
 	// 选择效果对象
+	// JSON:
+	// {
+	//     "reject": "INVALID_TARGET"
+	// }
 	class SelectEffectTargets
 	{
 	public:
@@ -396,6 +677,18 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询可连锁的效果
+	// JSON:
+	// {
+	//     "candidates": {
+	//         "1000": [
+	//             1,
+	//             2
+	//         ],
+	//         "1001": [
+	//             3
+	//         ]
+	//     }
+	// }
 	class QueryChainableEffects
 	{
 	public:
@@ -404,6 +697,10 @@ namespace cg::driver::response
 	};
 
 	// 选择连锁
+	// JSON:
+	// {
+	//     "reject": "CANNOT_ACTIVATE"
+	// }
 	class SelectChain
 	{
 	public:
@@ -416,6 +713,13 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询可攻击的怪兽
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryAttackableCards
 	{
 	public:
@@ -424,6 +728,10 @@ namespace cg::driver::response
 	};
 
 	// 查询指定攻击者是否可以直接攻击
+	// JSON:
+	// {
+	//     "reject": "WRONG_PHASE"
+	// }
 	class CheckDirectAttackable
 	{
 	public:
@@ -432,6 +740,13 @@ namespace cg::driver::response
 	};
 
 	// 查询指定攻击者可攻击的目标
+	// JSON:
+	// {
+	//     "candidates": [
+	//         1000,
+	//         1001
+	//     ]
+	// }
 	class QueryAttackTargets
 	{
 	public:
@@ -440,6 +755,10 @@ namespace cg::driver::response
 	};
 
 	// 选择攻击宣言
+	// JSON:
+	// {
+	//     "reject": "INVALID_TARGET"
+	// }
 	class SelectAttack
 	{
 	public:
@@ -452,6 +771,14 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 查询当前可进入的阶段
+	// JSON:
+	// {
+	//     "candidates": [
+	//         "MAIN_1",
+	//         "BATTLE",
+	//         "END"
+	//     ]
+	// }
 	class QueryPhaseTransitions
 	{
 	public:
@@ -460,6 +787,10 @@ namespace cg::driver::response
 	};
 
 	// 选择进入阶段
+	// JSON:
+	// {
+	//     "reject": "WRONG_PHASE"
+	// }
 	class SelectPhaseTransition
 	{
 	public:
@@ -472,6 +803,10 @@ namespace cg::driver::response
 	// =================================================================
 
 	// 取消当前选择(回退到上一个决策点)
+	// JSON:
+	// {
+	//     "reject": "CANCELLED"
+	// }
 	class CancelSelection
 	{
 	public:
@@ -480,6 +815,10 @@ namespace cg::driver::response
 	};
 
 	// 确认当前选择(用于需要两步确认的流程)
+	// JSON:
+	// {
+	//     "reject": "WRONG_PHASE"
+	// }
 	class ConfirmSelection
 	{
 	public:
@@ -488,127 +827,135 @@ namespace cg::driver::response
 	};
 
 	// 放弃响应(超时/主动放弃)
+	// JSON:
+	// {
+	//     "reject": "TIMEOUT"
+	// }
 	class PassResponse
 	{
 	public:
 		// reject == null-opt => 成功
 		std::optional<domain::RejectReason> reject;
 	};
-}
 
-namespace cg::driver
-{
-	// 行动阶段征询,回合玩家从行动列表中选择一个动作进行
-	class IdleCommandResponse
-	{
-	public:
-		Action action;
+	// =================================================================
+	// Response
+	// =================================================================
 
-		[[nodiscard]] constexpr auto operator==(const IdleCommandResponse& other) const noexcept -> bool = default;
-	};
-
-	// 从候选集中选择[min, max]张卡牌
-	class SelectCardResponse
-	{
-	public:
-		std::vector<state::CardInstanceId> select_cards;
-
-		[[nodiscard]] constexpr auto operator==(const SelectCardResponse& other) const noexcept -> bool = default;
-	};
-
-	// 是/否选择
-	class SelectYesNoResponse
-	{
-	public:
-		bool yes;
-
-		[[nodiscard]] constexpr auto operator==(const SelectYesNoResponse& other) const noexcept -> bool = default;
-	};
-
-	// 选择一个数字(如名推理[58577036]选择一个等级)
-	class SelectNumberResponse
-	{
-	public:
-		std::int64_t number;
-
-		[[nodiscard]] constexpr auto operator==(const SelectNumberResponse& other) const noexcept -> bool = default;
-	};
-
-	// 选择一个卡名(禁止令[43711255]宣言一个卡名)
-	class SelectCardNameResponse
-	{
-	public:
-		std::string card_name;
-
-		[[nodiscard]] constexpr auto operator==(const SelectCardNameResponse& other) const noexcept -> bool = default;
-	};
-
-	// 选择怪兽落点(仅主怪兽区域)
-	class SelectMonsterLocationResponse
-	{
-	public:
-		domain::MonsterLocation location;
-
-		[[nodiscard]] constexpr auto operator==(const SelectMonsterLocationResponse& other) const noexcept -> bool = default;
-	};
-
-	// 选择怪兽落点(包括额外怪兽区)
-	class SelectMonsterLocationExResponse
-	{
-	public:
-		domain::AnyMonsterLocation location;
-
-		[[nodiscard]] constexpr auto operator==(const SelectMonsterLocationExResponse& other) const noexcept -> bool = default;
-	};
-
-	// 选择怪兽表示形式
-	class SelectMonsterPositionResponse
-	{
-	public:
-		domain::Position position;
-
-		[[nodiscard]] constexpr auto operator==(const SelectMonsterPositionResponse& other) const noexcept -> bool = default;
-	};
-
-	// 选择魔陷落点
-	class SelectSpellTrapLocationResponse
-	{
-	public:
-		domain::SpellTrapLocation location;
-
-		[[nodiscard]] constexpr auto operator==(const SelectSpellTrapLocationResponse& other) const noexcept -> bool = default;
-	};
-
-	// 选择要发动的效果(如果同一时刻有多个效果可以发动)
-	class SelectActivateEffectResponse
-	{
-	public:
-		state::EffectId select_effect;
-
-		[[nodiscard]] constexpr auto operator==(const SelectActivateEffectResponse& other) const noexcept -> bool = default;
-	};
-
+	// JSON:
+	// {
+	//     "candidates": [
+	//         {
+	//             "card": 1000,
+	//             "placement": {
+	//                 "column": 0,
+	//                 "position": "FACE_UP_ATTACK"
+	//             },
+	//             "variant_index": 1,
+	//             "type": "normal_summon"
+	//         }
+	//     ],
+	//     "variant_index": 0,
+	//     "type": "query_idle_command"
+	// }
 	class Response : public std::variant<
-				// ==========================================
-				// 动作
-				// ==========================================
-				IdleCommandResponse,
-
-				// ==========================================
-				// 选择
-				// ==========================================
-				SelectCardResponse,
-				SelectYesNoResponse,
-				SelectNumberResponse,
-				SelectCardNameResponse,
-				SelectMonsterLocationResponse,
-				SelectMonsterLocationExResponse,
-				SelectMonsterPositionResponse,
-				SelectSpellTrapLocationResponse,
-				SelectActivateEffectResponse
-
-				// ==========================================
-				//
-				// ==========================================
-			> {};
+				// =================================================================
+				// 行动阶段
+				// =================================================================
+				QueryIdleCommand,
+				SubmitAction,
+				// =================================================================
+				// 通用选择
+				// =================================================================
+				SelectCards,
+				SelectYesNo,
+				OrderCards,
+				// =================================================================
+				// 选择落点
+				// =================================================================
+				SelectMonsterZoneLocation,
+				SelectAnyMonsterZoneLocation,
+				SelectMonsterPosition,
+				SelectSpellTrapLocation,
+				// =================================================================
+				// 表示形式变更
+				// =================================================================
+				QueryPositionChangeableCards,
+				QueryPositionChangeablePositions,
+				// =================================================================
+				// 通常召唤
+				// =================================================================
+				QueryNormalSummonableCards,
+				QueryNormalSummonType,
+				CheckNormalSummonType,
+				QueryNormalSummonLocation,
+				QueryNormalSummonPlacement,
+				// =================================================================
+				// 上级召唤
+				// =================================================================
+				QueryAdvanceSummonableCards,
+				QueryAdvanceCandidates,
+				QueryAdvanceSummonType,
+				CheckAdvanceSummonType,
+				SelectAdvanceTributes,
+				QueryAdvanceSummonLocation,
+				// =================================================================
+				// 反转召唤 / 二重召唤
+				// =================================================================
+				QueryFlipSummonableCards,
+				QueryDualSummonableCards,
+				// =================================================================
+				// 额外卡组特招
+				// =================================================================
+				QueryExtraDeckSummonableCards,
+				QueryExtraDeckSummonMaterialSources,
+				QueryExtraDeckSummonMaterials,
+				QueryExtraDeckSummonLocation,
+				// =================================================================
+				// 灵摆召唤
+				// =================================================================
+				QueryPendulumSummonableCards,
+				// =================================================================
+				// 规则/效果特招
+				// =================================================================
+				QuerySpecialSummonableCards,
+				QuerySpecialSummonLocation,
+				QuerySpecialSummonPlacements,
+				// =================================================================
+				// 盖放魔法/陷阱 / 灵摆放置
+				// =================================================================
+				QuerySetSpellTrapCards,
+				QuerySpellTrapSetLocation,
+				QueryActivatePendulumCards,
+				QueryActivatePendulumSide,
+				// =================================================================
+				// 效果发动
+				// =================================================================
+				QueryActivatableEffects,
+				QueryEffectTargets,
+				SelectEffectActivation,
+				SelectEffectTargets,
+				// =================================================================
+				// 连锁
+				// =================================================================
+				QueryChainableEffects,
+				SelectChain,
+				// =================================================================
+				// 攻击
+				// =================================================================
+				QueryAttackableCards,
+				CheckDirectAttackable,
+				QueryAttackTargets,
+				SelectAttack,
+				// =================================================================
+				// 阶段
+				// =================================================================
+				QueryPhaseTransitions,
+				SelectPhaseTransition,
+				// =================================================================
+				// 流程控制
+				// =================================================================
+				CancelSelection,
+				ConfirmSelection,
+				PassResponse> {};
 }

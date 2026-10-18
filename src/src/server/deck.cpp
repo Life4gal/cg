@@ -1,4 +1,4 @@
-#include <cg/server/deck_loader.hpp>
+#include <cg/server/deck.hpp>
 
 #include <format>
 
@@ -6,9 +6,9 @@
 
 namespace cg::server
 {
-	auto load_json_deck(const nlohmann::json& deck) noexcept -> std::expected<Deck, std::string>
+	auto Deck::load(const nlohmann::json& json) noexcept -> std::expected<Deck, std::string>
 	{
-		if (!deck.is_object())
+		if (!json.is_object())
 		{
 			return std::unexpected<std::string>{"卡组JSON必须是一个Object,如`{ \"main\": [...], \"extra\": [...], \"side\": [...] }`"};
 		}
@@ -18,7 +18,7 @@ namespace cg::server
 		{
 			try
 			{
-				if (!deck.contains(key) && !optional)
+				if (!json.contains(key) && !optional)
 				{
 					if (!optional)
 					{
@@ -28,7 +28,7 @@ namespace cg::server
 					return;
 				}
 
-				const auto& value = deck.at(key);
+				const auto& value = json.at(key);
 				if (!value.is_array())
 				{
 					error = std::format("卡组JSON的{}内容必须是一个数组!", key);
@@ -62,7 +62,7 @@ namespace cg::server
 			}
 		};
 
-		Deck result
+		Deck deck
 		{
 				// 外部设置
 				.filename = "",
@@ -73,30 +73,38 @@ namespace cg::server
 				.side_deck = {},
 		};
 		// 卡组名
-		if (deck.contains("name"))
+		if (json.contains("name"))
 		{
-			result.name = deck.at("name").dump();
+			if (const auto& name = json.at("name");
+				name.is_string())
+			{
+				deck.name = name.get<std::string>();
+			}
+			else
+			{
+				deck.name = name.dump();
+			}
 		}
 
 		// 主卡组
-		reader("main", false, result.main_deck);
+		reader("main", false, deck.main_deck);
 		if (!error.empty())
 		{
 			return std::unexpected{std::move(error)};
 		}
 		// 额外卡组
-		reader("extra", true, result.extra_deck);
+		reader("extra", true, deck.extra_deck);
 		if (!error.empty())
 		{
 			return std::unexpected{std::move(error)};
 		}
 		// 副卡组
-		reader("side", true, result.side_deck);
+		reader("side", true, deck.side_deck);
 		if (!error.empty())
 		{
 			return std::unexpected{std::move(error)};
 		}
 
-		return result;
+		return deck;
 	}
 }

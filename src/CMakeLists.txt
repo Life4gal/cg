@@ -7,9 +7,10 @@ add_library(
 	# SERVER
 	# ===================================
 
-	src/server/deck_loader.cpp
-	src/server/codec.cpp
+	src/server/deck.cpp
+	src/server/room.cpp
 	src/server/net_server.cpp
+	src/server/native_server.cpp
 
 	# ===================================
 	# STATE
@@ -75,10 +76,12 @@ target_sources(
 	# ===================================
 
 	include/cg/server/deck.hpp
-	include/cg/server/deck_loader.hpp
+	include/cg/server/message.hpp
 	include/cg/server/codec.hpp
 	include/cg/server/server.hpp
+	include/cg/server/room.hpp
 	include/cg/server/net_server.hpp
+	include/cg/server/native_server.hpp
 
 	# ===================================
 	# STATE
@@ -110,6 +113,16 @@ target_compile_options(
 	PRIVATE
 	${CG_COMPILE_FLAGS}
 )
+
+# codec.hpp/nlohmann/variant组合会生成大量section,MSVC需要/bigobj
+if (CG_COMPILER_MSVC OR CG_COMPILER_CLANG_CL)
+	target_compile_options(
+		${PROJECT_NAME}
+
+		PRIVATE
+		"/bigobj"
+	)
+endif (CG_COMPILER_MSVC OR CG_COMPILER_CLANG_CL)
 
 target_compile_features(
 	${PROJECT_NAME} 

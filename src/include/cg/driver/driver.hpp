@@ -17,6 +17,6 @@ namespace cg::driver
 
 		constexpr virtual ~Driver() noexcept = default;
 
-		virtual auto decide(const Request& request) noexcept -> Response = 0;
+		virtual auto decide(const request::Request& request) noexcept -> response::Response = 0;
 	};
 }
