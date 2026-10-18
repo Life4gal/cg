@@ -19,9 +19,17 @@ namespace cg::server
 	{
 		const std::filesystem::path path{options_.cards_path};
 
-		// TODO: 载入卡牌脚本
-		std::ignore = path;
-		std::ignore = this;
+		card_db_.load(path);
+		if (!card_db_.ok())
+		{
+			SPDLOG_ERROR(ROOM_LOG_PREFIX "卡牌数据库载入失败!");
+			for (const auto errors = card_db_.errors();
+			     const auto& [file, field, message]: errors)
+			{
+				SPDLOG_ERROR("\t{}({}): {}", file.string(), field, message);
+			}
+			return false;
+		}
 
 		return true;
 	}
@@ -85,6 +93,14 @@ namespace cg::server
 			}
 			else
 			{
+				if (!is_cached_deck(result->main_deck) || !is_cached_deck(result->extra_deck) || !is_cached_deck(result->side_deck))
+				{
+					SPDLOG_ERROR(ROOM_LOG_PREFIX "卡组文件{}存在不在数据库中的卡牌!", file.string());
+					continue;
+				}
+
+				// TODO: 检查卡组使用的卡牌是否满足规则要求
+
 				auto deck = *std::move(result);
 				deck.filename = file.stem().string();
 				if (deck.name.empty())
@@ -95,14 +111,21 @@ namespace cg::server
 				catalog_decks_.push_back(std::move(deck));
 			}
 
-			// TODO: 检查卡组使用的卡牌是否在DB中
-			// TODO: 检查卡组使用的卡牌是否满足规则要求
-
 			SPDLOG_INFO(ROOM_LOG_PREFIX "卡组文件{}加载成功!", file.string());
 		}
 
 		SPDLOG_INFO(ROOM_LOG_PREFIX "成功加载{}副卡组", catalog_decks_.size());
 		return true;
+	}
+
+	auto Room::is_cached_card(const domain::CardCode code) const noexcept -> bool
+	{
+		return card_db_.contains(code);
+	}
+
+	auto Room::is_cached_deck(std::span<const domain::CardCode> deck) noexcept -> bool
+	{
+		return std::ranges::all_of(deck, std::bind_front(&Room::is_cached_card, this));
 	}
 
 	auto Room::lobby_state_locked() const noexcept -> message::LobbyState

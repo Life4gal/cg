@@ -19,6 +19,7 @@ add_library(
 	src/state/card.cpp
 	src/state/field.cpp
 	src/state/game.cpp
+	src/state/db.cpp
 	
 	# ===================================
 	# FLOW
@@ -91,6 +92,7 @@ target_sources(
 	include/cg/state/card.hpp
 	include/cg/state/field.hpp
 	include/cg/state/game.hpp
+	include/cg/state/db.hpp
 	
 	# ===================================
 	# FLOW
