@@ -22,6 +22,13 @@ add_library(
 	src/state/db.cpp
 	
 	# ===================================
+	# DSL
+	# ===================================
+
+	src/dsl/archetype.cpp
+	src/dsl/types.cpp
+
+	# ===================================
 	# FLOW
 	# ===================================
 
@@ -107,6 +114,15 @@ target_sources(
 	include/cg/state/game.hpp
 	include/cg/state/db.hpp
 	
+	# ===================================
+	# DSL
+	# ===================================
+
+	include/cg/dsl/ids.hpp
+	include/cg/dsl/archetype.hpp
+	include/cg/dsl/identity.hpp
+	include/cg/dsl/types.hpp
+
 	# ===================================
 	# FLOW
 	# ===================================
