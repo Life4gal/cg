@@ -10,9 +10,11 @@ namespace cg::domain
 		// 正在进行通常召唤
 		NORMAL_SUMMON,
 		// 正在进行上级召唤
-		ADVANCE_SUMMON,
+		TRIBUTE_SUMMON,
 		// 正在选择上级召唤祭品
 		SELECT_TRIBUTE,
+		// 正在选择召唤素材(融合/同调/超量/连接/仪式)
+		SELECT_MATERIAL,
 		// 正在选择COST
 		SELECT_COST,
 		// 正在选择效果对象

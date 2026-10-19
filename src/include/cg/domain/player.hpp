@@ -29,4 +29,19 @@ namespace cg::domain
 		// 对方
 		OPPONENT,
 	};
+
+	// 玩家选择子(效果脚本中的玩家引用;相对效果控制者)
+	enum class PlayerSelector : std::uint8_t
+	{
+		// 效果控制者
+		SELF,
+		// 效果控制者的对手
+		OPPONENT,
+		// 事件玩家(事件的发生者)
+		EVENT_PLAYER,
+		// 原因玩家(移动/变化的原因来源方)
+		REASON_PLAYER,
+		// 触发玩家
+		TRIGGERING_PLAYER,
+	};
 }

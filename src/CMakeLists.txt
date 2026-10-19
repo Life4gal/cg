@@ -56,11 +56,13 @@ target_sources(
 	include/cg/domain/reason.hpp
 	include/cg/domain/phase.hpp
 	include/cg/domain/timing.hpp
+	include/cg/domain/event.hpp
 	include/cg/domain/field.hpp
 	include/cg/domain/player.hpp
 	include/cg/domain/summon.hpp
 	include/cg/domain/win.hpp
 	include/cg/domain/reject_reason.hpp
+	include/cg/domain/selection_context.hpp
 	
 	# ===================================
 	# DRIVER
@@ -77,11 +79,22 @@ target_sources(
 
 	include/cg/server/deck.hpp
 	include/cg/server/message.hpp
-	include/cg/server/codec.hpp
 	include/cg/server/server.hpp
 	include/cg/server/room.hpp
 	include/cg/server/net_server.hpp
 	include/cg/server/native_server.hpp
+
+	# ===================================
+	# CODEC
+	# ===================================
+
+	include/cg/codec/codec.hpp
+	include/cg/codec/domain.hpp
+	include/cg/codec/state.hpp
+	include/cg/codec/action.hpp
+	include/cg/codec/request.hpp
+	include/cg/codec/response.hpp
+	include/cg/codec/message.hpp
 
 	# ===================================
 	# STATE

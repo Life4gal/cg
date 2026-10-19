@@ -5,8 +5,7 @@
 #include <print>
 
 #include <cg/utility/functional.hpp>
-
-#include <cg/server/codec.hpp>
+#include <cg/codec/message.hpp>
 
 #include <spdlog/spdlog.h>
 #include <ixwebsocket/IXNetSystem.h>
@@ -113,7 +112,7 @@ namespace cg::server
 
 		try
 		{
-			socket->send(ValueCodec<message::Message>::encode(message).dump());
+			socket->send(codec::ValueCodec<message::Message>::encode(message).dump());
 		}
 		catch (const std::exception& exception)
 		{
@@ -437,7 +436,7 @@ namespace cg::server
 			return;
 		}
 
-		const auto message = ValueCodec<message::Message>::decode(content);
+		const auto message = codec::ValueCodec<message::Message>::decode(content);
 		if (!message.has_value())
 		{
 			message::Error error;

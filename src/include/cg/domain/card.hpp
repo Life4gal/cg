@@ -20,8 +20,8 @@ namespace cg::domain
 	{
 		// 怪兽-召唤&效果
 
-		// -反转召唤
-		FLIP_SUMMON,
+		// -翻转
+		FLIP,
 		// -特殊召唤
 		SPECIAL_SUMMON,
 		// -通常怪兽
@@ -55,11 +55,12 @@ namespace cg::domain
 		// -联合怪兽
 		UNION,
 		// -二重怪兽
-		DUAL,
+		GEMINI,
 		// -调整怪兽
 		TUNER,
 		// -卡通怪兽
-		CARTOON,
+		// ReSharper disable once IdentifierTypo
+		TOON,
 
 		// 怪兽/魔法/陷阱-效果类型
 
@@ -185,5 +186,20 @@ namespace cg::domain
 		LEFT,
 		// 左上
 		TOP_LEFT,
+	};
+
+	// 数值项
+	enum class NumericProperty : std::uint8_t
+	{
+		// 攻击力
+		ATTACK,
+		// 守备力
+		DEFENSE,
+		// 等级 / 阶级
+		LEVEL,
+		// 灵摆刻度-左
+		SCALE_LEFT,
+		// 灵摆刻度-右
+		SCALE_RIGHT,
 	};
 }

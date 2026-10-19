@@ -61,7 +61,7 @@ namespace cg::driver::action
 	//         "position": "FACE_UP_ATTACK"
 	//     }
 	// }
-	class AdvanceSummon
+	class TributeSummon
 	{
 	public:
 		state::CardInstanceId card;
@@ -70,7 +70,7 @@ namespace cg::driver::action
 		// 要么表侧攻击表示,要么里侧守备表示
 		domain::MonsterPlacement placement;
 
-		[[nodiscard]] constexpr auto operator==(const AdvanceSummon& other) const noexcept -> bool = default;
+		[[nodiscard]] constexpr auto operator==(const TributeSummon& other) const noexcept -> bool = default;
 	};
 
 	// 反转召唤
@@ -91,12 +91,12 @@ namespace cg::driver::action
 	// {
 	//     "card": 1000
 	// }
-	class DualSummon
+	class GeminiSummon
 	{
 	public:
 		state::CardInstanceId card;
 
-		[[nodiscard]] constexpr auto operator==(const DualSummon& other) const noexcept -> bool = default;
+		[[nodiscard]] constexpr auto operator==(const GeminiSummon& other) const noexcept -> bool = default;
 	};
 
 	// 额外卡组特招
@@ -297,9 +297,9 @@ namespace cg::driver::action
 				// 召唤
 				// =================================================================
 				NormalSummon,
-				AdvanceSummon,
+				TributeSummon,
 				FlipSummon,
-				DualSummon,
+				GeminiSummon,
 				ExtraDeckSummon,
 				PendulumSummon,
 				SpecialSummon,

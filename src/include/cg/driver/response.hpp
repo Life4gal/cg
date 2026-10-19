@@ -275,7 +275,7 @@ namespace cg::driver::response
 	//         1001
 	//     ]
 	// }
-	class QueryAdvanceSummonableCards
+	class QueryTributeSummonableCards
 	{
 	public:
 		// candidates.empty() => 无法上级召唤
@@ -290,7 +290,7 @@ namespace cg::driver::response
 	//         1001
 	//     ]
 	// }
-	class QueryAdvanceCandidates
+	class QueryTributeSummonTributeCandidates
 	{
 	public:
 		// candidates.empty() => 无可用祭品
@@ -305,7 +305,7 @@ namespace cg::driver::response
 	//         "SET"
 	//     ]
 	// }
-	class QueryAdvanceSummonType
+	class QueryTributeSummonType
 	{
 	public:
 		// candidates.empty() => 无法上级召唤
@@ -317,7 +317,7 @@ namespace cg::driver::response
 	// {
 	//     "reject": "WRONG_PHASE"
 	// }
-	class CheckAdvanceSummonType
+	class CheckTributeSummonType
 	{
 	public:
 		// reject == null-opt => 成功
@@ -329,7 +329,7 @@ namespace cg::driver::response
 	// {
 	//     "reject": "INVALID_TARGET"
 	// }
-	class SelectAdvanceTributes
+	class SelectTributeSummonTributes
 	{
 	public:
 		// reject == null-opt => 成功
@@ -345,7 +345,7 @@ namespace cg::driver::response
 	//         2
 	//     ]
 	// }
-	class QueryAdvanceSummonLocation
+	class QueryTributeSummonLocation
 	{
 	public:
 		// candidates.empty() => 无可用落点
@@ -379,7 +379,7 @@ namespace cg::driver::response
 	//         1001
 	//     ]
 	// }
-	class QueryDualSummonableCards
+	class QueryGeminiSummonableCards
 	{
 	public:
 		// candidates.empty() => 无法二重召唤
@@ -893,17 +893,17 @@ namespace cg::driver::response
 				// =================================================================
 				// 上级召唤
 				// =================================================================
-				QueryAdvanceSummonableCards,
-				QueryAdvanceCandidates,
-				QueryAdvanceSummonType,
-				CheckAdvanceSummonType,
-				SelectAdvanceTributes,
-				QueryAdvanceSummonLocation,
+				QueryTributeSummonableCards,
+				QueryTributeSummonTributeCandidates,
+				QueryTributeSummonType,
+				CheckTributeSummonType,
+				SelectTributeSummonTributes,
+				QueryTributeSummonLocation,
 				// =================================================================
 				// 反转召唤 / 二重召唤
 				// =================================================================
 				QueryFlipSummonableCards,
-				QueryDualSummonableCards,
+				QueryGeminiSummonableCards,
 				// =================================================================
 				// 额外卡组特招
 				// =================================================================

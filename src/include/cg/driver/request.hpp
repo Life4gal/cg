@@ -304,7 +304,7 @@ namespace cg::driver::request
 	// {
 	//     "player": "FIRST"
 	// }
-	class QueryAdvanceSummonableCards
+	class QueryTributeSummonableCards
 	{
 	public:
 		domain::Player player;
@@ -316,7 +316,7 @@ namespace cg::driver::request
 	//     "player": "FIRST",
 	//     "card": 1000
 	// }
-	class QueryAdvanceCandidates
+	class QueryTributeSummonTributeCandidates
 	{
 	public:
 		domain::Player player;
@@ -329,7 +329,7 @@ namespace cg::driver::request
 	//     "player": "FIRST",
 	//     "card": 1000
 	// }
-	class QueryAdvanceSummonType
+	class QueryTributeSummonType
 	{
 	public:
 		domain::Player player;
@@ -343,7 +343,7 @@ namespace cg::driver::request
 	//     "type": "SUMMON",
 	//     "card": 1000
 	// }
-	class CheckAdvanceSummonType
+	class CheckTributeSummonType
 	{
 	public:
 		domain::Player player;
@@ -361,7 +361,7 @@ namespace cg::driver::request
 	//         1002
 	//     ]
 	// }
-	class SelectAdvanceTributes
+	class SelectTributeSummonTributes
 	{
 	public:
 		domain::Player player;
@@ -375,7 +375,7 @@ namespace cg::driver::request
 	//     "player": "FIRST",
 	//     "card": 1000
 	// }
-	class QueryAdvanceSummonLocation
+	class QueryTributeSummonLocation
 	{
 	public:
 		domain::Player player;
@@ -402,7 +402,7 @@ namespace cg::driver::request
 	// {
 	//     "player": "FIRST"
 	// }
-	class QueryDualSummonableCards
+	class QueryGeminiSummonableCards
 	{
 	public:
 		domain::Player player;
@@ -854,17 +854,17 @@ namespace cg::driver::request
 				// =================================================================
 				// 上级召唤
 				// =================================================================
-				QueryAdvanceSummonableCards,
-				QueryAdvanceCandidates,
-				QueryAdvanceSummonType,
-				CheckAdvanceSummonType,
-				SelectAdvanceTributes,
-				QueryAdvanceSummonLocation,
+				QueryTributeSummonableCards,
+				QueryTributeSummonTributeCandidates,
+				QueryTributeSummonType,
+				CheckTributeSummonType,
+				SelectTributeSummonTributes,
+				QueryTributeSummonLocation,
 				// =================================================================
 				// 反转召唤 / 二重召唤
 				// =================================================================
 				QueryFlipSummonableCards,
-				QueryDualSummonableCards,
+				QueryGeminiSummonableCards,
 				// =================================================================
 				// 额外卡组特招
 				// =================================================================

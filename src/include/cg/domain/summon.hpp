@@ -10,7 +10,9 @@ namespace cg::domain
 		// 通常召唤
 		NORMAL,
 		// 上级召唤 == 通常召唤 + 需要祭品/素材
-		ADVANCE,
+		TRIBUTE,
+		// 翻转召唤(里侧守备 → 表侧攻击)
+		FLIP,
 		// 仪式召唤
 		RITUAL,
 		// 融合召唤

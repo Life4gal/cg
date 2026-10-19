@@ -1,7 +1,8 @@
 #include <print>
 
+#include <cg/codec/message.hpp>
+
 #include <cg/server/native_server.hpp>
-#include <cg/server/codec.hpp>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -41,7 +42,7 @@ auto main() noexcept -> int
 
 		while (auto message = client.try_pop())
 		{
-			std::println("[{}]{}", name, server::ValueCodec<server::message::Message>::encode(*message).dump());
+			std::println("[{}]{}", name, codec::ValueCodec<server::message::Message>::encode(*message).dump());
 		}
 	};
 
