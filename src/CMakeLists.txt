@@ -122,6 +122,10 @@ target_sources(
 	include/cg/dsl/archetype.hpp
 	include/cg/dsl/identity.hpp
 	include/cg/dsl/types.hpp
+	include/cg/dsl/expression.hpp
+	include/cg/dsl/statement.hpp
+	include/cg/dsl/trigger.hpp
+	include/cg/dsl/effect.hpp
 
 	# ===================================
 	# FLOW
