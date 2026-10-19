@@ -59,7 +59,7 @@ namespace cg::dsl
 				[](const symbol_underlying_type symbol) noexcept -> std::string_view
 				{
 					const auto v = static_cast<ArchetypeId::value_type>(symbol);
-					const auto id = ArchetypeId{id};
+					const auto id = ArchetypeId{v};
 					return ArchetypeRegistry::name_of(id);
 				}
 			)
@@ -89,6 +89,16 @@ namespace cg::dsl
 		do_register("reason", ValueClass::ENUM, make_resolver<domain::Reason>());
 		// domain/event.hpp
 		do_register("event_code", ValueClass::ENUM, make_resolver<domain::EventCode>());
+	}
+
+	auto TypeRegistry::contains(const TypeId id) const noexcept -> bool
+	{
+		return std::ranges::contains(types_, id, &Def::id);
+	}
+
+	auto TypeRegistry::contains(const std::string_view name) const noexcept -> bool
+	{
+		return std::ranges::contains(types_, name, &Def::name);
 	}
 
 	auto TypeRegistry::find(const TypeId id) const noexcept -> const Def*

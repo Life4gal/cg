@@ -116,6 +116,9 @@ namespace cg::dsl
 	public:
 		TypeRegistry() noexcept;
 
+		[[nodiscard]] auto contains(TypeId id) const noexcept -> bool;
+		[[nodiscard]] auto contains(std::string_view name) const noexcept -> bool;
+
 		[[nodiscard]] auto find(TypeId id) const noexcept -> const Def*;
 		[[nodiscard]] auto find(std::string_view name) const noexcept -> const Def*;
 	};

@@ -27,6 +27,7 @@ add_library(
 
 	src/dsl/archetype.cpp
 	src/dsl/types.cpp
+	src/dsl/vocabulary.cpp
 
 	# ===================================
 	# FLOW
@@ -126,6 +127,9 @@ target_sources(
 	include/cg/dsl/statement.hpp
 	include/cg/dsl/trigger.hpp
 	include/cg/dsl/effect.hpp
+	include/cg/dsl/summon_procedure.hpp
+	include/cg/dsl/card_script.hpp
+	include/cg/dsl/vocabulary.hpp
 
 	# ===================================
 	# FLOW
