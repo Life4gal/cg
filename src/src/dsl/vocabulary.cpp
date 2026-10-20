@@ -130,6 +130,20 @@ namespace cg::dsl
 		// ---------------- 选择 ----------------
 
 		do_register(
+			"pick_cost",
+			PrimitiveKind::SELECT,
+			{Phase::COST},
+			{
+					{.name = "players", .kind = ParamDef::Value{.type = type_id("players")}, .required = true},
+					{.name = "zones", .kind = ParamDef::Value{.type = type_id("zones")}, .required = true},
+					{.name = "min", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+					{.name = "max", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+					{.name = "filter", .kind = ParamDef::Scoped{.element = type_id("card"), .type = type_id("bool")}, .required = false},
+			},
+			type_id("group"),
+			"在指定玩家范围/区域中选择代价(仅COST阶段)"
+		);
+		do_register(
 			"pick_target",
 			PrimitiveKind::SELECT,
 			{Phase::TARGET},
@@ -168,6 +182,46 @@ namespace cg::dsl
 			},
 			type_id("void"),
 			"特殊召唤"
+		);
+		do_register(
+			"discard",
+			PrimitiveKind::ACTION,
+			{Phase::COST, Phase::RESOLVE},
+			{
+					{.name = "cards", .kind = ParamDef::Value{.type = type_id("group")}, .required = true},
+			},
+			type_id("void"),
+			"舍弃(手牌送墓;与 send_to_graveyard 语义不同)"
+		);
+		do_register(
+			"release",
+			PrimitiveKind::ACTION,
+			{Phase::COST, Phase::RESOLVE},
+			{
+					{.name = "cards", .kind = ParamDef::Value{.type = type_id("group")}, .required = true},
+			},
+			type_id("void"),
+			"解放(不视为破坏)"
+		);
+		do_register(
+			"pay_life",
+			PrimitiveKind::ACTION,
+			{Phase::COST},
+			{
+					{.name = "amount", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+			},
+			type_id("void"),
+			"支付生命值"
+		);
+		do_register(
+			"send_to_graveyard",
+			PrimitiveKind::ACTION,
+			{Phase::COST, Phase::RESOLVE},
+			{
+					{.name = "cards", .kind = ParamDef::Value{.type = type_id("group")}, .required = true},
+			},
+			type_id("void"),
+			"送入墓地(不触发舍弃;与 discard 语义不同)"
 		);
 
 		// ---------------- 静态修饰符 ----------------

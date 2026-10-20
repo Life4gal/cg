@@ -197,7 +197,7 @@ TEST_CASE("dsl::json::Reader enforces statement phases")
 	};
 
 	constexpr std::string_view destroy_call{R"([{"call":"destroy","args":{"cards":{"call":"find_cards","args":{"players":["OPPONENT"],"zones":["MONSTER"]}},"reason":"EFFECT"}}])"};
-	constexpr std::string_view target_call{R"([{"call":"pick_target","args":{"players":["OPPONENT"],"zone":"MONSTER","min":1,"max":1}}])"};
+	constexpr std::string_view target_call{R"([{"call":"pick_target","args":{"players":["OPPONENT"],"zones":["MONSTER"],"min":1,"max":1}}])"};
 
 	SUBCASE("resolve action in cost")
 	{
