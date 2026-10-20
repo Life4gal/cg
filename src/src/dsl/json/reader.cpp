@@ -803,13 +803,13 @@ namespace cg::dsl::json
 		}
 
 		const auto left_nested_item_path = std::format("{}[0]", item_path);
-		auto left_operand = read_expression(operation[0], TypeId{TypeId::invalid_id}, left_nested_item_path);
+		auto left_operand = read_expression(operation.value()[0], TypeId{TypeId::invalid_id}, left_nested_item_path);
 		if (!left_operand.has_value())
 		{
 			return std::nullopt;
 		}
 		const auto right_nested_item_path = std::format("{}[1]", item_path);
-		auto right_operand = read_expression(operation[1], TypeId{TypeId::invalid_id}, right_nested_item_path);
+		auto right_operand = read_expression(operation.value()[1], TypeId{TypeId::invalid_id}, right_nested_item_path);
 		if (!right_operand.has_value())
 		{
 			return std::nullopt;
@@ -839,13 +839,13 @@ namespace cg::dsl::json
 		}
 
 		const auto left_nested_item_path = std::format("{}[0]", item_path);
-		auto left_operand = read_expression(operation[0], TypeId{TypeId::invalid_id}, left_nested_item_path);
+		auto left_operand = read_expression(operation.value()[0], TypeId{TypeId::invalid_id}, left_nested_item_path);
 		if (!left_operand.has_value())
 		{
 			return std::nullopt;
 		}
 		const auto right_nested_item_path = std::format("{}[1]", item_path);
-		auto right_operand = read_expression(operation[1], TypeId{TypeId::invalid_id}, right_nested_item_path);
+		auto right_operand = read_expression(operation.value()[1], TypeId{TypeId::invalid_id}, right_nested_item_path);
 		if (!right_operand.has_value())
 		{
 			return std::nullopt;
@@ -2134,9 +2134,9 @@ namespace cg::dsl::json
 
 		if (mode == "trigger")
 		{
-			if (!only_specified_keys(activation.value(), {"mode", "source", "timing", "optional"}))
+			if (!only_specified_keys(activation.value(), {"mode", "source", "condition", "timing", "optional"}))
 			{
-				fail(path, "trigger allows only `mode` / `source` / `timing` / `optional`");
+				fail(path, "trigger allows only `mode` / `source` / `condition` / `timing` / `optional`");
 				return std::nullopt;
 			}
 
@@ -2152,6 +2152,19 @@ namespace cg::dsl::json
 			if (!sources.has_value())
 			{
 				return std::nullopt;
+			}
+
+			std::optional<Expression> condition;
+			if (const auto it = activation.value().find("condition");
+				it != activation.value().end())
+			{
+				const auto condition_path = std::format("{}.condition", path);
+
+				condition = read_expression(it.value(), types_.get().find("bool")->id, condition_path);
+				if (!condition.has_value())
+				{
+					return std::nullopt;
+				}
 			}
 
 			auto timing = TriggerTiming::WHEN;
@@ -2192,7 +2205,16 @@ namespace cg::dsl::json
 				optional = b;
 			}
 
-			return ActivationKind{Trigger{.sources = *std::move(sources), .timing = timing, .optional = optional}};
+			return ActivationKind
+			{
+					Trigger
+					{
+							.sources = *std::move(sources),
+							.condition = std::move(condition),
+							.timing = timing,
+							.optional = optional,
+					}
+			};
 		}
 
 		if (mode == "quick")

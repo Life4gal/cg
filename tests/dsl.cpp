@@ -152,6 +152,14 @@ TEST_CASE("dsl::json::Reader enforces element scope")
 
 		CHECK(result.script.has_value());
 	}
+
+	SUBCASE("comparison inside a filter")
+	{
+		const auto card = make_card(filter_with(R"({"le":[{"call":"attack","args":{"card":"$"}},1500]})"), default_effect);
+		const auto result = read_card(card);
+
+		CHECK(result.script.has_value());
+	}
 }
 
 TEST_CASE("dsl::speed_of matches the official classification")

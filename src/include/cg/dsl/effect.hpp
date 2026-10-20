@@ -41,6 +41,8 @@ namespace cg::dsl
 	public:
 		// 触发源(或关系;至少一个)
 		TriggerSourceList sources;
+		// 触发时附加条件(事件结果的约束,如"送入墓地");满足才成为触发效果
+		std::optional<Expression> condition;
 		// WHEN|IF
 		TriggerTiming timing;
 		// true = 任意 / false = 必发

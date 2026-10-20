@@ -98,6 +98,17 @@ namespace cg::dsl
 			type_id("bool"),
 			"卡是否具有指定种族"
 		);
+		do_register(
+			"is_in_zone",
+			PrimitiveKind::PREDICATE,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "zones", .kind = ParamDef::Value{.type = type_id("zones")}, .required = true},
+			},
+			type_id("bool"),
+			"卡是否位于指定区域"
+		);
 
 		// ---------------- 区域查询(非取对象) ----------------
 
@@ -147,6 +158,54 @@ namespace cg::dsl
 			},
 			type_id("int"),
 			"卡的当前守备力(含修正)"
+		);
+		do_register(
+			"attack",
+			PrimitiveKind::QUERY,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+			},
+			type_id("int"),
+			"卡的印刷攻击力(当前值见current_attack)"
+		);
+		do_register(
+			"defense",
+			PrimitiveKind::QUERY,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+			},
+			type_id("int"),
+			"卡的印刷守备力(当前值见current_defense)"
+		);
+		do_register(
+			"level",
+			PrimitiveKind::QUERY,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+			},
+			type_id("int"),
+			"卡的印刷等级/阶级"
+		);
+		do_register(
+			"sole_card",
+			PrimitiveKind::QUERY,
+			all_phases,
+			{
+					{.name = "group", .kind = ParamDef::Value{.type = type_id("group")}, .required = true},
+			},
+			type_id("card"),
+			"取组内唯一的卡(数量不为 1 时处理失败)"
+		);
+		do_register(
+			"this_card",
+			PrimitiveKind::QUERY,
+			all_phases,
+			{},
+			type_id("card"),
+			"效果来源卡(上下文引用)"
 		);
 
 		// ---------------- 选择 ----------------

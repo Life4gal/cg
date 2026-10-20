@@ -1,0 +1,80 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["EFFECT"],
+		"monster": {
+			"attribute": "EARTH",
+			"race": "BEAST",
+			"level": 4,
+			"attack": 1400,
+			"defense": 1450
+		}
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {
+				"mode": "trigger",
+				"source": {"event": "BATTLE_DESTROYED"},
+				"timing": "WHEN",
+				"optional": true,
+				"condition": {
+					"call": "is_in_zone",
+					"args": {
+						"card": {"call": "this_card", "args": {}},
+						"zones": ["GRAVEYARD"]
+					}
+				}
+			},
+			"effect": [
+				{
+					"call": "pick_resolution",
+					"args": {
+						"players": ["SELF"],
+						"zones": ["DECK"],
+						"min": 1,
+						"max": 1,
+						"filter": {
+							"and": [
+								{
+									"call": "is_card_type",
+									"args": {
+										"card": "$",
+										"card_type": "MONSTER"
+									}
+								},
+								{
+									"call": "is_attribute",
+									"args": {
+										"card": "$",
+										"attribute": "EARTH"
+									}
+								},
+								{
+									"le": [
+										{"call": "attack", "args": {"card": "$"}},
+										1500
+									]
+								}
+							]
+						}
+					},
+					"bind": "monster"
+				},
+				{
+					"call": "special_summon",
+					"args": {
+						"card": {
+							"call": "sole_card",
+							"args": {
+								"group": {"var": "monster"}
+							}
+						},
+						"method": "SPECIAL",
+						"position": "FACE_UP_ATTACK"
+					}
+				}
+			]
+		}
+	]
+}
