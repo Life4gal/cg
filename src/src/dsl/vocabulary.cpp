@@ -157,6 +157,20 @@ namespace cg::dsl
 			type_id("group"),
 			"在指定玩家范围/区域中取对象(仅TARGET阶段)"
 		);
+		do_register(
+			"pick_resolution",
+			PrimitiveKind::SELECT,
+			{Phase::RESOLVE},
+			{
+					{.name = "players", .kind = ParamDef::Value{.type = type_id("players")}, .required = true},
+					{.name = "zones", .kind = ParamDef::Value{.type = type_id("zones")}, .required = true},
+					{.name = "min", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+					{.name = "max", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+					{.name = "filter", .kind = ParamDef::Scoped{.element = type_id("card"), .type = type_id("bool")}, .required = false},
+			},
+			type_id("group"),
+			"结算时在指定玩家范围/区域中选择(不取对象)"
+		);
 
 		// ---------------- 动作 ----------------
 
@@ -222,6 +236,49 @@ namespace cg::dsl
 			},
 			type_id("void"),
 			"送入墓地(不触发舍弃;与 discard 语义不同)"
+		);
+		do_register(
+			"draw",
+			PrimitiveKind::ACTION,
+			{Phase::RESOLVE},
+			{
+					{.name = "players", .kind = ParamDef::Value{.type = type_id("players")}, .required = true},
+					{.name = "count", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+			},
+			type_id("void"),
+			"各指定玩家抽 count 张卡"
+		);
+		do_register(
+			"add_to_hand",
+			PrimitiveKind::ACTION,
+			{Phase::RESOLVE},
+			{
+					{.name = "cards", .kind = ParamDef::Value{.type = type_id("group")}, .required = true},
+			},
+			type_id("void"),
+			"加入手牌(如从卡组检索、从墓地回收)"
+		);
+		do_register(
+			"banish",
+			PrimitiveKind::ACTION,
+			{Phase::RESOLVE},
+			{
+					{.name = "cards", .kind = ParamDef::Value{.type = type_id("group")}, .required = true},
+					{.name = "face_down", .kind = ParamDef::Value{.type = type_id("bool")}, .required = true},
+			},
+			type_id("void"),
+			"除外(face_down = 里侧除外)"
+		);
+		do_register(
+			"change_position",
+			PrimitiveKind::ACTION,
+			{Phase::RESOLVE},
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "position", .kind = ParamDef::Value{.type = type_id("position")}, .required = true},
+			},
+			type_id("void"),
+			"变更表示形式"
 		);
 
 		// ---------------- 静态修饰符 ----------------

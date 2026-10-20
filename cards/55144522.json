@@ -1,0 +1,21 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["NORMAL"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"effect": [
+				{
+					"call": "draw",
+					"args": {
+						"players": ["SELF"],
+						"count": 2
+					}
+				}
+			]
+		}
+	]
+}
