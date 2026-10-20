@@ -1,0 +1,35 @@
+{
+	"identity": {
+		"kind": "TRAP",
+		"subtypes": ["NORMAL"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {
+				"mode": "activation",
+				"source": [
+					{"event": "NORMAL_SUMMON_SUCCESS"},
+					{"event": "SPECIAL_SUMMON_SUCCESS"},
+					{"event": "FLIP_SUMMON_SUCCESS"}
+				],
+				"timing": "WHEN"
+			},
+			"effect": [
+				{
+					"call": "destroy",
+					"args": {
+						"cards": {
+							"call": "find_cards",
+							"args": {
+								"players": ["SELF", "OPPONENT"],
+								"zones": ["MONSTER", "EXTRA_MONSTER"]
+							}
+						},
+						"reason": "EFFECT"
+					}
+				}
+			]
+		}
+	]
+}

@@ -2112,13 +2112,31 @@ namespace cg::dsl::json
 
 		if (mode == "activation")
 		{
-			if (!only_specified_keys(activation.value(), {"mode"}))
+			if (!only_specified_keys(activation.value(), {"mode", "source", "condition", "timing"}))
 			{
-				fail(path, "activation allows only `mode`");
+				fail(path, "activation allows only `mode` / `source` / `condition` / `timing`");
 				return std::nullopt;
 			}
 
-			return ActivationKind{CardActivation{}};
+			if (const auto it = activation.value().find("source");
+				it != activation.value().end())
+			{
+				auto spec = read_activated_effect_activation_trigger_spec(activation.value(), path);
+				if (!spec.has_value())
+				{
+					return std::nullopt;
+				}
+
+				return ActivationKind{CardActivation{.timing = std::move(spec)}};
+			}
+
+			if (activation.value().contains("condition") || activation.value().contains("timing"))
+			{
+				fail(path, "`condition` / `timing` require `source`");
+				return std::nullopt;
+			}
+
+			return ActivationKind{CardActivation{.timing = std::nullopt}};
 		}
 
 		if (mode == "ignition")
@@ -2140,53 +2158,10 @@ namespace cg::dsl::json
 				return std::nullopt;
 			}
 
-			auto source_path = std::format("{}.source", path);
-
-			const auto source_it = activation.value().find("source");
-			if (source_it == activation.value().end())
-			{
-				fail(std::move(source_path), "missing");
-				return std::nullopt;
-			}
-			auto sources = read_activated_effect_activation_trigger_source_list(source_it.value(), source_path);
-			if (!sources.has_value())
+			auto spec = read_activated_effect_activation_trigger_spec(activation.value(), path);
+			if (!spec.has_value())
 			{
 				return std::nullopt;
-			}
-
-			std::optional<Expression> condition;
-			if (const auto it = activation.value().find("condition");
-				it != activation.value().end())
-			{
-				const auto condition_path = std::format("{}.condition", path);
-
-				condition = read_expression(it.value(), types_.get().find("bool")->id, condition_path);
-				if (!condition.has_value())
-				{
-					return std::nullopt;
-				}
-			}
-
-			auto timing = TriggerTiming::WHEN;
-			if (const auto it = activation.value().find("timing");
-				it != activation.value().end())
-			{
-				auto timing_path = std::format("{}.timing", path);
-
-				if (!it.value().is_string())
-				{
-					fail(std::move(timing_path), "must be a string");
-					return std::nullopt;
-				}
-				const auto& text = it.value().get_ref<const nlohmann::json::string_t&>();
-				const auto e = utility::from_string<TriggerTiming>(text);
-				if (!e.has_value())
-				{
-					fail(std::move(timing_path), std::format("unknown trigger timing `{}`", text));
-					return std::nullopt;
-				}
-
-				timing = *e;
 			}
 
 			auto optional = false;
@@ -2209,9 +2184,7 @@ namespace cg::dsl::json
 			{
 					Trigger
 					{
-							.sources = *std::move(sources),
-							.condition = std::move(condition),
-							.timing = timing,
+							.spec = *std::move(spec),
 							.optional = optional,
 					}
 			};
@@ -2230,6 +2203,69 @@ namespace cg::dsl::json
 
 		fail(std::move(mode_path), std::format("unknown activation mode `{}`", mode));
 		return std::nullopt;
+	}
+
+	auto Reader::read_activated_effect_activation_trigger_spec(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<TriggerSpec>
+	{
+		LIBASSERT_DEBUG_ASSERT(json.is_object());
+		LIBASSERT_DEBUG_ASSERT(types_.get().contains("bool"));
+
+		auto source_path = std::format("{}.source", path);
+
+		const auto source_it = json.find("source");
+		if (source_it == json.end())
+		{
+			fail(std::move(source_path), "missing");
+			return std::nullopt;
+		}
+		auto sources = read_activated_effect_activation_trigger_source_list(source_it.value(), source_path);
+		if (!sources.has_value())
+		{
+			return std::nullopt;
+		}
+
+		std::optional<Expression> condition;
+		if (const auto it = json.find("condition");
+			it != json.end())
+		{
+			const auto condition_path = std::format("{}.condition", path);
+
+			condition = read_expression(it.value(), types_.get().find("bool")->id, condition_path);
+			if (!condition.has_value())
+			{
+				return std::nullopt;
+			}
+		}
+
+		auto timing = TriggerTiming::WHEN;
+		if (const auto it = json.find("timing");
+			it != json.end())
+		{
+			auto timing_path = std::format("{}.timing", path);
+
+			if (!it.value().is_string())
+			{
+				fail(std::move(timing_path), "must be a string");
+				return std::nullopt;
+			}
+
+			const auto& text = it.value().get_ref<const nlohmann::json::string_t&>();
+			const auto e = utility::from_string<TriggerTiming>(text);
+			if (!e.has_value())
+			{
+				fail(std::move(timing_path), std::format("unknown trigger timing `{}`", text));
+				return std::nullopt;
+			}
+
+			timing = *e;
+		}
+
+		return TriggerSpec
+		{
+				.sources = *std::move(sources),
+				.condition = std::move(condition),
+				.timing = timing,
+		};
 	}
 
 	auto Reader::read_activated_effect_activation_trigger_source_list(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<TriggerSourceList>

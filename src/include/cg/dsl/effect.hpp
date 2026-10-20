@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <optional>
 #include <variant>
 #include <vector>
@@ -9,7 +8,6 @@
 #include <cg/domain/effect.hpp>
 #include <cg/domain/field.hpp>
 
-#include <cg/dsl/expression.hpp>
 #include <cg/dsl/statement.hpp>
 #include <cg/dsl/trigger.hpp>
 
@@ -25,6 +23,9 @@ namespace cg::dsl
 	class CardActivation
 	{
 	public:
+		// 事件型发动时点(可选);空 = 开放状态/连锁响应
+		std::optional<TriggerSpec> timing;
+
 		[[nodiscard]] auto operator==(const CardActivation&) const -> bool = default;
 	};
 
@@ -39,12 +40,7 @@ namespace cg::dsl
 	class Trigger
 	{
 	public:
-		// 触发源(或关系;至少一个)
-		TriggerSourceList sources;
-		// 触发时附加条件(事件结果的约束,如"送入墓地");满足才成为触发效果
-		std::optional<Expression> condition;
-		// WHEN|IF
-		TriggerTiming timing;
+		TriggerSpec spec;
 		// true = 任意 / false = 必发
 		bool optional;
 

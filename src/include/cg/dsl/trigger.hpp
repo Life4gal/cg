@@ -6,6 +6,8 @@
 #include <cg/domain/event.hpp>
 #include <cg/domain/phase.hpp>
 
+#include <cg/dsl/expression.hpp>
+
 namespace cg::dsl
 {
 	// ================================================================
@@ -29,5 +31,19 @@ namespace cg::dsl
 		WHEN,
 		// 不受此限(即"xxx场合")
 		IF,
+	};
+
+	// 触发条件:事件/期间 + WHEN/IF + 附加条件
+	class TriggerSpec
+	{
+	public:
+		// 触发源(或关系;至少一个)
+		TriggerSourceList sources;
+		// 触发时附加条件(事件结果的约束,如"送入墓地");满足才成为触发
+		std::optional<Expression> condition;
+		// WHEN|IF
+		TriggerTiming timing;
+
+		[[nodiscard]] auto operator==(const TriggerSpec&) const -> bool = default;
 	};
 }

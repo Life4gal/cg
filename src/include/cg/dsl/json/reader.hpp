@@ -108,6 +108,7 @@ namespace cg::dsl::json
 		[[nodiscard]] auto read_activated_effect_activation(const nlohmann::json::const_iterator& activation, std::string_view path) noexcept -> std::optional<ActivationKind>;
 		[[nodiscard]] auto read_activated_effect_activation_trigger_source_list(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<TriggerSourceList>;
 		[[nodiscard]] auto read_activated_effect_activation_trigger_source(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<TriggerSource>;
+		[[nodiscard]] auto read_activated_effect_activation_trigger_spec(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<TriggerSpec>;
 		[[nodiscard]] auto read_static_effect_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<StaticEffect>;
 		[[nodiscard]] auto read_static_effect_modifier(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<StaticModifier>;
 

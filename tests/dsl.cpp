@@ -275,3 +275,17 @@ TEST_CASE("dsl::json::Reader reads player scopes")
 		CHECK(result.script.has_value());
 	}
 }
+
+TEST_CASE("dsl::json::Reader reads activation timings")
+{
+	SUBCASE("timing without source is rejected")
+	{
+		const auto card = nlohmann::json::parse(
+			R"({"identity":{"kind":"TRAP","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation","timing":"WHEN"},"effect":[]}]})"
+		);
+		const auto result = read_card(card);
+
+		CHECK_FALSE(result.script.has_value());
+		CHECK(contains_message(result.diagnostics, "require `source`"));
+	}
+}
