@@ -11,6 +11,8 @@ namespace cg::dsl
 {
 	class Statement;
 
+	class StatementList : public std::vector<Statement> {};
+
 	enum class Conjunction : std::uint8_t
 	{
 		NONE,
@@ -27,7 +29,7 @@ namespace cg::dsl
 	public:
 		PrimitiveId primitive;
 		// 位置参数
-		std::vector<Expression> args;
+		ExpressionList args;
 		// 有返回值者可绑定
 		std::optional<BindingId> binding;
 
@@ -48,8 +50,8 @@ namespace cg::dsl
 	{
 	public:
 		Expression condition;
-		std::vector<Statement> then_body;
-		std::vector<Statement> else_body;
+		StatementList then_body;
+		StatementList else_body;
 
 		[[nodiscard]] constexpr auto operator==(const If&) const -> bool = default;
 	};
@@ -60,7 +62,7 @@ namespace cg::dsl
 	public:
 		Expression group;
 		BindingId binding;
-		std::vector<Statement> body;
+		StatementList body;
 
 		[[nodiscard]] constexpr auto operator==(const ForEach&) const -> bool = default;
 	};
@@ -77,6 +79,4 @@ namespace cg::dsl
 
 		[[nodiscard]] constexpr auto operator==(const Statement&) const -> bool = default;
 	};
-
-	class StatementList : public std::vector<Statement> {};
 }

@@ -5,6 +5,7 @@
 
 #include <cg/domain/card.hpp>
 #include <cg/domain/field.hpp>
+#include <cg/domain/player.hpp>
 #include <cg/domain/summon.hpp>
 #include <cg/domain/phase.hpp>
 #include <cg/domain/reason.hpp>
@@ -38,7 +39,6 @@ namespace cg::dsl
 		do_register("void", ValueClass::VOID, none_symbol_resolver);
 		do_register("bool", ValueClass::BOOL, none_symbol_resolver);
 		do_register("int", ValueClass::INT, none_symbol_resolver);
-		do_register("player", ValueClass::PLAYER, none_symbol_resolver);
 		do_register("card", ValueClass::CARD, none_symbol_resolver);
 		do_register("group", ValueClass::GROUP, none_symbol_resolver);
 
@@ -69,6 +69,8 @@ namespace cg::dsl
 		// 枚举值
 		// ====================
 
+		// domain/player.hpp
+		do_register("player", ValueClass::ENUM, make_resolver<domain::PlayerSelector>());
 		// domain/card.hpp
 		do_register("card_type", ValueClass::ENUM, make_resolver<domain::CardType>());
 		do_register("card_subtype", ValueClass::ENUM, make_resolver<domain::CardSubtype>());
@@ -79,6 +81,7 @@ namespace cg::dsl
 		// domain/field.hpp
 		do_register("position", ValueClass::ENUM, make_resolver<domain::Position>());
 		do_register("zone", ValueClass::ENUM, make_resolver<domain::Zone>());
+		do_register("zones", ValueClass::ENUM_SET, make_resolver<domain::Zone>());
 		// domain/summon.hpp
 		do_register("summon_method", ValueClass::ENUM, make_resolver<domain::SummonMethod>());
 		// domain/phase.hpp

@@ -33,24 +33,16 @@ namespace cg::dsl
 		[[nodiscard]] auto operator==(const Ignition&) const -> bool = default;
 	};
 
-	enum class TriggerTiming : std::uint8_t
-	{
-		// 触发动作须为该时点最后发生的事,否则错过时点(即"xxx时")
-		WHEN,
-		// 不受此限(即"xxx场合")
-		IF,
-	};
-
 	// 诱发效果(事件/期间触发;含flip等子类)
 	class Trigger
 	{
 	public:
-		// 触发源: 事件|期间
-		TriggerSource source;
+		// 触发源(或关系;至少一个)
+		TriggerSourceList sources;
 		// WHEN|IF
 		TriggerTiming timing;
 		// true = 任意 / false = 必发
-		bool is_optional;
+		bool optional;
 
 		[[nodiscard]] auto operator==(const Trigger&) const -> bool = default;
 	};
@@ -100,18 +92,22 @@ namespace cg::dsl
 	public:
 		// 要么没有限制,有限制也不会超过255次 (同时可以减少填充)
 		using size_type = std::uint8_t;
+		// 效果索引
+		// FIXME(OPT): 将它定义在合适的位置
+		using index_type = size_type;
 
-		UsageScope scope = UsageScope::TURN;
-		UsageBasis basis = UsageBasis::THIS_CARD;
-		RestrictionVerb verb = RestrictionVerb::USE;
+		UsageScope scope;
+		UsageBasis basis;
+		RestrictionVerb verb;
 		// 次数上限(按卡名共享时为卡名合计上限)
 		size_type count;
-
-		// 受限效果(单效果 = 1个成员;共享 = 多个)
-		std::vector<EffectId> members;
+		// 受限效果下标(CardScript::effects[index])
+		std::vector<index_type> refs;
 
 		[[nodiscard]] auto operator==(const UsageRestriction&) const -> bool = default;
 	};
+
+	class UsageRestrictionList : public std::vector<UsageRestriction> {};
 
 	// ===========================================
 	// 发动类效果
@@ -146,10 +142,12 @@ namespace cg::dsl
 	public:
 		PrimitiveId primitive;
 		// 位置参数
-		std::vector<Expression> args;
+		ExpressionList args;
 
 		[[nodiscard]] auto operator==(const StaticModifier&) const -> bool = default;
 	};
+
+	class StaticModifierList : public std::vector<StaticModifier> {};
 
 	class StaticEffect
 	{
@@ -159,7 +157,7 @@ namespace cg::dsl
 		// 生效条件
 		std::optional<Expression> condition;
 		// 修饰符列表
-		std::vector<StaticModifier> modifiers;
+		StaticModifierList modifiers;
 
 		[[nodiscard]] auto operator==(const StaticEffect& other) const -> bool = default;
 	};
@@ -180,4 +178,6 @@ namespace cg::dsl
 
 		[[nodiscard]] auto operator==(const Effect&) const -> bool = default;
 	};
+
+	class EffectList : public std::vector<Effect> {};
 }

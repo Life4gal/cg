@@ -20,7 +20,7 @@ namespace cg::dsl
 		// 种族
 		domain::Race race;
 		// 等级 / 阶级
-		domain::LevelRank level_rank;
+		domain::LevelRank level;
 		// 原攻击力
 		domain::AttackDefense attack;
 		// 原守备力
@@ -33,8 +33,8 @@ namespace cg::dsl
 	class PendulumIdentity
 	{
 	public:
-		domain::PendulumScale scale_left;
-		domain::PendulumScale scale_right;
+		domain::PendulumScale left;
+		domain::PendulumScale right;
 
 		[[nodiscard]] constexpr auto operator==(const PendulumIdentity& other) const -> bool = default;
 	};
@@ -43,7 +43,6 @@ namespace cg::dsl
 	class LinkMarkerIdentity
 	{
 	public:
-		std::uint8_t rating = 0;
 		utility::EnumMask<domain::LinkMarker> markers;
 
 		[[nodiscard]] constexpr auto operator==(const LinkMarkerIdentity& other) const -> bool = default;
@@ -65,7 +64,7 @@ namespace cg::dsl
 		// 灵摆刻度
 		std::optional<PendulumIdentity> pendulum;
 		// 连接
-		std::optional<LinkMarkerIdentity> link;
+		std::optional<LinkMarkerIdentity> link_marker;
 		// 系列/字段
 		std::vector<ArchetypeId> archetypes;
 		// 追加卡密

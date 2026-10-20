@@ -33,11 +33,13 @@ namespace cg::dsl
 		[[nodiscard]] constexpr auto operator==(const MaterialSpec&) const -> bool = default;
 	};
 
+	class MaterialSpecList : public std::vector<MaterialSpec> {};
+
 	// 融合
 	class FusionProcedure
 	{
 	public:
-		std::vector<MaterialSpec> materials;
+		MaterialSpecList materials;
 
 		[[nodiscard]] constexpr auto operator==(const FusionProcedure&) const -> bool = default;
 	};
@@ -107,4 +109,6 @@ namespace cg::dsl
 				RitualProcedure,
 				SelfSpecialProcedure
 			> {};
+
+	class SummonProcedureList : public std::vector<SummonProcedure> {};
 }

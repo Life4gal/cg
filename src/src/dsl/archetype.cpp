@@ -1,23 +1,14 @@
 #include <cg/dsl/archetype.hpp>
 
+#include <cg/utility/hash.hpp>
+
 namespace cg::dsl
 {
 	std::unordered_map<std::uint64_t, std::string> ArchetypeRegistry::registry_ = {};
 
 	auto ArchetypeRegistry::do_hash(const std::string_view text) noexcept -> std::uint64_t
 	{
-		constexpr auto offset_basis = std::uint64_t{0xcbf29ce484222325ull};
-		constexpr auto prime = std::uint64_t{0x100000001b3ull};
-
-		auto hash = offset_basis;
-		for (const auto c: text)
-		{
-			const auto byte = static_cast<unsigned char>(c);
-			hash ^= byte;
-			hash *= prime;
-		}
-
-		return hash;
+		return utility::hash<std::string_view>::operator()(text);
 	}
 
 	auto ArchetypeRegistry::id_of(const std::string_view text) noexcept -> ArchetypeId

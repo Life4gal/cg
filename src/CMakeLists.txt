@@ -29,6 +29,8 @@ add_library(
 	src/dsl/types.cpp
 	src/dsl/vocabulary.cpp
 
+	src/dsl/json/reader.cpp
+
 	# ===================================
 	# FLOW
 	# ===================================
@@ -54,6 +56,7 @@ target_sources(
 	include/cg/utility/opacity.hpp
 	include/cg/utility/type_list.hpp
 	include/cg/utility/variant.hpp
+	include/cg/utility/hash.hpp
 
 	# ===================================
 	# DOMAIN
@@ -91,7 +94,7 @@ target_sources(
 	include/cg/server/room.hpp
 	include/cg/server/net_server.hpp
 	include/cg/server/native_server.hpp
-
+		
 	# ===================================
 	# CODEC
 	# ===================================
@@ -130,6 +133,9 @@ target_sources(
 	include/cg/dsl/summon_procedure.hpp
 	include/cg/dsl/card_script.hpp
 	include/cg/dsl/vocabulary.hpp
+	include/cg/dsl/script.hpp
+
+	include/cg/dsl/json/reader.hpp
 
 	# ===================================
 	# FLOW

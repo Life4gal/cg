@@ -18,7 +18,6 @@ namespace cg::dsl
 		VOID,
 		BOOL,
 		INT,
-		PLAYER,
 		CARD,
 		GROUP,
 
@@ -45,11 +44,11 @@ namespace cg::dsl
 		class SymbolResolver
 		{
 		public:
-			symbol_resolver_type symbol_resolver;
-			symbol_name_resolver_type symbol_name_resolver;
+			symbol_resolver_type symbol;
+			symbol_name_resolver_type symbol_name;
 		};
 
-		constexpr SymbolResolver none_symbol_resolver{.symbol_resolver = nullptr, .symbol_name_resolver = nullptr};
+		constexpr static SymbolResolver none_symbol_resolver{.symbol = nullptr, .symbol_name = nullptr};
 
 		template<typename Symbol, typename SymbolName>
 			requires(
@@ -58,7 +57,7 @@ namespace cg::dsl
 			)
 		[[nodiscard]] static auto make_resolver(Symbol&& symbol_resolver, SymbolName&& symbol_name_resolver) noexcept -> SymbolResolver
 		{
-			return {.symbol_resolver = std::forward<Symbol>(symbol_resolver), .symbol_name_resolver = std::forward<SymbolName>(symbol_name_resolver)};
+			return {.symbol = std::forward<Symbol>(symbol_resolver), .symbol_name = std::forward<SymbolName>(symbol_name_resolver)};
 		}
 
 		template<auto Symbol, auto SymbolName>

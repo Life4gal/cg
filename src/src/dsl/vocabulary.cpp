@@ -4,6 +4,8 @@
 #include <ranges>
 #include <format>
 
+#include <cg/dsl/types.hpp>
+
 namespace cg::dsl
 {
 	auto Vocabulary::generate_id() const noexcept -> PrimitiveId
@@ -45,8 +47,8 @@ namespace cg::dsl
 			PrimitiveKind::PREDICATE,
 			all_phases,
 			{
-					{.name = "card", .type = type_id("card"), .is_required = true},
-					{.name = "card_type", .type = type_id("card_type"), .is_required = true},
+					{.name = "card", .type = type_id("card"), .required = true},
+					{.name = "card_type", .type = type_id("card_type"), .required = true},
 			},
 			type_id("bool"),
 			"卡是否为指定种类(monster/spell/trap)"
@@ -56,8 +58,8 @@ namespace cg::dsl
 			PrimitiveKind::PREDICATE,
 			all_phases,
 			{
-					{.name = "card", .type = type_id("card"), .is_required = true},
-					{.name = "subtype", .type = type_id("card_subtype"), .is_required = true},
+					{.name = "card", .type = type_id("card"), .required = true},
+					{.name = "subtype", .type = type_id("card_subtype"), .required = true},
 			},
 			type_id("bool"),
 			"卡是否具有指定副种类(normal/effect/tuner/…)"
@@ -67,8 +69,8 @@ namespace cg::dsl
 			PrimitiveKind::PREDICATE,
 			all_phases,
 			{
-					{.name = "card", .type = type_id("card"), .is_required = true},
-					{.name = "archetype", .type = type_id("archetype"), .is_required = true},
+					{.name = "card", .type = type_id("card"), .required = true},
+					{.name = "archetype", .type = type_id("archetype"), .required = true},
 			},
 			type_id("bool"),
 			"卡是否属于指定系列/字段"
@@ -81,11 +83,11 @@ namespace cg::dsl
 			PrimitiveKind::QUERY,
 			all_phases,
 			{
-					{.name = "player", .type = type_id("player"), .is_required = true},
-					{.name = "zones", .type = type_id("zone_set"), .is_required = true},
-					{.name = "filter", .type = type_id("bool"), .is_required = false},
+					{.name = "player", .type = type_id("player"), .required = true},
+					{.name = "zones", .type = type_id("zones"), .required = true},
+					{.name = "filter", .type = type_id("bool"), .required = false},
 			},
-			type_id("bool"),
+			type_id("group"),
 			"指定玩家区域中满足过滤的全部卡(非取对象)"
 		);
 		do_register(
@@ -93,10 +95,10 @@ namespace cg::dsl
 			PrimitiveKind::QUERY,
 			all_phases,
 			{
-					{.name = "player", .type = type_id("player"), .is_required = true},
-					{.name = "zones", .type = type_id("zone_set"), .is_required = true},
-					{.name = "min", .type = type_id("int"), .is_required = true},
-					{.name = "filter", .type = type_id("bool"), .is_required = false},
+					{.name = "player", .type = type_id("player"), .required = true},
+					{.name = "zones", .type = type_id("zones"), .required = true},
+					{.name = "min", .type = type_id("int"), .required = true},
+					{.name = "filter", .type = type_id("bool"), .required = false},
 			},
 			type_id("bool"),
 			"指定玩家区域中是否至少有min张满足过滤的卡"
@@ -106,8 +108,8 @@ namespace cg::dsl
 			PrimitiveKind::QUERY,
 			all_phases,
 			{
-					{.name = "card", .type = type_id("card"), .is_required = true},
-					{.name = "filter", .type = type_id("bool"), .is_required = false},
+					{.name = "card", .type = type_id("card"), .required = true},
+					{.name = "filter", .type = type_id("bool"), .required = false},
 			},
 			type_id("int"),
 			"卡的当前攻击力(含修正)"
@@ -117,8 +119,8 @@ namespace cg::dsl
 			PrimitiveKind::QUERY,
 			all_phases,
 			{
-					{.name = "card", .type = type_id("card"), .is_required = true},
-					{.name = "filter", .type = type_id("bool"), .is_required = false},
+					{.name = "card", .type = type_id("card"), .required = true},
+					{.name = "filter", .type = type_id("bool"), .required = false},
 			},
 			type_id("int"),
 			"卡的当前守备力(含修正)"
@@ -131,10 +133,10 @@ namespace cg::dsl
 			PrimitiveKind::SELECT,
 			{Phase::TARGET},
 			{
-					{.name = "player", .type = type_id("player"), .is_required = true},
-					{.name = "zone", .type = type_id("zone"), .is_required = true},
-					{.name = "min", .type = type_id("min"), .is_required = true},
-					{.name = "max", .type = type_id("max"), .is_required = true},
+					{.name = "player", .type = type_id("player"), .required = true},
+					{.name = "zone", .type = type_id("zone"), .required = true},
+					{.name = "min", .type = type_id("int"), .required = true},
+					{.name = "max", .type = type_id("int"), .required = true},
 			},
 			type_id("group"),
 			"在指定玩家/区域中取对象(仅TARGET阶段)"
@@ -147,8 +149,8 @@ namespace cg::dsl
 			PrimitiveKind::ACTION,
 			{Phase::RESOLVE},
 			{
-					{.name = "cards", .type = type_id("group"), .is_required = true},
-					{.name = "reason", .type = type_id("reason"), .is_required = true},
+					{.name = "cards", .type = type_id("group"), .required = true},
+					{.name = "reason", .type = type_id("reason"), .required = true},
 			},
 			type_id("void"),
 			"破坏组内全部卡"
@@ -158,9 +160,9 @@ namespace cg::dsl
 			PrimitiveKind::ACTION,
 			{Phase::RESOLVE},
 			{
-					{.name = "card", .type = type_id("card"), .is_required = true},
-					{.name = "method", .type = type_id("summon_method"), .is_required = true},
-					{.name = "position", .type = type_id("position"), .is_required = true},
+					{.name = "card", .type = type_id("card"), .required = true},
+					{.name = "method", .type = type_id("summon_method"), .required = true},
+					{.name = "position", .type = type_id("position"), .required = true},
 			},
 			type_id("void"),
 			"特殊召唤"
@@ -173,8 +175,8 @@ namespace cg::dsl
 			PrimitiveKind::STATIC,
 			{Phase::STATIC},
 			{
-					{.name = "property", .type = type_id("numeric_property"), .is_required = true},
-					{.name = "value", .type = type_id("int"), .is_required = true},
+					{.name = "property", .type = type_id("numeric_property"), .required = true},
+					{.name = "value", .type = type_id("int"), .required = true},
 			},
 			type_id("void"),
 			"按数值项增加(如:攻击力上升500)"
@@ -187,27 +189,43 @@ namespace cg::dsl
 
 		const auto validate = [&](const std::tuple<std::ptrdiff_t, const PrimitiveDef&>& tuple) noexcept -> void
 		{
-			const auto [index, primitive] = tuple;
+			const auto [primitive_index, primitive] = tuple;
 
 			if (!primitive.id.valid())
 			{
-				errors.push_back(std::format("[{}] id invalid", index));
+				errors.push_back(std::format("[{}] id invalid", primitive_index));
 			}
 			if (primitive.name.empty())
 			{
-				errors.push_back(std::format("[{}] name empty", index));
+				errors.push_back(std::format("[{}] name empty", primitive_index));
 			}
 			if (!types.contains(primitive.returns))
 			{
-				errors.push_back(std::format("[{}] unregistered return type", index));
+				errors.push_back(std::format("[{}] unregistered return type", primitive_index));
 			}
 
-			for (std::size_t i = 0; i < primitive.params.size(); ++i)
+			for (const auto [param_index, param]: primitive.params | std::views::enumerate)
 			{
-				if (const auto& param = primitive.params[i];
-					!types.contains(param.type))
+				if (!types.contains(param.type))
 				{
-					errors.push_back(std::format("[{}] unregistered param type of {}[{}]", index, param.name, i));
+					errors.push_back(std::format("[{}] unregistered param type of {}[{}]", primitive_index, param.name, param_index));
+				}
+				if (param.name.empty())
+				{
+					errors.push_back(std::format("[{}] empty param name [{}]", primitive_index, param_index));
+				}
+				if (std::ranges::contains(primitive.params.begin(), primitive.params.begin() + param_index, param.name, &ParamDef::name))
+				{
+					errors.push_back(std::format("[{}] duplicate param name `{}`", primitive_index, param.name));
+				}
+				// 位置槽无空洞:可选参数必须全部位于末尾
+				if (!param.required)
+				{
+					if (const auto it = std::ranges::find(primitive.params.begin() + param_index + 1, primitive.params.end(), true, &ParamDef::required);
+						it != primitive.params.end())
+					{
+						errors.push_back(std::format("[{}] required param `{}` follows optional `{}`", param_index, it->name, param.name));
+					}
 				}
 			}
 		};
@@ -222,11 +240,19 @@ namespace cg::dsl
 			std::ranges::transform(primitives_, std::back_inserter(results), element);
 			std::ranges::sort(results);
 
-			for (auto groups = results | std::views::chunk_by(std::ranges::equal_to{}); const auto& group: groups)
+			for (auto groups = results | std::views::chunk_by(std::ranges::equal_to{});
+			     const auto& group: groups)
 			{
 				if (std::ranges::distance(group) > 1)
 				{
-					errors.push_back(std::format("duplicate primitive {}: {}", name, *std::ranges::begin(group)));
+					if constexpr (std::is_same_v<Result, PrimitiveId>)
+					{
+						errors.push_back(std::format("duplicate primitive {}: {}", name, std::ranges::begin(group)->raw()));
+					}
+					else
+					{
+						errors.push_back(std::format("duplicate primitive {}: {}", name, *std::ranges::begin(group)));
+					}
 				}
 			}
 		};
@@ -237,7 +263,7 @@ namespace cg::dsl
 		return errors;
 	}
 
-	auto Vocabulary::find(const PrimitiveId id) noexcept -> const PrimitiveDef*
+	auto Vocabulary::find(const PrimitiveId id) const noexcept -> const PrimitiveDef*
 	{
 		const auto it = std::ranges::find(primitives_, id, &PrimitiveDef::id);
 		if (it == primitives_.end())
@@ -248,7 +274,7 @@ namespace cg::dsl
 		return &*it;
 	}
 
-	auto Vocabulary::find(const std::string_view name) noexcept -> const PrimitiveDef*
+	auto Vocabulary::find(const std::string_view name) const noexcept -> const PrimitiveDef*
 	{
 		const auto it = std::ranges::find(primitives_, name, &PrimitiveDef::name);
 		if (it == primitives_.end())
@@ -257,5 +283,15 @@ namespace cg::dsl
 		}
 
 		return &*it;
+	}
+
+	auto Vocabulary::empty() const noexcept -> bool
+	{
+		return primitives_.empty();
+	}
+
+	auto Vocabulary::size() const noexcept -> size_type
+	{
+		return primitives_.size();
 	}
 }

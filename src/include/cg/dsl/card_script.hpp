@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector>
-
 #include <cg/dsl/identity.hpp>
 #include <cg/dsl/effect.hpp>
 #include <cg/dsl/summon_procedure.hpp>
@@ -16,9 +14,9 @@ namespace cg::dsl
 	{
 	public:
 		CardIdentity identity;
-		std::vector<SummonProcedure> summons;
-		std::vector<Effect> effects;
-		std::vector<UsageRestriction> usage_restrictions;
+		SummonProcedureList summons;
+		EffectList effects;
+		UsageRestrictionList usage_restrictions;
 
 		[[nodiscard]] constexpr auto operator==(const CardScript&) const -> bool = default;
 	};

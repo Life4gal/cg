@@ -4,12 +4,13 @@
 #include <vector>
 
 #include <cg/dsl/ids.hpp>
-#include <cg/dsl/types.hpp>
 
 #include <cg/utility/enum.hpp>
 
 namespace cg::dsl
 {
+	class TypeRegistry;
+
 	enum class Phase : std::uint8_t
 	{
 		// 检查是否满足条件
@@ -46,7 +47,7 @@ namespace cg::dsl
 		// 参数名(仅诊断/生成视图;调用处为位置参数)
 		std::string name;
 		TypeId type;
-		bool is_required;
+		bool required;
 
 		[[nodiscard]] constexpr auto operator==(const ParamDef&) const -> bool = default;
 	};
@@ -76,6 +77,7 @@ namespace cg::dsl
 	{
 	public:
 		using primitives_type = std::vector<PrimitiveDef>;
+		using size_type = primitives_type::size_type;
 
 	private:
 		primitives_type primitives_;
@@ -94,11 +96,14 @@ namespace cg::dsl
 	public:
 		explicit Vocabulary(const TypeRegistry& types) noexcept;
 
-		// 词表校验:name/id 唯一、类型已注册、规则溯源非空
+		// 词表校验:name/id 唯一、类型已注册
 		// 返回错误列表(空 = 通过)。
 		[[nodiscard]] auto validate(const TypeRegistry& types) const noexcept -> std::vector<std::string>;
 
-		[[nodiscard]] auto find(PrimitiveId id) noexcept -> const PrimitiveDef*;
-		[[nodiscard]] auto find(std::string_view name) noexcept -> const PrimitiveDef*;
+		[[nodiscard]] auto find(PrimitiveId id) const noexcept -> const PrimitiveDef*;
+		[[nodiscard]] auto find(std::string_view name) const noexcept -> const PrimitiveDef*;
+
+		[[nodiscard]] auto empty() const noexcept -> bool;
+		[[nodiscard]] auto size() const noexcept -> size_type;
 	};
 }
