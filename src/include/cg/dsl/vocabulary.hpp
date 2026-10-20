@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <variant>
 
 #include <cg/dsl/id.hpp>
 
@@ -44,9 +45,35 @@ namespace cg::dsl
 	class ParamDef
 	{
 	public:
+		// 普通值参数:一个表达式
+		class Value
+		{
+		public:
+			TypeId type;
+
+			[[nodiscard]] constexpr auto operator==(const Value&) const -> bool = default;
+		};
+
+		// 作用域参数:表达式在一个隐式元素(`$`)的作用域内求值
+		// - element = `$`的类型
+		// - type    = 表达式类型(过滤/条件 = bool;投影/映射 = 任意结果类型)
+		class Scoped
+		{
+		public:
+			TypeId element;
+			TypeId type;
+
+			[[nodiscard]] constexpr auto operator==(const Scoped&) const -> bool = default;
+		};
+
+		// 参数形态
+		class Kind : public std::variant<Value, Scoped> {};
+
 		// 参数名(仅诊断/生成视图;调用处为位置参数)
 		std::string name;
-		TypeId type;
+		// 参数形态(普通值/作用域内求值)
+		Kind kind;
+		// 是否必须提供
 		bool required;
 
 		[[nodiscard]] constexpr auto operator==(const ParamDef&) const -> bool = default;

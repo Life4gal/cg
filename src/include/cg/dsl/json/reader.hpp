@@ -31,6 +31,9 @@ namespace cg::dsl::json
 		std::vector<scope_type> scopes_;
 		BindingId::value_type binding_id_;
 
+		// 元素作用域栈:栈顶 = 当前作用域元素(`$`)的类型;`$`绑定最内层作用域
+		std::vector<TypeId> element_scopes_;
+
 		auto fail(std::string path, std::string message) noexcept -> void;
 		auto fail(std::string_view path, std::string message) noexcept -> void;
 

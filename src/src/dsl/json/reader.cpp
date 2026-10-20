@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <ranges>
 
+#include <cg/utility/functional.hpp>
 #include <cg/dsl/archetype.hpp>
 #include <cg/dsl/types.hpp>
 #include <cg/dsl/vocabulary.hpp>
@@ -432,6 +433,33 @@ namespace cg::dsl::json
 			if (const auto& text = json.get_ref<const nlohmann::json::string_t&>();
 				text == CandidateRef::ref)
 			{
+				if (element_scopes_.empty())
+				{
+					fail(path, std::format("`{}` is only valid inside a scoped parameter", CandidateRef::ref));
+					return std::nullopt;
+				}
+
+				if (const auto candidate_type = element_scopes_.back();
+					expected.valid() && expected != candidate_type)
+				{
+					const auto type_name = [&](const TypeId id) noexcept -> std::string_view
+					{
+						const auto* def = types_.get().find(id);
+						return def != nullptr ? def->name : std::string_view{"<unknown>"};
+					};
+
+					fail(
+						path,
+						std::format(
+							"`{}` refers to a candidate of type `{}`, but `{}` is expected",
+							CandidateRef::ref,
+							type_name(candidate_type),
+							type_name(expected)
+						)
+					);
+					return std::nullopt;
+				}
+
 				return Expression{CandidateRef{}};
 			}
 
@@ -876,7 +904,25 @@ namespace cg::dsl::json
 					return std::nullopt;
 				}
 
-				auto arg = read_expression(*provided[index], param.type, nested_item_path);
+				auto arg = std::visit(
+					utility::Overloaded
+					{
+							[&](const ParamDef::Value& value) noexcept -> std::optional<Expression>
+							{
+								return read_expression(*provided[index], value.type, nested_item_path);
+							},
+							[&](const ParamDef::Scoped& scoped) noexcept -> std::optional<Expression>
+							{
+								element_scopes_.push_back(scoped.element);
+								auto r = read_expression(*provided[index], scoped.type, nested_item_path);
+								element_scopes_.pop_back();
+
+								return r;
+							},
+					},
+					param.kind
+				);
+
 				if (!arg)
 				{
 					return std::nullopt;

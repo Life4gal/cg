@@ -4,6 +4,7 @@
 #include <ranges>
 #include <format>
 
+#include <cg/utility/functional.hpp>
 #include <cg/dsl/types.hpp>
 
 namespace cg::dsl
@@ -47,8 +48,8 @@ namespace cg::dsl
 			PrimitiveKind::PREDICATE,
 			all_phases,
 			{
-					{.name = "card", .type = type_id("card"), .required = true},
-					{.name = "card_type", .type = type_id("card_type"), .required = true},
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "card_type", .kind = ParamDef::Value{.type = type_id("card_type")}, .required = true},
 			},
 			type_id("bool"),
 			"卡是否为指定种类(monster/spell/trap)"
@@ -58,8 +59,8 @@ namespace cg::dsl
 			PrimitiveKind::PREDICATE,
 			all_phases,
 			{
-					{.name = "card", .type = type_id("card"), .required = true},
-					{.name = "subtype", .type = type_id("card_subtype"), .required = true},
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "subtype", .kind = ParamDef::Value{.type = type_id("card_subtype")}, .required = true},
 			},
 			type_id("bool"),
 			"卡是否具有指定副种类(normal/effect/tuner/…)"
@@ -69,8 +70,8 @@ namespace cg::dsl
 			PrimitiveKind::PREDICATE,
 			all_phases,
 			{
-					{.name = "card", .type = type_id("card"), .required = true},
-					{.name = "archetype", .type = type_id("archetype"), .required = true},
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "archetype", .kind = ParamDef::Value{.type = type_id("archetype")}, .required = true},
 			},
 			type_id("bool"),
 			"卡是否属于指定系列/字段"
@@ -83,9 +84,9 @@ namespace cg::dsl
 			PrimitiveKind::QUERY,
 			all_phases,
 			{
-					{.name = "player", .type = type_id("player"), .required = true},
-					{.name = "zones", .type = type_id("zones"), .required = true},
-					{.name = "filter", .type = type_id("bool"), .required = false},
+					{.name = "player", .kind = ParamDef::Value{.type = type_id("player")}, .required = true},
+					{.name = "zones", .kind = ParamDef::Value{.type = type_id("zones")}, .required = true},
+					{.name = "filter", .kind = ParamDef::Scoped{.element = type_id("card"), .type = type_id("bool")}, .required = false},
 			},
 			type_id("group"),
 			"指定玩家区域中满足过滤的全部卡(非取对象)"
@@ -95,10 +96,10 @@ namespace cg::dsl
 			PrimitiveKind::QUERY,
 			all_phases,
 			{
-					{.name = "player", .type = type_id("player"), .required = true},
-					{.name = "zones", .type = type_id("zones"), .required = true},
-					{.name = "min", .type = type_id("int"), .required = true},
-					{.name = "filter", .type = type_id("bool"), .required = false},
+					{.name = "player", .kind = ParamDef::Value{.type = type_id("player")}, .required = true},
+					{.name = "zones", .kind = ParamDef::Value{.type = type_id("zones")}, .required = true},
+					{.name = "min", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+					{.name = "filter", .kind = ParamDef::Scoped{.element = type_id("card"), .type = type_id("bool")}, .required = false},
 			},
 			type_id("bool"),
 			"指定玩家区域中是否至少有min张满足过滤的卡"
@@ -108,8 +109,8 @@ namespace cg::dsl
 			PrimitiveKind::QUERY,
 			all_phases,
 			{
-					{.name = "card", .type = type_id("card"), .required = true},
-					{.name = "filter", .type = type_id("bool"), .required = false},
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "filter", .kind = ParamDef::Scoped{.element = type_id("card"), .type = type_id("bool")}, .required = false},
 			},
 			type_id("int"),
 			"卡的当前攻击力(含修正)"
@@ -119,8 +120,8 @@ namespace cg::dsl
 			PrimitiveKind::QUERY,
 			all_phases,
 			{
-					{.name = "card", .type = type_id("card"), .required = true},
-					{.name = "filter", .type = type_id("bool"), .required = false},
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "filter", .kind = ParamDef::Scoped{.element = type_id("card"), .type = type_id("bool")}, .required = false},
 			},
 			type_id("int"),
 			"卡的当前守备力(含修正)"
@@ -133,10 +134,10 @@ namespace cg::dsl
 			PrimitiveKind::SELECT,
 			{Phase::TARGET},
 			{
-					{.name = "player", .type = type_id("player"), .required = true},
-					{.name = "zone", .type = type_id("zone"), .required = true},
-					{.name = "min", .type = type_id("int"), .required = true},
-					{.name = "max", .type = type_id("int"), .required = true},
+					{.name = "player", .kind = ParamDef::Value{.type = type_id("player")}, .required = true},
+					{.name = "zone", .kind = ParamDef::Value{.type = type_id("zone")}, .required = true},
+					{.name = "min", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+					{.name = "max", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
 			},
 			type_id("group"),
 			"在指定玩家/区域中取对象(仅TARGET阶段)"
@@ -149,8 +150,8 @@ namespace cg::dsl
 			PrimitiveKind::ACTION,
 			{Phase::RESOLVE},
 			{
-					{.name = "cards", .type = type_id("group"), .required = true},
-					{.name = "reason", .type = type_id("reason"), .required = true},
+					{.name = "cards", .kind = ParamDef::Value{.type = type_id("group")}, .required = true},
+					{.name = "reason", .kind = ParamDef::Value{.type = type_id("reason")}, .required = true},
 			},
 			type_id("void"),
 			"破坏组内全部卡"
@@ -160,9 +161,9 @@ namespace cg::dsl
 			PrimitiveKind::ACTION,
 			{Phase::RESOLVE},
 			{
-					{.name = "card", .type = type_id("card"), .required = true},
-					{.name = "method", .type = type_id("summon_method"), .required = true},
-					{.name = "position", .type = type_id("position"), .required = true},
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "method", .kind = ParamDef::Value{.type = type_id("summon_method")}, .required = true},
+					{.name = "position", .kind = ParamDef::Value{.type = type_id("position")}, .required = true},
 			},
 			type_id("void"),
 			"特殊召唤"
@@ -175,8 +176,8 @@ namespace cg::dsl
 			PrimitiveKind::STATIC,
 			{Phase::STATIC},
 			{
-					{.name = "property", .type = type_id("numeric_property"), .required = true},
-					{.name = "value", .type = type_id("int"), .required = true},
+					{.name = "property", .kind = ParamDef::Value{.type = type_id("numeric_property")}, .required = true},
+					{.name = "value", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
 			},
 			type_id("void"),
 			"按数值项增加(如:攻击力上升500)"
@@ -206,18 +207,42 @@ namespace cg::dsl
 
 			for (const auto [param_index, param]: primitive.params | std::views::enumerate)
 			{
-				if (!types.contains(param.type))
-				{
-					errors.push_back(std::format("[{}] unregistered param type of {}[{}]", primitive_index, param.name, param_index));
-				}
 				if (param.name.empty())
 				{
 					errors.push_back(std::format("[{}] empty param name [{}]", primitive_index, param_index));
 				}
+
+				std::visit(
+					utility::Overloaded
+					{
+							[&](const ParamDef::Value& value) noexcept -> void
+							{
+								if (!types.contains(value.type))
+								{
+									errors.push_back(std::format("[{}] unregistered param type of {}[{}]", primitive_index, param.name, param_index));
+								}
+							},
+							[&](const ParamDef::Scoped& scoped) noexcept -> void
+							{
+								if (!types.contains(scoped.type))
+								{
+									errors.push_back(std::format("[{}] unregistered param type of {}[{}]", primitive_index, param.name, param_index));
+								}
+
+								if (!types.contains(scoped.element))
+								{
+									errors.push_back(std::format("[{}] unregistered element type of scoped param `{}`", primitive_index, param.name));
+								}
+							},
+					},
+					param.kind
+				);
+
 				if (std::ranges::contains(primitive.params.begin(), primitive.params.begin() + param_index, param.name, &ParamDef::name))
 				{
 					errors.push_back(std::format("[{}] duplicate param name `{}`", primitive_index, param.name));
 				}
+
 				// 位置槽无空洞:可选参数必须全部位于末尾
 				if (!param.required)
 				{
