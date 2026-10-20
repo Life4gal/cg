@@ -109,6 +109,16 @@ namespace cg::dsl
 			type_id("bool"),
 			"卡是否位于指定区域"
 		);
+		do_register(
+			"is_face_up",
+			PrimitiveKind::PREDICATE,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+			},
+			type_id("bool"),
+			"卡是否表侧表示"
+		);
 
 		// ---------------- 区域查询(非取对象) ----------------
 
@@ -206,6 +216,14 @@ namespace cg::dsl
 			{},
 			type_id("card"),
 			"效果来源卡(上下文引用)"
+		);
+		do_register(
+			"equipped_card",
+			PrimitiveKind::QUERY,
+			all_phases,
+			{},
+			type_id("card"),
+			"被这张卡装备的怪兽(装备卡上下文引用)"
 		);
 
 		// ---------------- 选择 ----------------
@@ -374,6 +392,16 @@ namespace cg::dsl
 			},
 			type_id("void"),
 			"按数值项增加(如:攻击力上升500)"
+		);
+		do_register(
+			"add_protection",
+			PrimitiveKind::STATIC,
+			{Phase::STATIC},
+			{
+					{.name = "protection", .kind = ParamDef::Value{.type = type_id("protection")}, .required = true},
+			},
+			type_id("void"),
+			"给予抗性(如:不会被战斗破坏)"
 		);
 	}
 

@@ -4,6 +4,7 @@
 #include <ranges>
 
 #include <cg/domain/card.hpp>
+#include <cg/domain/effect.hpp>
 #include <cg/domain/field.hpp>
 #include <cg/domain/player.hpp>
 #include <cg/domain/summon.hpp>
@@ -91,6 +92,8 @@ namespace cg::dsl
 		do_register("damage_step", ValueClass::ENUM, make_resolver<domain::DamageStep>());
 		// domain/reason.hpp
 		do_register("reason", ValueClass::ENUM, make_resolver<domain::Reason>());
+		// domain/effect.hpp
+		do_register("protection", ValueClass::ENUM, make_resolver<domain::Protection>());
 		// domain/event.hpp
 		do_register("event_code", ValueClass::ENUM, make_resolver<domain::EventCode>());
 	}
