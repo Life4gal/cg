@@ -59,6 +59,7 @@ namespace cg::state
 
 		// 获取玩家所属区域
 		[[nodiscard]] auto player_zone_of(domain::Player player) const noexcept -> const PlayerZone&;
+		[[nodiscard]] auto player_zone_of(domain::Player player) noexcept -> PlayerZone&;
 
 	public:
 		Field() noexcept;
@@ -152,12 +153,8 @@ namespace cg::state
 		// 指定位置的卡牌实例
 		// ==================================================================================
 
-	private:
-		[[nodiscard]] auto is_location_empty(domain::Player player, domain::ExtraMonsterLocation location) const noexcept -> bool;
-		[[nodiscard]] auto select_location_card(domain::Player player, domain::ExtraMonsterLocation location) const noexcept -> CardInstanceId;
-
-	public:
 		[[nodiscard]] auto is_location_empty(domain::Player player, domain::MonsterLocation location) const noexcept -> bool;
+		[[nodiscard]] auto is_location_empty(domain::Player player, domain::ExtraMonsterLocation location) const noexcept -> bool;
 		[[nodiscard]] auto is_location_empty(domain::ExtraMonsterLocation location) const noexcept -> bool;
 		[[nodiscard]] auto is_location_empty(domain::Player player, domain::SpellTrapLocation location) const noexcept -> bool;
 		[[nodiscard]] auto is_location_empty(domain::Player player, domain::FieldSpellLocation location) const noexcept -> bool;
@@ -174,6 +171,7 @@ namespace cg::state
 		[[nodiscard]] auto select_location_card(domain::Player player, domain::GraveyardLocation location) const noexcept -> CardInstanceId;
 		[[nodiscard]] auto select_location_card(domain::Player player, domain::BanishedLocation location) const noexcept -> CardInstanceId;
 		[[nodiscard]] auto select_location_card(domain::Player player, domain::MonsterLocation location) const noexcept -> CardInstanceId;
+		[[nodiscard]] auto select_location_card(domain::Player player, domain::ExtraMonsterLocation location) const noexcept -> CardInstanceId;
 		[[nodiscard]] auto select_location_card(domain::ExtraMonsterLocation location) const noexcept -> CardInstanceId;
 		[[nodiscard]] auto select_location_card(domain::Player player, domain::SpellTrapLocation location) const noexcept -> CardInstanceId;
 		[[nodiscard]] auto select_location_card(domain::Player player, domain::FieldSpellLocation location) const noexcept -> CardInstanceId;
@@ -181,5 +179,65 @@ namespace cg::state
 		// 获取指定位置的卡牌实例
 		// 如果目标位置不存在卡牌实例则返回无效ID
 		[[nodiscard]] auto select_location_card(domain::Player player, domain::Location location) const noexcept -> CardInstanceId;
+
+		auto place(domain::Player player, CardInstanceId card, domain::DeckLocation location) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::ExtraDeckLocation location) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::HandLocation location) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::GraveyardLocation location) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::BanishedLocation location) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::MonsterLocation location) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::ExtraMonsterLocation location) noexcept -> bool;
+		auto place(CardInstanceId card, domain::ExtraMonsterLocation location) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::SpellTrapLocation location) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::FieldSpellLocation location) noexcept -> bool;
+
+		// 将卡放入指定位置(不处理原位置),返回是否覆盖(即原位置是否有卡) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律追加(无视位置,返回false)
+		auto place(domain::Player player, CardInstanceId card, domain::Location location) noexcept -> bool;
+
+		auto remove(domain::Player player, CardInstanceId card, domain::DeckLocation location) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::ExtraDeckLocation location) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::HandLocation location) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::GraveyardLocation location) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::BanishedLocation location) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::MonsterLocation location) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::ExtraMonsterLocation location) noexcept -> bool;
+		auto remove(CardInstanceId card, domain::ExtraMonsterLocation location) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::SpellTrapLocation location) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::FieldSpellLocation location) noexcept -> bool;
+
+		// 将卡从指定位置移除,返回是否移除成功 -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律擦除(无视位置,返回true)
+		auto remove(domain::Player player, CardInstanceId card, domain::Location location) noexcept -> bool;
+
+		// ==================================================================================
+		// 指定位置的卡牌实例
+		// ==================================================================================
+
+		auto place(domain::Player player, CardInstanceId card, domain::DeckPlacement placement) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::ExtraDeckPlacement placement) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::HandPlacement placement) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::GraveyardPlacement placement) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::BanishedPlacement placement) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::MonsterPlacement placement) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::ExtraMonsterPlacement placement) noexcept -> bool;
+		auto place(CardInstanceId card, domain::ExtraMonsterPlacement placement) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::SpellTrapPlacement placement) noexcept -> bool;
+		auto place(domain::Player player, CardInstanceId card, domain::FieldSpellPlacement placement) noexcept -> bool;
+
+		// 将卡放入指定位置(不处理原位置),返回是否覆盖(即原位置是否有卡) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律追加(无视位置,返回false)
+		auto place(domain::Player player, CardInstanceId card, domain::Placement placement) noexcept -> bool;
+
+		auto remove(domain::Player player, CardInstanceId card, domain::DeckPlacement placement) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::ExtraDeckPlacement placement) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::HandPlacement placement) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::GraveyardPlacement placement) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::BanishedPlacement placement) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::MonsterPlacement placement) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::ExtraMonsterPlacement placement) noexcept -> bool;
+		auto remove(CardInstanceId card, domain::ExtraMonsterPlacement placement) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::SpellTrapPlacement placement) noexcept -> bool;
+		auto remove(domain::Player player, CardInstanceId card, domain::FieldSpellPlacement placement) noexcept -> bool;
+
+		// 将卡从指定位置移除,返回是否移除成功 -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律擦除(无视位置,返回true)
+		auto remove(domain::Player player, CardInstanceId card, domain::Placement placement) noexcept -> bool;
 	};
 }

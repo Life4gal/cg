@@ -19,8 +19,8 @@ namespace cg::dsl
 	class Literal
 	{
 	public:
-		using number_type = std::int32_t;
-
+		using boolean_type = bool;
+		using number_type = std::int64_t;
 		// 符号常量(取值域确定;校验期按type校验)
 		// - 闭枚举:value = 枚举序数(经TypeRegistry解析);
 		// - 开放名域(系列/字段等):value = ArchetypeId
@@ -31,7 +31,7 @@ namespace cg::dsl
 			std::uint64_t value;
 		};
 
-		using value_type = std::variant<number_type, bool, Symbol>;
+		using value_type = std::variant<boolean_type, number_type, Symbol>;
 
 		value_type value;
 

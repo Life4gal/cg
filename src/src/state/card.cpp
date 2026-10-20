@@ -2,11 +2,11 @@
 
 namespace cg::state
 {
-	CardInstance::CardInstance(const CardInstanceId id, const CardDefinition& definition) noexcept
+	CardInstance::CardInstance(const CardInstanceId id, const domain::Player owner, const CardDefinition& definition) noexcept
 		: definition_{definition},
 		  id_{id},
-		  owner_{domain::Player::FIRST},
-		  controller_{domain::Player::FIRST},
+		  owner_{owner},
+		  controller_{owner},
 		  // placement_{},
 		  // overlays_{},
 		  move_
@@ -82,5 +82,15 @@ namespace cg::state
 
 		// 否则基于定义
 		return definition_.get().kind.contains(domain::CardType::TRAP);
+	}
+
+	auto CardInstance::set_placement(const domain::Placement& placement) noexcept -> void
+	{
+		placement_ = placement;
+	}
+
+	auto CardInstance::set_move_provenance(const MoveProvenance& provenance) noexcept -> void
+	{
+		move_ = provenance;
 	}
 }

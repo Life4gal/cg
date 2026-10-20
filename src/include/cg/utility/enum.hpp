@@ -101,6 +101,9 @@ namespace cg::utility
 			EnumMask::add(e);
 		}
 
+		constexpr explicit EnumMask(const value_type value) noexcept
+			: bits_{value} {}
+
 		// template<std::same_as<enum_type>... Es>
 		// constexpr explicit(false) EnumMask(Es... es) noexcept
 		// 	: EnumMask{}

@@ -95,7 +95,7 @@ namespace cg::state
 		Form form_;
 
 	public:
-		CardInstance(CardInstanceId id, const CardDefinition& definition) noexcept;
+		CardInstance(CardInstanceId id, domain::Player owner, const CardDefinition& definition) noexcept;
 
 		// ================================================================
 		// 实例信息
@@ -129,7 +129,10 @@ namespace cg::state
 		[[nodiscard]] auto is_trap_card() const noexcept -> bool;
 
 		// ================================================================
-		// 
+		// 变更(引擎内部使用)
 		// ================================================================
+
+		auto set_placement(const domain::Placement& placement) noexcept -> void;
+		auto set_move_provenance(const MoveProvenance& provenance) noexcept -> void;
 	};
 }

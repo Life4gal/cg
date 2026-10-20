@@ -17,6 +17,13 @@ namespace cg::state
 		return player_zones_[std::to_underlying(player)];
 	}
 
+	auto Field::player_zone_of(const domain::Player player) noexcept -> PlayerZone&
+	{
+		LIBASSERT_DEBUG_ASSERT(std::to_underlying(player) < player_zones_.size());
+
+		return player_zones_[std::to_underlying(player)];
+	}
+
 	Field::Field() noexcept
 		: player_zones_{}
 	// extra_monster_zones_{}
@@ -53,7 +60,7 @@ namespace cg::state
 			// 卡组
 			if (std::ranges::contains(player_zone.deck_zones, card))
 			{
-				return domain::Zone::EXTRA_DECK;
+				return domain::Zone::DECK;
 			}
 			// 额外卡组
 			if (std::ranges::contains(player_zone.extra_deck_zones, card))
@@ -561,8 +568,7 @@ namespace cg::state
 
 	namespace
 	{
-		template<std::same_as<PlayerZone::bag_zones_type> Zones>
-		auto collect_bag_zones(const Zones& zones, std::vector<CardInstanceId>& out) noexcept -> void
+		auto collect_bag_zones(const PlayerZone::bag_zones_type& zones, std::vector<CardInstanceId>& out) noexcept -> void
 		{
 			// bag中所有实例都是合法的
 			LIBASSERT_DEBUG_ASSERT(std::ranges::all_of(zones,&CardInstanceId::valid));
@@ -874,8 +880,7 @@ namespace cg::state
 		std::vector<CardInstanceId> out{};
 		out.reserve(count);
 
-		collect_zones(game, domain::Player::FIRST, zone, out);
-		collect_zones(game, domain::Player::SECOND, zone, out);
+		collect_zones(game, player, zone, out);
 		LIBASSERT_DEBUG_ASSERT(out.size() == count);
 
 		return out;
@@ -907,22 +912,17 @@ namespace cg::state
 		return out;
 	}
 
-	auto Field::is_location_empty([[maybe_unused]] const domain::Player player, const domain::ExtraMonsterLocation location) const noexcept -> bool
-	{
-		return is_location_empty(location);
-	}
-
-	auto Field::select_location_card([[maybe_unused]] const domain::Player player, const domain::ExtraMonsterLocation location) const noexcept -> CardInstanceId
-	{
-		return select_location_card(location);
-	}
-
 	auto Field::is_location_empty(const domain::Player player, const domain::MonsterLocation location) const noexcept -> bool
 	{
 		const auto& player_zone = player_zone_of(player);
 		LIBASSERT_DEBUG_ASSERT(std::to_underlying(location.column) < player_zone.monster_zones.size());
 
 		return !player_zone.monster_zones[std::to_underlying(location.column)].valid();
+	}
+
+	auto Field::is_location_empty([[maybe_unused]] const domain::Player player, const domain::ExtraMonsterLocation location) const noexcept -> bool
+	{
+		return is_location_empty(location);
 	}
 
 	auto Field::is_location_empty(const domain::ExtraMonsterLocation location) const noexcept -> bool
@@ -1028,6 +1028,11 @@ namespace cg::state
 		return player_zone.monster_zones[std::to_underlying(location.column)];
 	}
 
+	auto Field::select_location_card([[maybe_unused]] const domain::Player player, const domain::ExtraMonsterLocation location) const noexcept -> CardInstanceId
+	{
+		return select_location_card(location);
+	}
+
 	auto Field::select_location_card(const domain::ExtraMonsterLocation location) const noexcept -> CardInstanceId
 	{
 		LIBASSERT_DEBUG_ASSERT(std::to_underlying(location.column) < extra_monster_zones_.size());
@@ -1075,6 +1080,360 @@ namespace cg::state
 					}
 			},
 			location
+		);
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::DeckLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		// LIBASSERT_DEBUG_ASSERT(location.index < player_zone.deck_zones.size());
+
+		player_zone.deck_zones.push_back(card);
+		return false;
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::ExtraDeckLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		// LIBASSERT_DEBUG_ASSERT(location.index < player_zone.extra_deck_zones.size());
+
+		player_zone.extra_deck_zones.push_back(card);
+		return false;
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::HandLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		// LIBASSERT_DEBUG_ASSERT(location.index < player_zone.hand_zones.size());
+
+		player_zone.hand_zones.push_back(card);
+		return false;
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::GraveyardLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		// LIBASSERT_DEBUG_ASSERT(location.index < player_zone.graveyard_zones.size());
+
+		player_zone.graveyard_zones.push_back(card);
+		return false;
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::BanishedLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		// LIBASSERT_DEBUG_ASSERT(location.index < player_zone.banished_zones.size());
+
+		player_zone.banished_zones.push_back(card);
+		return false;
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::MonsterLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		LIBASSERT_DEBUG_ASSERT(std::to_underlying(location.column) < player_zone.monster_zones.size());
+
+		const auto prev = std::exchange(player_zone.monster_zones[std::to_underlying(location.column)], card);
+		return prev.valid();
+	}
+
+	auto Field::place([[maybe_unused]] const domain::Player player, const CardInstanceId card, const domain::ExtraMonsterLocation location) noexcept -> bool
+	{
+		return place(card, location);
+	}
+
+	auto Field::place(const CardInstanceId card, const domain::ExtraMonsterLocation location) noexcept -> bool
+	{
+		LIBASSERT_DEBUG_ASSERT(std::to_underlying(location.column) < extra_monster_zones_.size());
+
+		const auto prev = std::exchange(extra_monster_zones_[std::to_underlying(location.column)], card);
+		return prev.valid();
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::SpellTrapLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		LIBASSERT_DEBUG_ASSERT(std::to_underlying(location.column) < player_zone.spell_trap_zones.size());
+
+		const auto prev = std::exchange(player_zone.spell_trap_zones[std::to_underlying(location.column)], card);
+		return prev.valid();
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::FieldSpellLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+
+		const auto prev = std::exchange(player_zone.field_spell_zone, card);
+		return prev.valid();
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::Location location) noexcept -> bool
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[&]<typename Location>(const Location& l) noexcept -> bool
+					{
+						return this->place(player, card, l);
+					},
+					[](const domain::NotExistLocation&) noexcept -> bool
+					{
+						return false;
+					},
+			},
+			location
+		);
+	}
+
+	namespace
+	{
+		auto erase_bag_zones(PlayerZone::bag_zones_type& zones, const CardInstanceId card) noexcept -> bool
+		{
+			const auto it = std::ranges::find(zones, card);
+			if (it == zones.end())
+			{
+				return false;
+			}
+
+			zones.erase(it);
+			return true;
+		}
+
+		auto erase_field_zones(PlayerZone::field_zones_type& field_zones, const domain::FieldColumn column) noexcept -> bool
+		{
+			const auto prev = std::exchange(field_zones[std::to_underlying(column)], CardInstanceId{CardInstanceId::invalid_id});
+
+			return prev.valid();
+		}
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::DeckLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		// LIBASSERT_DEBUG_ASSERT(location.index < player_zone.deck_zones.size());
+
+		return erase_bag_zones(player_zone.deck_zones, card);
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::ExtraDeckLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		// LIBASSERT_DEBUG_ASSERT(location.index < player_zone.extra_deck_zones.size());
+
+		return erase_bag_zones(player_zone.extra_deck_zones, card);
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::HandLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		// LIBASSERT_DEBUG_ASSERT(location.index < player_zone.hand_zones.size());
+
+		return erase_bag_zones(player_zone.hand_zones, card);
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::GraveyardLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		// LIBASSERT_DEBUG_ASSERT(location.index < player_zone.graveyard_zones.size());
+
+		return erase_bag_zones(player_zone.graveyard_zones, card);
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::BanishedLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		// LIBASSERT_DEBUG_ASSERT(location.index < player_zone.banished_zones.size());
+
+		return erase_bag_zones(player_zone.banished_zones, card);
+	}
+
+	auto Field::remove(const domain::Player player, [[maybe_unused]] const CardInstanceId card, const domain::MonsterLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		LIBASSERT_DEBUG_ASSERT(std::to_underlying(location.column) < player_zone.monster_zones.size());
+
+		return erase_field_zones(player_zone.monster_zones, location.column);
+	}
+
+	auto Field::remove([[maybe_unused]] const domain::Player player, const CardInstanceId card, const domain::ExtraMonsterLocation location) noexcept -> bool
+	{
+		return remove(card, location);
+	}
+
+	auto Field::remove([[maybe_unused]] const CardInstanceId card, const domain::ExtraMonsterLocation location) noexcept -> bool
+	{
+		LIBASSERT_DEBUG_ASSERT(std::to_underlying(location.column) < extra_monster_zones_.size());
+
+		return erase_field_zones(extra_monster_zones_, location.column);
+	}
+
+	auto Field::remove(const domain::Player player, [[maybe_unused]] const CardInstanceId card, const domain::SpellTrapLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+		LIBASSERT_DEBUG_ASSERT(std::to_underlying(location.column) < player_zone.spell_trap_zones.size());
+
+		return erase_field_zones(player_zone.spell_trap_zones, location.column);
+	}
+
+	auto Field::remove(const domain::Player player, [[maybe_unused]] const CardInstanceId card, [[maybe_unused]] const domain::FieldSpellLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+
+		const auto prev = std::exchange(player_zone.field_spell_zone, CardInstanceId{CardInstanceId::invalid_id});
+		return prev.valid();
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::Location location) noexcept -> bool
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[&]<typename Location>(const Location& l) noexcept -> bool
+					{
+						return this->remove(player, card, l);
+					},
+					[&](const domain::NotExistLocation&) noexcept -> bool
+					{
+						return false;
+					},
+			},
+			location
+		);
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::DeckPlacement placement) noexcept -> bool
+	{
+		return place(player, card, domain::DeckLocation{.index = placement.index});
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::ExtraDeckPlacement placement) noexcept -> bool
+	{
+		return place(player, card, domain::ExtraDeckLocation{.index = placement.index});
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::HandPlacement placement) noexcept -> bool
+	{
+		return place(player, card, domain::HandLocation{.index = placement.index});
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::GraveyardPlacement placement) noexcept -> bool
+	{
+		return place(player, card, domain::GraveyardLocation{.index = placement.index});
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::BanishedPlacement placement) noexcept -> bool
+	{
+		return place(player, card, domain::BanishedLocation{.index = placement.index});
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::MonsterPlacement placement) noexcept -> bool
+	{
+		return place(player, card, domain::MonsterLocation{.column = placement.column});
+	}
+
+	auto Field::place([[maybe_unused]] const domain::Player player, const CardInstanceId card, const domain::ExtraMonsterPlacement placement) noexcept -> bool
+	{
+		return place(card, placement);
+	}
+
+	auto Field::place(const CardInstanceId card, const domain::ExtraMonsterPlacement placement) noexcept -> bool
+	{
+		return place(card, domain::ExtraMonsterLocation{.column = placement.column});
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::SpellTrapPlacement placement) noexcept -> bool
+	{
+		return place(player, card, domain::SpellTrapLocation{.column = placement.column});
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::FieldSpellPlacement placement) noexcept -> bool
+	{
+		return place(player, card, domain::FieldSpellLocation{});
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::Placement placement) noexcept -> bool
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[&]<typename Placement>(const Placement& p) noexcept -> bool
+					{
+						return this->place(player, card, p);
+					},
+					[](const domain::NotExistPlacement&) noexcept -> bool
+					{
+						return false;
+					},
+			},
+			placement
+		);
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::DeckPlacement placement) noexcept -> bool
+	{
+		return remove(player, card, domain::DeckLocation{.index = placement.index});
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::ExtraDeckPlacement placement) noexcept -> bool
+	{
+		return remove(player, card, domain::ExtraDeckLocation{.index = placement.index});
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::HandPlacement placement) noexcept -> bool
+	{
+		return remove(player, card, domain::HandLocation{.index = placement.index});
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::GraveyardPlacement placement) noexcept -> bool
+	{
+		return remove(player, card, domain::GraveyardLocation{.index = placement.index});
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::BanishedPlacement placement) noexcept -> bool
+	{
+		return remove(player, card, domain::BanishedLocation{.index = placement.index});
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::MonsterPlacement placement) noexcept -> bool
+	{
+		return remove(player, card, domain::MonsterLocation{.column = placement.column});
+	}
+
+	auto Field::remove([[maybe_unused]] const domain::Player player, const CardInstanceId card, const domain::ExtraMonsterPlacement placement) noexcept -> bool
+	{
+		return remove(card, placement);
+	}
+
+	auto Field::remove(const CardInstanceId card, const domain::ExtraMonsterPlacement placement) noexcept -> bool
+	{
+		return remove(card, domain::ExtraMonsterLocation{.column = placement.column});
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::SpellTrapPlacement placement) noexcept -> bool
+	{
+		return remove(player, card, domain::SpellTrapLocation{.column = placement.column});
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, [[maybe_unused]] const domain::FieldSpellPlacement placement) noexcept -> bool
+	{
+		return remove(player, card, domain::FieldSpellLocation{});
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::Placement placement) noexcept -> bool
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[&]<typename Placement>(const Placement& p) noexcept -> bool
+					{
+						return this->remove(player, card, p);
+					},
+					[](const domain::NotExistPlacement&) noexcept -> bool
+					{
+						return false;
+					},
+			},
+			placement
 		);
 	}
 }

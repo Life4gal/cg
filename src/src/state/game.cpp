@@ -42,6 +42,19 @@ namespace cg::state
 		return nullptr;
 	}
 
+	auto Game::find_instance_mutable(const CardInstanceId card) noexcept -> CardInstance*
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto it = std::ranges::find(card_instances, card, &CardInstance::id);
+			it != card_instances.end())
+		{
+			return &*it;
+		}
+
+		return nullptr;
+	}
+
 	auto Game::owner(const CardInstanceId card) const noexcept -> std::optional<domain::Player>
 	{
 		LIBASSERT_DEBUG_ASSERT(card.valid());
@@ -471,6 +484,169 @@ namespace cg::state
 			static_cast<auto (Field::*)(domain::Player player, domain::Location location) const noexcept -> CardInstanceId>(&Field::select_location_card),
 			player,
 			location
+		);
+	}
+
+	auto Game::place(const CardInstanceId card, const domain::DeckPlacement placement) noexcept -> bool
+	{
+		return do_place(card, placement);
+	}
+
+	auto Game::place(const CardInstanceId card, const domain::ExtraDeckPlacement placement) noexcept -> bool
+	{
+		return do_place(card, placement);
+	}
+
+	auto Game::place(const CardInstanceId card, const domain::HandPlacement placement) noexcept -> bool
+	{
+		return do_place(card, placement);
+	}
+
+	auto Game::place(const CardInstanceId card, const domain::GraveyardPlacement placement) noexcept -> bool
+	{
+		return do_place(card, placement);
+	}
+
+	auto Game::place(const CardInstanceId card, const domain::BanishedPlacement placement) noexcept -> bool
+	{
+		return do_place(card, placement);
+	}
+
+	auto Game::place(const CardInstanceId card, const domain::MonsterPlacement placement) noexcept -> bool
+	{
+		return do_place(card, placement);
+	}
+
+	auto Game::place(const CardInstanceId card, const domain::ExtraMonsterPlacement placement) noexcept -> bool
+	{
+		return do_place(card, placement);
+	}
+
+	auto Game::place(const CardInstanceId card, const domain::SpellTrapPlacement placement) noexcept -> bool
+	{
+		return do_place(card, placement);
+	}
+
+	auto Game::place(const CardInstanceId card, const domain::FieldSpellPlacement placement) noexcept -> bool
+	{
+		return do_place(card, placement);
+	}
+
+	auto Game::place(const CardInstanceId card, const domain::Placement placement) noexcept -> bool
+	{
+		return do_place(card, placement);
+	}
+
+	auto Game::move_to_deck(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason) noexcept -> bool
+	{
+		return do_move_to(
+			card,
+			reason,
+			[&](const domain::Player player) noexcept -> domain::DeckPlacement
+			{
+				const auto index = count_deck_zones_card(player);
+				return domain::DeckPlacement{.index = index};
+			}
+		);
+	}
+
+	auto Game::move_to_extra_deck(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason) noexcept -> bool
+	{
+		return do_move_to(
+			card,
+			reason,
+			[&](const domain::Player player) noexcept -> domain::ExtraDeckPlacement
+			{
+				const auto index = count_extra_deck_zones_card(player);
+				return domain::ExtraDeckPlacement{.index = index, .position = domain::Position::FACE_UP_ATTACK};
+			}
+		);
+	}
+
+	auto Game::move_to_hand(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::Position position) noexcept -> bool
+	{
+		return do_move_to(
+			card,
+			reason,
+			[&](const domain::Player player) noexcept -> domain::HandPlacement
+			{
+				const auto index = count_hand_zones_card(player);
+				return domain::HandPlacement{.index = index, .position = position};
+			}
+		);
+	}
+
+	auto Game::move_to_graveyard(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason) noexcept -> bool
+	{
+		return do_move_to(
+			card,
+			reason,
+			[&](const domain::Player player) noexcept -> domain::GraveyardPlacement
+			{
+				const auto index = count_graveyard_zones_card(player);
+				return domain::GraveyardPlacement{.index = index};
+			}
+		);
+	}
+
+	auto Game::move_to_banished(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::Position position) noexcept -> bool
+	{
+		return do_move_to(
+			card,
+			reason,
+			[&](const domain::Player player) noexcept -> domain::BanishedPlacement
+			{
+				const auto index = count_banished_zones_card(player);
+				return domain::BanishedPlacement{.index = index, .position = position};
+			}
+		);
+	}
+
+	auto Game::move_to_monster(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::MonsterPlacement placement) noexcept -> bool
+	{
+		return do_move_to(
+			card,
+			reason,
+			[&]([[maybe_unused]] const domain::Player player) noexcept -> domain::MonsterPlacement
+			{
+				return placement;
+			}
+		);
+	}
+
+	auto Game::move_to_extra_monster(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::ExtraMonsterPlacement placement) noexcept -> bool
+	{
+		return do_move_to(
+			card,
+			reason,
+			[&]([[maybe_unused]] const domain::Player player) noexcept -> domain::ExtraMonsterPlacement
+			{
+				return placement;
+			}
+		);
+	}
+
+	auto Game::move_to_spell_trap(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::SpellTrapPlacement placement) noexcept -> bool
+	{
+		return do_move_to(
+			card,
+			reason,
+			[&]([[maybe_unused]] const domain::Player player) noexcept -> domain::SpellTrapPlacement
+			{
+				return placement;
+			}
+		);
+	}
+
+	auto Game::move_to_field_spell(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::FieldSpellPlacement placement) noexcept -> bool
+	{
+		return do_move_to(
+			card,
+			reason,
+			[&]([[maybe_unused]] const domain::Player player) noexcept -> domain::FieldSpellPlacement
+			{
+				return placement;
+			}
 		);
 	}
 }

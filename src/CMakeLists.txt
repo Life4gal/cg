@@ -39,6 +39,12 @@ add_library(
 	src/flow/turn.cpp
 	src/flow/battle.cpp
 	src/flow/priority.cpp
+	
+	# ===================================
+	# EXECUTION
+	# ===================================
+
+	src/execution/interpreter.cpp
 )
 
 target_sources(
@@ -146,6 +152,14 @@ target_sources(
 	include/cg/flow/turn.hpp
 	include/cg/flow/battle.hpp
 	include/cg/flow/priority.hpp
+	
+	# ===================================
+	# EXECUTION
+	# ===================================
+
+	include/cg/execution/value.hpp
+	include/cg/execution/context.hpp
+	include/cg/execution/interpreter.hpp
 )
 
 target_include_directories(

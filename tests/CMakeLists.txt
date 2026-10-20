@@ -5,6 +5,8 @@ add_executable(
 
 	${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/dsl.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/interpreter.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/state.cpp
 )
 
 target_compile_definitions(

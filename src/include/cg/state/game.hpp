@@ -34,12 +34,14 @@ namespace cg::state
 		// 获取实例ID所属实例
 		[[nodiscard]] auto find_instance(CardInstanceId card) const noexcept -> const CardInstance*;
 
+	private:
+		[[nodiscard]] auto find_instance_mutable(CardInstanceId card) noexcept -> CardInstance*;
+
 		// ==================================================================================
 		// 卡牌实例ID + 接口 ==> instance + 接口 ==> instance->接口
 		// 卡牌实例ID对应实例不存在 => 返回null-opt
 		// ==================================================================================
 
-	private:
 		template<typename Interface, typename... Args>
 			requires std::is_invocable_v<Interface, const CardInstance*, Args...>
 		auto instance_invoke(const CardInstanceId card, Interface&& interface, Args&&... args) const noexcept -> std::optional<std::invoke_result_t<Interface, const CardInstance*, Args...>>
@@ -209,5 +211,85 @@ namespace cg::state
 		// 获取指定位置的卡牌实例
 		// 如果目标位置不存在卡牌实例则返回无效ID
 		[[nodiscard]] auto select_location_card(domain::Player player, domain::Location location) const noexcept -> CardInstanceId;
+
+		// ==================================================================================
+		// 指定位置的卡牌实例
+		// ==================================================================================
+
+	private:
+		template<typename Placement>
+		auto do_place(const CardInstanceId card, const Placement placement) noexcept -> bool
+		{
+			auto* instance = find_instance_mutable(card);
+			if (instance == nullptr)
+			{
+				return false;
+			}
+
+			const auto prev = instance->placement();
+			field.remove(instance->controller(), card, prev);
+
+			instance->set_placement({placement});
+			field.place(instance->controller(), card, placement);
+
+			return true;
+		}
+
+	public:
+		auto place(CardInstanceId card, domain::DeckPlacement placement) noexcept -> bool;
+		auto place(CardInstanceId card, domain::ExtraDeckPlacement placement) noexcept -> bool;
+		auto place(CardInstanceId card, domain::HandPlacement placement) noexcept -> bool;
+		auto place(CardInstanceId card, domain::GraveyardPlacement placement) noexcept -> bool;
+		auto place(CardInstanceId card, domain::BanishedPlacement placement) noexcept -> bool;
+		auto place(CardInstanceId card, domain::MonsterPlacement placement) noexcept -> bool;
+		auto place(CardInstanceId card, domain::ExtraMonsterPlacement placement) noexcept -> bool;
+		auto place(CardInstanceId card, domain::SpellTrapPlacement placement) noexcept -> bool;
+		auto place(CardInstanceId card, domain::FieldSpellPlacement placement) noexcept -> bool;
+
+		// 将卡放入其持有者的指定位置(自动从原位置移除) -- 指定实例不存在返回false
+		auto place(CardInstanceId card, domain::Placement placement) noexcept -> bool;
+
+	private:
+		template<typename PlacementGetter>
+			requires std::is_invocable_v<PlacementGetter, domain::Player>
+		auto do_move_to(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, PlacementGetter getter) noexcept -> bool
+		{
+			auto* instance = find_instance_mutable(card);
+			if (instance == nullptr)
+			{
+				return false;
+			}
+
+			instance->set_move_provenance(
+				{
+						.controller = instance->controller(),
+						.reason = reason,
+						.placement = instance->placement(),
+						.effect = dsl::EffectId{dsl::EffectId::invalid_id}
+				}
+			);
+
+			return this->place(card, getter(instance->owner()));
+		}
+
+	public:
+		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
+		auto move_to_deck(CardInstanceId card, utility::EnumMask<domain::Reason> reason) noexcept -> bool;
+		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
+		auto move_to_extra_deck(CardInstanceId card, utility::EnumMask<domain::Reason> reason) noexcept -> bool;
+		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
+		auto move_to_hand(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::Position position = domain::Position::FACE_DOWN_DEFENSE) noexcept -> bool;
+		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
+		auto move_to_graveyard(CardInstanceId card, utility::EnumMask<domain::Reason> reason) noexcept -> bool;
+		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
+		auto move_to_banished(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::Position position = domain::Position::FACE_UP_ATTACK) noexcept -> bool;
+		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
+		auto move_to_monster(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::MonsterPlacement placement) noexcept -> bool;
+		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
+		auto move_to_extra_monster(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::ExtraMonsterPlacement placement) noexcept -> bool;
+		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
+		auto move_to_spell_trap(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::SpellTrapPlacement placement) noexcept -> bool;
+		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
+		auto move_to_field_spell(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::FieldSpellPlacement placement) noexcept -> bool;
 	};
 }
