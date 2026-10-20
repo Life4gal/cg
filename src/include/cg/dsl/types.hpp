@@ -5,7 +5,7 @@
 
 #include <cg/utility/enum.hpp>
 
-#include <cg/dsl/ids.hpp>
+#include <cg/dsl/id.hpp>
 
 namespace cg::dsl
 {

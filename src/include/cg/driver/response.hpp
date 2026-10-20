@@ -625,7 +625,7 @@ namespace cg::driver::response
 	{
 	public:
 		// candidates.empty() => 无可发动的效果
-		std::map<state::CardInstanceId, std::vector<state::EffectId>> candidates;
+		std::map<state::CardInstanceId, std::vector<dsl::EffectId>> candidates;
 	};
 
 	// 查询指定效果的可选对象
@@ -693,7 +693,7 @@ namespace cg::driver::response
 	{
 	public:
 		// candidates.empty() => 无可连锁效果
-		std::map<state::CardInstanceId, std::vector<state::EffectId>> candidates;
+		std::map<state::CardInstanceId, std::vector<dsl::EffectId>> candidates;
 	};
 
 	// 选择连锁

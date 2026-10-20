@@ -7,6 +7,8 @@
 #include <cg/domain/reason.hpp>
 #include <cg/domain/summon.hpp>
 
+#include <cg/dsl/id.hpp>
+
 #include <cg/state/id.hpp>
 #include <cg/state/card_definition.hpp>
 
@@ -26,7 +28,7 @@ namespace cg::state
 			// 移动前位置
 			domain::Placement placement;
 			// 导致移动的效果
-			EffectId effect;
+			dsl::EffectId effect;
 		};
 
 		class SummonRecord

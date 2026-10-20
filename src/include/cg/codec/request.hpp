@@ -2445,7 +2445,7 @@ namespace cg::codec
 				return std::nullopt;
 			}
 			const auto effect_it = json.find("effect");
-			const auto effect = ValueCodec<state::EffectId>::decode(effect_it.value());
+			const auto effect = ValueCodec<dsl::EffectId>::decode(effect_it.value());
 			if (!effect.has_value())
 			{
 				return std::nullopt;
@@ -2460,7 +2460,7 @@ namespace cg::codec
 
 			object["player"] = ValueCodec<domain::Player>::encode(data.player);
 			object["card"] = ValueCodec<state::CardInstanceId>::encode(data.card);
-			object["effect"] = ValueCodec<state::EffectId>::encode(data.effect);
+			object["effect"] = ValueCodec<dsl::EffectId>::encode(data.effect);
 
 			return object;
 		}
@@ -2521,7 +2521,7 @@ namespace cg::codec
 				return std::nullopt;
 			}
 			const auto effect_it = json.find("effect");
-			const auto effect = ValueCodec<state::EffectId>::decode(effect_it.value());
+			const auto effect = ValueCodec<dsl::EffectId>::decode(effect_it.value());
 			if (!effect.has_value())
 			{
 				return std::nullopt;
@@ -2536,7 +2536,7 @@ namespace cg::codec
 
 			object["player"] = ValueCodec<domain::Player>::encode(data.player);
 			object["card"] = ValueCodec<state::CardInstanceId>::encode(data.card);
-			object["effect"] = ValueCodec<state::EffectId>::encode(data.effect);
+			object["effect"] = ValueCodec<dsl::EffectId>::encode(data.effect);
 
 			return object;
 		}
@@ -2604,7 +2604,7 @@ namespace cg::codec
 				return std::nullopt;
 			}
 			const auto effect_it = json.find("effect");
-			const auto effect = ValueCodec<state::EffectId>::decode(effect_it.value());
+			const auto effect = ValueCodec<dsl::EffectId>::decode(effect_it.value());
 			if (!effect.has_value())
 			{
 				return std::nullopt;
@@ -2625,7 +2625,7 @@ namespace cg::codec
 
 			object["player"] = ValueCodec<domain::Player>::encode(data.player);
 			object["card"] = ValueCodec<state::CardInstanceId>::encode(data.card);
-			object["effect"] = ValueCodec<state::EffectId>::encode(data.effect);
+			object["effect"] = ValueCodec<dsl::EffectId>::encode(data.effect);
 			object["targets"] = ValueCodec<std::vector<state::CardInstanceId>>::encode(data.targets);
 
 			return object;
@@ -2735,7 +2735,7 @@ namespace cg::codec
 				return std::nullopt;
 			}
 			const auto effect_it = json.find("effect");
-			const auto effect = ValueCodec<state::EffectId>::decode(effect_it.value());
+			const auto effect = ValueCodec<dsl::EffectId>::decode(effect_it.value());
 			if (!effect.has_value())
 			{
 				return std::nullopt;
@@ -2750,7 +2750,7 @@ namespace cg::codec
 
 			object["player"] = ValueCodec<domain::Player>::encode(data.player);
 			object["card"] = ValueCodec<state::CardInstanceId>::encode(data.card);
-			object["effect"] = ValueCodec<state::EffectId>::encode(data.effect);
+			object["effect"] = ValueCodec<dsl::EffectId>::encode(data.effect);
 
 			return object;
 		}

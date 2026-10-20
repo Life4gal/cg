@@ -614,7 +614,7 @@ namespace cg::driver::request
 	public:
 		domain::Player player;
 		state::CardInstanceId card;
-		state::EffectId effect;
+		dsl::EffectId effect;
 	};
 
 	// 选择发动效果
@@ -629,7 +629,7 @@ namespace cg::driver::request
 	public:
 		domain::Player player;
 		state::CardInstanceId card;
-		state::EffectId effect;
+		dsl::EffectId effect;
 	};
 
 	// 选择效果对象
@@ -648,7 +648,7 @@ namespace cg::driver::request
 	public:
 		domain::Player player;
 		state::CardInstanceId card;
-		state::EffectId effect;
+		dsl::EffectId effect;
 		std::vector<state::CardInstanceId> targets;
 	};
 
@@ -679,7 +679,7 @@ namespace cg::driver::request
 	public:
 		domain::Player player;
 		state::CardInstanceId card;
-		state::EffectId effect;
+		dsl::EffectId effect;
 	};
 
 	// =================================================================

@@ -8,6 +8,8 @@
 #include <cg/domain/field.hpp>
 #include <cg/domain/summon.hpp>
 
+#include <cg/dsl/id.hpp>
+
 #include <cg/state/id.hpp>
 
 namespace cg::driver::action
@@ -231,7 +233,7 @@ namespace cg::driver::action
 	{
 	public:
 		state::CardInstanceId card;
-		state::EffectId effect;
+		dsl::EffectId effect;
 
 		// TODO: 区分怪兽/魔陷效果?
 		// 怪兽效果可以手发(无需放置到场上)

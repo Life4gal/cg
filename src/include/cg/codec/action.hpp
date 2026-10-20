@@ -3,6 +3,7 @@
 #include <cg/driver/action.hpp>
 
 #include <cg/codec/domain.hpp>
+#include <cg/codec/dsl.hpp>
 #include <cg/codec/state.hpp>
 
 namespace cg::codec
@@ -666,7 +667,7 @@ namespace cg::codec
 				return std::nullopt;
 			}
 			const auto effect_it = json.find("effect");
-			const auto effect = ValueCodec<state::EffectId>::decode(effect_it.value());
+			const auto effect = ValueCodec<dsl::EffectId>::decode(effect_it.value());
 			if (!effect.has_value())
 			{
 				return std::nullopt;
@@ -680,7 +681,7 @@ namespace cg::codec
 			auto object = nlohmann::json::object();
 
 			object["card"] = ValueCodec<state::CardInstanceId>::encode(data.card);
-			object["effect"] = ValueCodec<state::EffectId>::encode(data.effect);
+			object["effect"] = ValueCodec<dsl::EffectId>::encode(data.effect);
 
 			return object;
 		}

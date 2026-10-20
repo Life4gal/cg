@@ -101,6 +101,7 @@ target_sources(
 
 	include/cg/codec/codec.hpp
 	include/cg/codec/domain.hpp
+	include/cg/codec/dsl.hpp
 	include/cg/codec/state.hpp
 	include/cg/codec/action.hpp
 	include/cg/codec/request.hpp
@@ -122,7 +123,7 @@ target_sources(
 	# DSL
 	# ===================================
 
-	include/cg/dsl/ids.hpp
+	include/cg/dsl/id.hpp
 	include/cg/dsl/archetype.hpp
 	include/cg/dsl/identity.hpp
 	include/cg/dsl/types.hpp

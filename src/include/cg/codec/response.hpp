@@ -1842,7 +1842,7 @@ namespace cg::codec
 			}
 
 			const auto candidates_it = json.find("candidates");
-			std::map<state::CardInstanceId, std::vector<state::EffectId>> candidates;
+			std::map<state::CardInstanceId, std::vector<dsl::EffectId>> candidates;
 			for (const auto& [key, value]: candidates_it.value().items())
 			{
 				const auto key_json = nlohmann::json::parse(key, nullptr, false);
@@ -1856,7 +1856,7 @@ namespace cg::codec
 				{
 					return std::nullopt;
 				}
-				auto effects = ValueCodec<std::vector<state::EffectId>>::decode(value);
+				auto effects = ValueCodec<std::vector<dsl::EffectId>>::decode(value);
 				if (!effects.has_value())
 				{
 					return std::nullopt;
@@ -1877,7 +1877,7 @@ namespace cg::codec
 			{
 				auto key = ValueCodec<state::CardInstanceId>::encode(card);
 
-				candidates[std::move(key)] = ValueCodec<std::vector<state::EffectId>>::encode(effects);
+				candidates[std::move(key)] = ValueCodec<std::vector<dsl::EffectId>>::encode(effects);
 			}
 			object["candidates"] = std::move(candidates);
 
@@ -2087,7 +2087,7 @@ namespace cg::codec
 			}
 
 			const auto candidates_it = json.find("candidates");
-			std::map<state::CardInstanceId, std::vector<state::EffectId>> candidates;
+			std::map<state::CardInstanceId, std::vector<dsl::EffectId>> candidates;
 			for (const auto& [key, value]: candidates_it.value().items())
 			{
 				const auto key_json = nlohmann::json::parse(key, nullptr, false);
@@ -2101,7 +2101,7 @@ namespace cg::codec
 				{
 					return std::nullopt;
 				}
-				auto effects = ValueCodec<std::vector<state::EffectId>>::decode(value);
+				auto effects = ValueCodec<std::vector<dsl::EffectId>>::decode(value);
 				if (!effects.has_value())
 				{
 					return std::nullopt;
@@ -2122,7 +2122,7 @@ namespace cg::codec
 			{
 				auto key = ValueCodec<state::CardInstanceId>::encode(card);
 
-				candidates[std::move(key)] = ValueCodec<std::vector<state::EffectId>>::encode(effects);
+				candidates[std::move(key)] = ValueCodec<std::vector<dsl::EffectId>>::encode(effects);
 			}
 			object["candidates"] = std::move(candidates);
 

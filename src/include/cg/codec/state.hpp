@@ -7,10 +7,8 @@
 // ReSharper disable once CppRedundantNamespaceDefinition
 namespace cg::codec
 {
-	template<typename T>
-	// state::CardInstanceId / state::EffectId 结构完全相同,一并处理
-		requires(std::is_same_v<T, state::CardInstanceId> || std::is_same_v<T, state::EffectId>)
-	class ValueCodec<T>
+	template<>
+	class ValueCodec<state::CardInstanceId>
 	{
 	public:
 		[[nodiscard]] static auto valid(const nlohmann::json& json) noexcept -> bool
@@ -18,18 +16,18 @@ namespace cg::codec
 			return json.is_number_unsigned();
 		}
 
-		[[nodiscard]] static auto decode(const nlohmann::json& json) noexcept -> std::optional<T>
+		[[nodiscard]] static auto decode(const nlohmann::json& json) noexcept -> std::optional<state::CardInstanceId>
 		{
 			if (!valid(json))
 			{
 				return std::nullopt;
 			}
 
-			const auto id = json.get<typename T::value_type>();
-			return T{id};
+			const auto id = json.get<state::CardInstanceId::value_type>();
+			return state::CardInstanceId{id};
 		}
 
-		[[nodiscard]] static auto encode(const T& id) noexcept -> nlohmann::json
+		[[nodiscard]] static auto encode(const state::CardInstanceId id) noexcept -> nlohmann::json
 		{
 			return id.raw();
 		}

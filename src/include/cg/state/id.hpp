@@ -10,12 +10,4 @@ namespace cg::state
 	public:
 		using Opacity::Opacity;
 	};
-
-	// 效果ID
-	// TODO: 已移动到dsl/ids.hpp
-	class EffectId : public utility::Opacity<class TagEffect>
-	{
-	public:
-		using Opacity::Opacity;
-	};
 }
