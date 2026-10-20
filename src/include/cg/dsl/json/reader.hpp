@@ -2,6 +2,7 @@
 
 #include <cg/utility/hash.hpp>
 
+#include <cg/dsl/vocabulary.hpp>
 #include <cg/dsl/card_script.hpp>
 #include <cg/dsl/script.hpp>
 
@@ -45,13 +46,13 @@ namespace cg::dsl::json
 		// dsl::Statement
 		// =====================================================================================
 
-		[[nodiscard]] auto read_statement_list(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<StatementList>;
-		[[nodiscard]] auto read_statement(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<Statement>;
+		[[nodiscard]] auto read_statement_list(const nlohmann::json& json, Phase phase, std::string_view path) noexcept -> std::optional<StatementList>;
+		[[nodiscard]] auto read_statement(const nlohmann::json& json, Phase phase, std::string_view path) noexcept -> std::optional<Statement>;
 		[[nodiscard]] auto read_statement_conjunction(const nlohmann::json::const_iterator& conjunction, std::string_view path) noexcept -> std::optional<Conjunction>;
-		[[nodiscard]] auto read_call_statement_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<ActionCall>;
+		[[nodiscard]] auto read_call_statement_body(const nlohmann::json& json, Phase phase, std::string_view path) noexcept -> std::optional<ActionCall>;
 		[[nodiscard]] auto read_guard_statement_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<Guard>;
-		[[nodiscard]] auto read_if_statement_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<If>;
-		[[nodiscard]] auto read_foreach_statement_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<ForEach>;
+		[[nodiscard]] auto read_if_statement_body(const nlohmann::json& json, Phase phase, std::string_view path) noexcept -> std::optional<If>;
+		[[nodiscard]] auto read_foreach_statement_body(const nlohmann::json& json, Phase phase, std::string_view path) noexcept -> std::optional<ForEach>;
 
 		// =====================================================================================
 		// dsl::Expression

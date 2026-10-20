@@ -6,7 +6,6 @@
 #include <cg/utility/functional.hpp>
 #include <cg/dsl/archetype.hpp>
 #include <cg/dsl/types.hpp>
-#include <cg/dsl/vocabulary.hpp>
 
 #include <libassert/assert.hpp>
 
@@ -76,7 +75,7 @@ namespace cg::dsl::json
 		return BindingId{current};
 	}
 
-	auto Reader::read_statement_list(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<StatementList>
+	auto Reader::read_statement_list(const nlohmann::json& json, const Phase phase, const std::string_view path) noexcept -> std::optional<StatementList>
 	{
 		if (!json.is_array())
 		{
@@ -91,7 +90,7 @@ namespace cg::dsl::json
 		{
 			const auto item_path = std::format("{}[{}]", path, index);
 
-			auto statement = read_statement(item, item_path);
+			auto statement = read_statement(item, phase, item_path);
 			if (!statement.has_value())
 			{
 				return std::nullopt;
@@ -103,7 +102,7 @@ namespace cg::dsl::json
 		return list;
 	}
 
-	auto Reader::read_statement(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<Statement>
+	auto Reader::read_statement(const nlohmann::json& json, const Phase phase, const std::string_view path) noexcept -> std::optional<Statement>
 	{
 		if (!json.is_object())
 		{
@@ -126,7 +125,7 @@ namespace cg::dsl::json
 
 		if (json.contains("call"))
 		{
-			auto body = read_call_statement_body(json, path);
+			auto body = read_call_statement_body(json, phase, path);
 			if (!body.has_value())
 			{
 				return std::nullopt;
@@ -148,7 +147,7 @@ namespace cg::dsl::json
 
 		if (json.contains("if"))
 		{
-			auto body = read_if_statement_body(json, path);
+			auto body = read_if_statement_body(json, phase, path);
 			if (!body.has_value())
 			{
 				return std::nullopt;
@@ -159,7 +158,7 @@ namespace cg::dsl::json
 
 		if (json.contains("foreach"))
 		{
-			auto body = read_foreach_statement_body(json, path);
+			auto body = read_foreach_statement_body(json, phase, path);
 			if (!body.has_value())
 			{
 				return std::nullopt;
@@ -196,7 +195,7 @@ namespace cg::dsl::json
 		return c;
 	}
 
-	auto Reader::read_call_statement_body(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<ActionCall>
+	auto Reader::read_call_statement_body(const nlohmann::json& json, const Phase phase, const std::string_view path) noexcept -> std::optional<ActionCall>
 	{
 		LIBASSERT_DEBUG_ASSERT(json.contains("call"));
 
@@ -226,6 +225,12 @@ namespace cg::dsl::json
 		if (def->kind != PrimitiveKind::SELECT && def->kind != PrimitiveKind::ACTION && def->kind != PrimitiveKind::CONTROL && def->kind != PrimitiveKind::STATIC)
 		{
 			fail(std::move(item_path), std::format("primitive `{}` is not usable as a statement", text));
+			return std::nullopt;
+		}
+
+		if (!def->phases.contains(phase))
+		{
+			fail(std::move(item_path), std::format("primitive `{}` is not usable in the `{}` phase", text, utility::to_string(phase)));
 			return std::nullopt;
 		}
 
@@ -293,7 +298,7 @@ namespace cg::dsl::json
 		return Guard{.condition = *std::move(condition)};
 	}
 
-	auto Reader::read_if_statement_body(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<If>
+	auto Reader::read_if_statement_body(const nlohmann::json& json, const Phase phase, const std::string_view path) noexcept -> std::optional<If>
 	{
 		LIBASSERT_DEBUG_ASSERT(json.contains("if"));
 		LIBASSERT_DEBUG_ASSERT(types_.get().contains("bool"));
@@ -320,7 +325,7 @@ namespace cg::dsl::json
 			const auto then_path = std::format("{}.then", path);
 
 			scopes_.emplace_back();
-			auto list = read_statement_list(it.value(), then_path);
+			auto list = read_statement_list(it.value(), phase, then_path);
 			scopes_.pop_back();
 
 			if (!list.has_value())
@@ -338,7 +343,7 @@ namespace cg::dsl::json
 			const auto else_path = std::format("{}.else", path);
 
 			scopes_.emplace_back();
-			auto list = read_statement_list(it.value(), else_path);
+			auto list = read_statement_list(it.value(), phase, else_path);
 			scopes_.pop_back();
 
 			if (!list.has_value())
@@ -352,7 +357,7 @@ namespace cg::dsl::json
 		return If{.condition = *std::move(condition), .then_body = std::move(then_body), .else_body = std::move(else_body)};
 	}
 
-	auto Reader::read_foreach_statement_body(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<ForEach>
+	auto Reader::read_foreach_statement_body(const nlohmann::json& json, const Phase phase, const std::string_view path) noexcept -> std::optional<ForEach>
 	{
 		LIBASSERT_DEBUG_ASSERT(json.contains("foreach"));
 		LIBASSERT_DEBUG_ASSERT(types_.get().contains("group"));
@@ -398,7 +403,7 @@ namespace cg::dsl::json
 		{
 			const auto do_path = std::format("{}.do", path);
 
-			auto list = read_statement_list(do_it.value(), do_path);
+			auto list = read_statement_list(do_it.value(), phase, do_path);
 			if (!list.has_value())
 			{
 				scopes_.pop_back();
@@ -1829,7 +1834,7 @@ namespace cg::dsl::json
 			{
 				const auto cost_path = std::format("{}.cost", path);
 
-				if (auto c = read_statement_list(it.value(), cost_path);
+				if (auto c = read_statement_list(it.value(), Phase::COST, cost_path);
 					!c.has_value())
 				{
 					error = true;
@@ -2036,7 +2041,7 @@ namespace cg::dsl::json
 		StatementList target;
 		StatementList effect;
 		bool error = false;
-		const auto do_read = [&](const std::string_view name, StatementList& out) noexcept -> void
+		const auto do_read = [&](const std::string_view name, const Phase phase, StatementList& out) noexcept -> void
 		{
 			if (error)
 			{
@@ -2048,7 +2053,7 @@ namespace cg::dsl::json
 			{
 				const auto name_path = std::format("{}.{}", path, name);
 
-				if (auto list = read_statement_list(it.value(), name_path);
+				if (auto list = read_statement_list(it.value(), phase, name_path);
 					!list.has_value())
 				{
 					error = true;
@@ -2062,9 +2067,9 @@ namespace cg::dsl::json
 
 		// 效果帧作用域(cost/target/effect共享)
 		scopes_.emplace_back();
-		do_read("cost", cost);
-		do_read("target", target);
-		do_read("effect", effect);
+		do_read("cost", Phase::COST, cost);
+		do_read("target", Phase::TARGET, target);
+		do_read("effect", Phase::RESOLVE, effect);
 		scopes_.pop_back();
 
 		if (error)

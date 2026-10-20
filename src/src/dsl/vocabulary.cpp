@@ -204,6 +204,14 @@ namespace cg::dsl
 			{
 				errors.push_back(std::format("[{}] unregistered return type", primitive_index));
 			}
+			if (primitive.phases.empty())
+			{
+				errors.push_back(std::format("[{}] primitive `{}` has no phase", primitive_index, primitive.name));
+			}
+			else if (primitive.kind == PrimitiveKind::STATIC && !primitive.phases.contains(Phase::STATIC))
+			{
+				errors.push_back(std::format("[{}] static primitive `{}` has no STATIC phase", primitive_index, primitive.name));
+			}
 
 			for (const auto [param_index, param]: primitive.params | std::views::enumerate)
 			{

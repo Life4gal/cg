@@ -22,7 +22,7 @@ namespace cg::dsl
 		TARGET,
 		// 解析/处理
 		RESOLVE,
-		// 静态修饰符(非连锁段;MODEL 决策 3.3)
+		// 静态修饰符(非连锁段)
 		STATIC,
 	};
 
