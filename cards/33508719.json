@@ -1,0 +1,45 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["FLIP", "EFFECT"],
+		"monster": {
+			"attribute": "EARTH",
+			"race": "ROCK",
+			"level": 2,
+			"attack": 700,
+			"defense": 600
+		}
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {
+				"mode": "trigger",
+				"source": {"event": "FLIP"},
+				"timing": "WHEN",
+				"optional": false
+			},
+			"effect": [
+				{
+					"call": "discard",
+					"args": {
+						"cards": {
+							"call": "find_cards",
+							"args": {
+								"players": ["SELF", "OPPONENT"],
+								"zones": ["HAND"]
+							}
+						}
+					}
+				},
+				{
+					"call": "draw",
+					"args": {
+						"players": ["SELF", "OPPONENT"],
+						"count": 5
+					}
+				}
+			]
+		}
+	]
+}
