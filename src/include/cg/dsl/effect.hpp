@@ -5,6 +5,8 @@
 #include <variant>
 #include <vector>
 
+#include <cg/domain/card.hpp>
+#include <cg/domain/effect.hpp>
 #include <cg/domain/field.hpp>
 
 #include <cg/dsl/expression.hpp>
@@ -56,6 +58,15 @@ namespace cg::dsl
 	};
 
 	class ActivationKind : public std::variant<CardActivation, Ignition, Trigger, Quick> {};
+
+	// ===========================================
+	// 咒文速度
+	// ===========================================
+
+	// 由卡类型/子类型与激活窗口推导:
+	// - `CardActivation` = 卡自身的发动(魔法/陷阱),速度由卡类型决定;
+	// - `Ignition` / `Trigger` = 1,`Quick` = 2
+	[[nodiscard]] auto speed_of(domain::CardType type, utility::EnumMask<domain::CardSubtype> subtypes, const ActivationKind& activation) noexcept -> domain::EffectSpeed;
 
 	// ===========================================
 	// 使用次数限制

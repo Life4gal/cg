@@ -27,6 +27,7 @@ add_library(
 
 	src/dsl/archetype.cpp
 	src/dsl/types.cpp
+	src/dsl/effect.cpp
 	src/dsl/vocabulary.cpp
 
 	src/dsl/json/reader.cpp

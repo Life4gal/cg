@@ -50,6 +50,11 @@ namespace cg::domain
 		COUNTER = 3,
 	};
 
+	[[nodiscard]] constexpr auto is_fast_effect(const EffectSpeed speed) noexcept -> bool
+	{
+		return speed == EffectSpeed::QUICK || speed == EffectSpeed::COUNTER;
+	}
+
 	// 限定静态效果适用时卡牌所在区域(只有效果所属卡牌位于指定区域才有效果)
 	enum class StaticEffectRegion : std::uint8_t
 	{
