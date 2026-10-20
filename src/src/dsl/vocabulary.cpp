@@ -76,6 +76,28 @@ namespace cg::dsl
 			type_id("bool"),
 			"卡是否属于指定系列/字段"
 		);
+		do_register(
+			"is_attribute",
+			PrimitiveKind::PREDICATE,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "attribute", .kind = ParamDef::Value{.type = type_id("attribute")}, .required = true},
+			},
+			type_id("bool"),
+			"卡是否具有指定属性"
+		);
+		do_register(
+			"is_race",
+			PrimitiveKind::PREDICATE,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "race", .kind = ParamDef::Value{.type = type_id("race")}, .required = true},
+			},
+			type_id("bool"),
+			"卡是否具有指定种族"
+		);
 
 		// ---------------- 区域查询(非取对象) ----------------
 

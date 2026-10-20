@@ -176,4 +176,16 @@ namespace cg::dsl
 				CompareOperation,
 				ArithmeticOperation
 			> {};
+
+	// 作用域表达式:在隐式元素(记号`$`)的作用域内求值
+	class ScopedExpression
+	{
+	public:
+		// `$` 的类型
+		TypeId element;
+		// 表达式本身(内部可用 `$` 引用元素)
+		Expression expression;
+
+		[[nodiscard]] constexpr auto operator==(const ScopedExpression&) const -> bool = default;
+	};
 }

@@ -1,0 +1,52 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["FIELD"]
+	},
+	"effects": [
+		{
+			"type": "static",
+			"apply_to": {
+				"or": [
+					{
+						"call": "is_race",
+						"args": {
+							"card": "$",
+							"race": "DRAGON"
+						}
+					},
+					{
+						"call": "is_race",
+						"args": {
+							"card": "$",
+							"race": "WINGED_BEAST"
+						}
+					},
+					{
+						"call": "is_race",
+						"args": {
+							"card": "$",
+							"race": "THUNDER"
+						}
+					}
+				]
+			},
+			"modifiers": [
+				{
+					"call": "add_numeric_property",
+					"args": {
+						"property": "ATTACK",
+						"value": 200
+					}
+				},
+				{
+					"call": "add_numeric_property",
+					"args": {
+						"property": "DEFENSE",
+						"value": 200
+					}
+				}
+			]
+		}
+	]
+}

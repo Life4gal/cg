@@ -163,8 +163,8 @@ namespace cg::dsl
 	class StaticEffect
 	{
 	public:
-		// 适用对象(对候选卡的谓词)
-		Expression apply_to;
+		// 适用对象(作用域表达式:对候选卡的谓词)
+		ScopedExpression apply_to;
 		// 生效条件
 		std::optional<Expression> condition;
 		// 修饰符列表

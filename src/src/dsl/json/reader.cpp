@@ -2329,7 +2329,7 @@ namespace cg::dsl::json
 	{
 		LIBASSERT_DEBUG_ASSERT(json.is_object());
 		LIBASSERT_DEBUG_ASSERT(json.contains("type") && json.at("type").is_string() && json.at("type").get_ref<const nlohmann::json::string_t&>() == "static");
-		LIBASSERT_DEBUG_ASSERT(types_.get().contains("bool"));
+		LIBASSERT_DEBUG_ASSERT(types_.get().contains("bool") && types_.get().contains("card"));
 
 		if (!only_specified_keys(json, {"type", "apply_to", "condition", "modifiers"}))
 		{
@@ -2345,7 +2345,11 @@ namespace cg::dsl::json
 			fail(std::move(apply_to_path), "missing");
 			return std::nullopt;
 		}
+
+		element_scopes_.push_back(types_.get().find("card")->id);
 		auto apply_to = read_expression(apply_to_it.value(), types_.get().find("bool")->id, apply_to_path);
+		element_scopes_.pop_back();
+
 		if (!apply_to.has_value())
 		{
 			return std::nullopt;
@@ -2392,7 +2396,12 @@ namespace cg::dsl::json
 			}
 		}
 
-		return StaticEffect{.apply_to = *std::move(apply_to), .condition = std::move(condition), .modifiers = std::move(modifiers)};
+		return StaticEffect
+		{
+				.apply_to = {.element = types_.get().find("card")->id, .expression = *std::move(apply_to)},
+				.condition = std::move(condition),
+				.modifiers = std::move(modifiers),
+		};
 	}
 
 	auto Reader::read_static_effect_modifier(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<StaticModifier>
