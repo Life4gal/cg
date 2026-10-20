@@ -379,6 +379,28 @@ namespace cg::dsl
 			type_id("void"),
 			"变更表示形式"
 		);
+		do_register(
+			"effect_damage",
+			PrimitiveKind::ACTION,
+			{Phase::RESOLVE},
+			{
+					{.name = "players", .kind = ParamDef::Value{.type = type_id("players")}, .required = true},
+					{.name = "amount", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+			},
+			type_id("void"),
+			"对指定玩家造成效果伤害"
+		);
+		do_register(
+			"recover_life",
+			PrimitiveKind::ACTION,
+			{Phase::RESOLVE},
+			{
+					{.name = "players", .kind = ParamDef::Value{.type = type_id("players")}, .required = true},
+					{.name = "amount", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+			},
+			type_id("void"),
+			"指定玩家回复生命值"
+		);
 
 		// ---------------- 静态修饰符 ----------------
 

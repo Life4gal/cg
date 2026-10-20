@@ -1,0 +1,21 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["NORMAL"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"effect": [
+				{
+					"call": "effect_damage",
+					"args": {
+						"players": ["OPPONENT"],
+						"amount": 200
+					}
+				}
+			]
+		}
+	]
+}

@@ -1,0 +1,21 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["NORMAL"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"effect": [
+				{
+					"call": "recover_life",
+					"args": {
+						"players": ["SELF"],
+						"amount": 1000
+					}
+				}
+			]
+		}
+	]
+}
