@@ -71,6 +71,7 @@ namespace cg::dsl
 
 		// domain/player.hpp
 		do_register("player", ValueClass::ENUM, make_resolver<domain::PlayerSelector>());
+		do_register("players", ValueClass::ENUM_SET, make_resolver<domain::PlayerSelector>());
 		// domain/card.hpp
 		do_register("card_type", ValueClass::ENUM, make_resolver<domain::CardType>());
 		do_register("card_subtype", ValueClass::ENUM, make_resolver<domain::CardSubtype>());

@@ -84,25 +84,25 @@ namespace cg::dsl
 			PrimitiveKind::QUERY,
 			all_phases,
 			{
-					{.name = "player", .kind = ParamDef::Value{.type = type_id("player")}, .required = true},
+					{.name = "players", .kind = ParamDef::Value{.type = type_id("players")}, .required = true},
 					{.name = "zones", .kind = ParamDef::Value{.type = type_id("zones")}, .required = true},
 					{.name = "filter", .kind = ParamDef::Scoped{.element = type_id("card"), .type = type_id("bool")}, .required = false},
 			},
 			type_id("group"),
-			"指定玩家区域中满足过滤的全部卡(非取对象)"
+			"指定玩家范围/区域中满足过滤的全部卡(非取对象)"
 		);
 		do_register(
 			"exists_matching",
 			PrimitiveKind::QUERY,
 			all_phases,
 			{
-					{.name = "player", .kind = ParamDef::Value{.type = type_id("player")}, .required = true},
+					{.name = "players", .kind = ParamDef::Value{.type = type_id("players")}, .required = true},
 					{.name = "zones", .kind = ParamDef::Value{.type = type_id("zones")}, .required = true},
 					{.name = "min", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
 					{.name = "filter", .kind = ParamDef::Scoped{.element = type_id("card"), .type = type_id("bool")}, .required = false},
 			},
 			type_id("bool"),
-			"指定玩家区域中是否至少有min张满足过滤的卡"
+			"指定玩家范围/区域中是否至少有min张满足过滤的卡"
 		);
 		do_register(
 			"current_attack",
@@ -134,13 +134,14 @@ namespace cg::dsl
 			PrimitiveKind::SELECT,
 			{Phase::TARGET},
 			{
-					{.name = "player", .kind = ParamDef::Value{.type = type_id("player")}, .required = true},
-					{.name = "zone", .kind = ParamDef::Value{.type = type_id("zone")}, .required = true},
+					{.name = "players", .kind = ParamDef::Value{.type = type_id("players")}, .required = true},
+					{.name = "zones", .kind = ParamDef::Value{.type = type_id("zones")}, .required = true},
 					{.name = "min", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
 					{.name = "max", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+					{.name = "filter", .kind = ParamDef::Scoped{.element = type_id("card"), .type = type_id("bool")}, .required = false},
 			},
 			type_id("group"),
-			"在指定玩家/区域中取对象(仅TARGET阶段)"
+			"在指定玩家范围/区域中取对象(仅TARGET阶段)"
 		);
 
 		// ---------------- 动作 ----------------

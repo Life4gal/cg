@@ -1,0 +1,35 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["NORMAL"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"condition": {
+				"call": "exists_matching",
+				"args": {
+					"players": ["OPPONENT"],
+					"zones": ["MONSTER", "EXTRA_MONSTER"],
+					"min": 1
+				}
+			},
+			"effect": [
+				{
+					"call": "destroy",
+					"args": {
+						"cards": {
+							"call": "find_cards",
+							"args": {
+								"players": ["OPPONENT"],
+								"zones": ["MONSTER", "EXTRA_MONSTER"]
+							}
+						},
+						"reason": "EFFECT"
+					}
+				}
+			]
+		}
+	]
+}

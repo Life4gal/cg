@@ -1,0 +1,22 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["FUSION"],
+		"monster": {
+			"attribute": "LIGHT",
+			"race": "DRAGON",
+			"level": 12,
+			"attack": 4500,
+			"defense": 3800
+		},
+		"archetypes": ["BLUE-EYES"]
+	},
+	"summons": [
+		{
+			"method": "fusion",
+			"materials": [
+				{"card": 89631139, "count": 3}
+			]
+		}
+	]
+}

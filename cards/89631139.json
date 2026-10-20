@@ -1,0 +1,14 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["NORMAL"],
+		"monster": {
+			"attribute": "LIGHT",
+			"race": "DRAGON",
+			"level": 8,
+			"attack": 3000,
+			"defense": 2500
+		},
+		"archetypes": ["BLUE-EYES"]
+	}
+}

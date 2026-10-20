@@ -1,0 +1,48 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["NORMAL"],
+		"archetypes": ["HARPIE"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"condition": {
+				"call": "exists_matching",
+				"args": {
+					"players": ["OPPONENT"],
+					"zones": ["MONSTER", "EXTRA_MONSTER", "SPELL_TRAP", "FIELD_SPELL"],
+					"min": 1,
+					"filter": {
+						"or": [
+							{"call": "is_card_type", "args": {"card": "$", "card_type": "SPELL"}},
+							{"call": "is_card_type", "args": {"card": "$", "card_type": "TRAP"}}
+						]
+					}
+				}
+			},
+			"effect": [
+				{
+					"call": "destroy",
+					"args": {
+						"cards": {
+							"call": "find_cards",
+							"args": {
+								"players": ["OPPONENT"],
+								"zones": ["MONSTER", "EXTRA_MONSTER", "SPELL_TRAP", "FIELD_SPELL"],
+								"filter": {
+									"or": [
+										{"call": "is_card_type", "args": {"card": "$", "card_type": "SPELL"}},
+										{"call": "is_card_type", "args": {"card": "$", "card_type": "TRAP"}}
+									]
+								}
+							}
+						},
+						"reason": "EFFECT"
+					}
+				}
+			]
+		}
+	]
+}
