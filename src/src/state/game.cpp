@@ -290,6 +290,11 @@ namespace cg::state
 		return instance_invoke(card, &CardInstance::is_defense, defense);
 	}
 
+	auto Game::set_life_points(const domain::Player player, const std::underlying_type_t<domain::AttackDefense> value) noexcept -> void
+	{
+		return field_invoke(&Field::set_life_points, player, value);
+	}
+
 	auto Game::life_points(const domain::Player player) const noexcept -> std::underlying_type_t<domain::AttackDefense>
 	{
 		return field_invoke(&Field::life_points, player);

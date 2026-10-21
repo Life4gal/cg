@@ -44,23 +44,6 @@ namespace cg::flow
 				domain::Phase::END,
 		};
 
-		// 回合内玩家状态
-		// TODO: 这个状态放这里吗?
-		class State
-		{
-		public:
-			// 是否已抽卡(抽卡阶段)
-			bool drew_in_draw_phase;
-			// 是否已进行通常召唤
-			bool normal_summoned;
-			// 是否已进行灵摆召唤
-			bool pendulum_summoned;
-			// 本回合是否已进入过战斗阶段
-			bool entered_battle_phase;
-			// 本回合是否已进行过攻击
-			bool attacked;
-		};
-
 		// 回合数/ID
 		using id_type = std::uint16_t;
 
@@ -71,10 +54,6 @@ namespace cg::flow
 		id_type turn_id_;
 		// 当前阶段
 		domain::Phase phase_;
-		// 当前回合玩家的回合内状态
-		State state_;
-
-		[[nodiscard]] static auto default_state() noexcept -> State;
 
 	public:
 		explicit Turn() noexcept;
@@ -90,10 +69,6 @@ namespace cg::flow
 
 		// 当前阶段
 		[[nodiscard]] auto phase() const noexcept -> domain::Phase;
-
-		// 当前回合玩家的回合内状态
-		[[nodiscard]] auto state() noexcept -> State&;
-		[[nodiscard]] auto state() const noexcept -> const State&;
 
 		// 可推进到的阶段顺序 -- 不是当前阶段可推进到的阶段顺序,而是当前回合可推进到的阶段顺序
 		[[nodiscard]] auto available_phase_order() const noexcept -> std::span<const domain::Phase>;

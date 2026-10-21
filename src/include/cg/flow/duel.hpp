@@ -1,5 +1,8 @@
 #pragma once
 
+#include <optional>
+#include <vector>
+
 #include <cg/state/game.hpp>
 
 #include <cg/flow/battle.hpp>
@@ -12,13 +15,33 @@ namespace cg::flow
 	class Duel
 	{
 	public:
-		//
+		// 回合内玩家状态
+		class TurnState
+		{
+		public:
+			// 是否已抽卡(抽卡阶段)
+			bool drew_in_draw_phase = false;
+			// 是否已进行通常召唤
+			bool normal_summoned = false;
+			// 是否已进行灵摆召唤
+			bool pendulum_summoned = false;
+			// 本回合是否已进入过战斗阶段
+			bool entered_battle_phase = false;
+			// 本回合是否已进行过攻击
+			bool attacked = false;
+
+			// 本回合已攻击的怪兽
+			std::vector<state::CardInstanceId> attacked_monsters;
+		};
 
 	private:
 		state::Game game_;
+
 		Turn turn_;
 		Priority priority_;
 		Battle battle_;
+
+		TurnState state_;
 
 	public:
 		Duel() noexcept;
@@ -35,6 +58,9 @@ namespace cg::flow
 		[[nodiscard]] auto battle() noexcept -> Battle&;
 		[[nodiscard]] auto battle() const noexcept -> const Battle&;
 
+		// 胜负(生命值 ≤ 0)
+		[[nodiscard]] auto winner() const noexcept -> std::optional<domain::Player>;
+
 		// 抽卡阶段抽1张;卡组为空返回 false
 		auto draw_for_turn() noexcept -> bool;
 
@@ -43,6 +69,9 @@ namespace cg::flow
 
 		// 盖放怪兽(里侧守备表示)
 		auto set_monster(state::CardInstanceId card, domain::FieldColumn column) noexcept -> bool;
+
+		// 攻击宣言:target = 空表示直接攻击
+		auto declare_attack(state::CardInstanceId attacker, std::optional<state::CardInstanceId> target) noexcept -> bool;
 
 		// 推进阶段(委托Turn::advance_phase)
 		auto change_phase() noexcept -> bool;

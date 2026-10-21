@@ -29,6 +29,13 @@ namespace cg::state
 	// extra_monster_zones_{}
 	{}
 
+	auto Field::set_life_points(const domain::Player player, const std::underlying_type_t<domain::AttackDefense> value) noexcept -> void
+	{
+		auto& player_zone = player_zone_of(player);
+
+		player_zone.life_points = value;
+	}
+
 	auto Field::life_points(const domain::Player player) const noexcept -> std::underlying_type_t<domain::AttackDefense>
 	{
 		const auto& player_zone = player_zone_of(player);

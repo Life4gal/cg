@@ -4,23 +4,10 @@
 
 namespace cg::flow
 {
-	auto Turn::default_state() noexcept -> State
-	{
-		return
-		{
-				.drew_in_draw_phase = false,
-				.normal_summoned = false,
-				.pendulum_summoned = false,
-				.entered_battle_phase = false,
-				.attacked = false,
-		};
-	}
-
 	Turn::Turn() noexcept
 		: turn_player_{domain::Player::FIRST},
 		  turn_id_{1},
-		  phase_{domain::Phase::DRAW},
-		  state_{default_state()} {}
+		  phase_{domain::Phase::DRAW} {}
 
 	auto Turn::turn_player() const noexcept -> domain::Player
 	{
@@ -40,16 +27,6 @@ namespace cg::flow
 	auto Turn::phase() const noexcept -> domain::Phase
 	{
 		return phase_;
-	}
-
-	auto Turn::state() noexcept -> State&
-	{
-		return state_;
-	}
-
-	auto Turn::state() const noexcept -> const State&
-	{
-		return state_;
 	}
 
 	auto Turn::available_phase_order() const noexcept -> std::span<const domain::Phase>
@@ -106,6 +83,5 @@ namespace cg::flow
 		turn_player_ = domain::opponent_of(turn_player_);
 		turn_id_ += 1;
 		phase_ = domain::Phase::DRAW;
-		state_ = default_state();
 	}
 }
