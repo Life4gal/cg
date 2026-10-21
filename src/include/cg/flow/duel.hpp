@@ -15,6 +15,7 @@
 
 #include <cg/flow/battle.hpp>
 #include <cg/flow/priority.hpp>
+#include <cg/flow/stat_resolver.hpp>
 #include <cg/flow/turn.hpp>
 
 namespace cg::flow
@@ -123,15 +124,13 @@ namespace cg::flow
 		execution::ScriptRegistry scripts_;
 		execution::Interpreter interpreter_;
 
+		StatResolver stats_;
+
 		// ================================================================
 		// 内部动作
 		// ================================================================
 
 		auto perform_tribute_summon(state::CardInstanceId card, domain::FieldColumn column, std::span<const state::CardInstanceId> tributes, domain::Position position) noexcept -> bool;
-
-		// 当前攻击力/守备力(含静态修正)
-		[[nodiscard]] auto attack_value(const state::CardInstance& card) noexcept -> std::underlying_type_t<domain::AttackDefense>;
-		[[nodiscard]] auto defense_value(const state::CardInstance& card) noexcept -> std::underlying_type_t<domain::AttackDefense>;
 
 		// 使用次数
 		[[nodiscard]] auto usage_owner(dsl::UsageBasis basis, state::CardInstanceId card) const noexcept -> UsageKey::owner_type;

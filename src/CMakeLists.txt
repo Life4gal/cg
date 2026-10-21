@@ -36,10 +36,11 @@ add_library(
 	# FLOW
 	# ===================================
 
-	src/flow/duel.cpp
 	src/flow/turn.cpp
 	src/flow/battle.cpp
 	src/flow/priority.cpp
+	src/flow/stat_resolver.cpp
+	src/flow/duel.cpp
 	
 	# ===================================
 	# EXECUTION
@@ -151,10 +152,11 @@ target_sources(
 	# FLOW
 	# ===================================
 
-	include/cg/flow/duel.hpp
 	include/cg/flow/turn.hpp
 	include/cg/flow/battle.hpp
 	include/cg/flow/priority.hpp
+	include/cg/flow/stat_resolver.hpp
+	include/cg/flow/duel.hpp
 	
 	# ===================================
 	# EXECUTION

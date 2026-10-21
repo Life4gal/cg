@@ -105,30 +105,6 @@ namespace cg::flow
 		return true;
 	}
 
-	auto Duel::attack_value(const state::CardInstance& card) noexcept -> std::underlying_type_t<domain::AttackDefense>
-	{
-		const auto controller = card.controller();
-		const auto base = card.attack();
-		const auto id = card.id();
-
-		execution::Context context{game_, controller};
-		const auto bonus = interpreter_.static_numeric_bonus(scripts_, id, domain::NumericProperty::ATTACK, context);
-
-		return static_cast<std::underlying_type_t<domain::AttackDefense>>(base + bonus);
-	}
-
-	auto Duel::defense_value(const state::CardInstance& card) noexcept -> std::underlying_type_t<domain::AttackDefense>
-	{
-		const auto controller = card.controller();
-		const auto base = card.defense();
-		const auto id = card.id();
-
-		execution::Context context{game_, controller};
-		const auto bonus = interpreter_.static_numeric_bonus(scripts_, id, domain::NumericProperty::DEFENSE, context);
-
-		return static_cast<std::underlying_type_t<domain::AttackDefense>>(base + bonus);
-	}
-
 	Duel::Duel() noexcept
 		:
 		// game_{},
@@ -140,7 +116,8 @@ namespace cg::flow
 		// types_{},
 		vocabulary_{types_},
 		// scripts_{},
-		interpreter_{vocabulary_} {}
+		interpreter_{vocabulary_},
+		stats_{game_, scripts_, interpreter_} {}
 
 	auto Duel::game() noexcept -> state::Game&
 	{
@@ -725,7 +702,7 @@ namespace cg::flow
 		state_.attacked = true;
 		state_.entered_battle_phase = true;
 
-		const auto attacker_attack = attack_value(*instance);
+		const auto attacker_attack = stats_.attack(*instance);
 
 		// 战斗步骤:攻击宣言 → 伤害步骤
 		battle_.reset();
@@ -797,7 +774,7 @@ namespace cg::flow
 
 			if (target_position == domain::Position::FACE_UP_ATTACK)
 			{
-				if (const auto target_attack = attack_value(*target_instance);
+				if (const auto target_attack = stats_.attack(*target_instance);
 					attacker_attack > target_attack)
 				{
 					destroy_target = *target;
@@ -816,7 +793,7 @@ namespace cg::flow
 			}
 			else
 			{
-				if (const auto target_defense = defense_value(*target_instance);
+				if (const auto target_defense = stats_.defense(*target_instance);
 					attacker_attack > target_defense)
 				{
 					destroy_target = *target;
