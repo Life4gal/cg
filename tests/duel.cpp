@@ -9,7 +9,8 @@ namespace
 	[[nodiscard]] auto make_monster(
 		const domain::CardCode code,
 		const std::underlying_type_t<domain::AttackDefense> attack = 1000,
-		const std::underlying_type_t<domain::AttackDefense> defense = 1000
+		const std::underlying_type_t<domain::AttackDefense> defense = 1000,
+		const std::underlying_type_t<domain::LevelRank> level = 4
 	) -> state::CardDefinition
 	{
 		state::CardDefinition definition{};
@@ -20,7 +21,7 @@ namespace
 		{
 				.attribute = domain::Attribute::EARTH,
 				.race = domain::Race::DRAGON,
-				.level = 4,
+				.level = level,
 				.attack = attack,
 				.defense = defense,
 				.pendulum_scale = std::nullopt,
@@ -224,4 +225,76 @@ TEST_CASE("flow::Duel flips a face-down defender before damage calculation")
 	CHECK(game.zone_of(defender) == domain::Zone::GRAVEYARD);
 	CHECK(game.life_points(domain::Player::FIRST) == 8000);
 	CHECK(game.life_points(domain::Player::SECOND) == 8000);
+}
+
+TEST_CASE("flow::Duel tribute summons a level 5 monster")
+{
+	constexpr domain::CardCode high_code{91000020};
+	constexpr domain::CardCode low_code{91000021};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(high_code, make_monster(high_code, 2000, 2000, 5));
+	game.register_definition(low_code, make_monster(low_code, 1000, 1000));
+
+	duel.change_phase(); // STANDBY
+	duel.change_phase(); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	const auto high = game.create_instance(high_code, domain::Player::FIRST);
+	REQUIRE(game.place(high, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+
+	const auto tribute = game.create_instance(low_code, domain::Player::FIRST);
+	REQUIRE(game.place(tribute, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	// 等级 5 不能直接通常召唤
+	CHECK_FALSE(duel.normal_summon(high, domain::FieldColumn::C2));
+
+	const std::array tributes{tribute};
+	CHECK(duel.tribute_summon(high, domain::FieldColumn::C2, tributes));
+
+	CHECK(game.zone_of(tribute) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(high) == domain::Zone::MONSTER);
+}
+
+TEST_CASE("flow::Duel requires two tributes for a level 7 monster")
+{
+	constexpr domain::CardCode high_code{91000022};
+	constexpr domain::CardCode low_code{91000023};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(high_code, make_monster(high_code, 2500, 2500, 7));
+	game.register_definition(low_code, make_monster(low_code, 1000, 1000));
+
+	duel.change_phase(); // STANDBY
+	duel.change_phase(); // MAIN_1
+
+	const auto high = game.create_instance(high_code, domain::Player::FIRST);
+	REQUIRE(game.place(high, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+
+	const auto first = game.create_instance(low_code, domain::Player::FIRST);
+	const auto second = game.create_instance(low_code, domain::Player::FIRST);
+	REQUIRE(game.place(first, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(second, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+
+	const std::array one{first};
+	CHECK_FALSE(duel.tribute_summon(high, domain::FieldColumn::C3, one));
+
+	const std::array two{first, second};
+	CHECK(duel.tribute_summon(high, domain::FieldColumn::C3, two));
+
+	CHECK(game.zone_of(first) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(second) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(high) == domain::Zone::MONSTER);
+}
+
+TEST_CASE("flow::Duel loses when drawing from an empty deck")
+{
+	flow::Duel duel{};
+
+	CHECK_FALSE(duel.draw_for_turn());
+	CHECK(duel.winner() == domain::Player::SECOND);
 }

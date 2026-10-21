@@ -36,6 +36,98 @@ namespace cg::flow
 		}
 	}
 
+	auto Duel::perform_tribute_summon(
+		const state::CardInstanceId card,
+		const domain::FieldColumn column,
+		const std::span<const state::CardInstanceId> tributes,
+		const domain::Position position
+	) noexcept -> bool
+	{
+		if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
+		{
+			return false;
+		}
+		if (state_.normal_summoned)
+		{
+			return false;
+		}
+
+		const auto controller = game_.controller(card);
+		if (!controller.has_value() || *controller != turn_.turn_player())
+		{
+			return false;
+		}
+
+		if (game_.zone_of(card) != domain::Zone::HAND)
+		{
+			return false;
+		}
+
+		if (const auto monster = game_.is_monster_card(card);
+			!monster.has_value() || !*monster)
+		{
+			return false;
+		}
+
+		const auto level = game_.level(card);
+		if (!level.has_value())
+		{
+			return false;
+		}
+
+		// 等级 5~6 需要 1 个祭品,等级 7+ 需要 2 个
+		if (const auto required = *level >= 7 ? std::size_t{2} : (*level >= 5 ? std::size_t{1} : std::size_t{0});
+			tributes.size() != required)
+		{
+			return false;
+		}
+
+		for (std::size_t i = 0; i < tributes.size(); ++i)
+		{
+			if (const auto tribute_controller = game_.controller(tributes[i]);
+				!tribute_controller.has_value() || *tribute_controller != *controller)
+			{
+				return false;
+			}
+
+			if (const auto zone = game_.zone_of(tributes[i]);
+				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
+			{
+				return false;
+			}
+
+			for (std::size_t j = i + 1; j < tributes.size(); ++j)
+			{
+				if (tributes[i] == tributes[j])
+				{
+					return false;
+				}
+			}
+		}
+
+		if (!game_.is_location_empty(*controller, domain::MonsterLocation{.column = column}))
+		{
+			return false;
+		}
+
+		// 解放祭品
+		for (const auto tribute: tributes)
+		{
+			if (!game_.move_to_graveyard(tribute, {domain::Reason::RELEASE}))
+			{
+				return false;
+			}
+		}
+
+		if (!game_.place(card, domain::Placement{domain::MonsterPlacement{.column = column, .position = position}}))
+		{
+			return false;
+		}
+
+		state_.normal_summoned = true;
+		return true;
+	}
+
 	Duel::Duel() noexcept
 	// : game_{},
 	// turn_{},
@@ -85,6 +177,11 @@ namespace cg::flow
 
 	auto Duel::winner() const noexcept -> std::optional<domain::Player>
 	{
+		if (loser_.has_value())
+		{
+			return domain::opponent_of(*loser_);
+		}
+
 		const auto first = game_.life_points(domain::Player::FIRST);
 		const auto second = game_.life_points(domain::Player::SECOND);
 
@@ -115,7 +212,8 @@ namespace cg::flow
 		const auto deck = game_.collect_deck_zones_card(player);
 		if (deck.empty())
 		{
-			// 抽卡失败(卡组耗尽)
+			// 必须抽卡时卡组为空 → 判负
+			loser_ = player;
 			return false;
 		}
 
@@ -152,6 +250,13 @@ namespace cg::flow
 
 		if (const auto monster = game_.is_monster_card(card);
 			!monster.has_value() || !*monster)
+		{
+			return false;
+		}
+
+		// 等级 5 以上需要祭品(使用 tribute_summon / tribute_set)
+		if (const auto level = game_.level(card);
+			!level.has_value() || *level >= 5)
 		{
 			return false;
 		}
@@ -198,6 +303,13 @@ namespace cg::flow
 			return false;
 		}
 
+		// 等级 5 以上需要祭品(使用 tribute_summon / tribute_set)
+		if (const auto level = game_.level(card);
+			!level.has_value() || *level >= 5)
+		{
+			return false;
+		}
+
 		if (!game_.is_location_empty(*controller, domain::MonsterLocation{.column = column}))
 		{
 			return false;
@@ -210,6 +322,16 @@ namespace cg::flow
 
 		state_.normal_summoned = true;
 		return true;
+	}
+
+	auto Duel::tribute_summon(const state::CardInstanceId card, const domain::FieldColumn column, const std::span<const state::CardInstanceId> tributes) noexcept -> bool
+	{
+		return perform_tribute_summon(card, column, tributes, domain::Position::FACE_UP_ATTACK);
+	}
+
+	auto Duel::tribute_set(const state::CardInstanceId card, const domain::FieldColumn column, const std::span<const state::CardInstanceId> tributes) noexcept -> bool
+	{
+		return perform_tribute_summon(card, column, tributes, domain::Position::FACE_DOWN_DEFENSE);
 	}
 
 	auto Duel::declare_attack(const state::CardInstanceId attacker, const std::optional<state::CardInstanceId> target) noexcept -> bool

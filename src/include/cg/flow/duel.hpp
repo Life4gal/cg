@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <cg/state/game.hpp>
@@ -15,7 +16,7 @@ namespace cg::flow
 	class Duel
 	{
 	public:
-		// 回合内玩家状态
+		// 回合内状态
 		class TurnState
 		{
 		public:
@@ -30,7 +31,7 @@ namespace cg::flow
 			// 本回合是否已进行过攻击
 			bool attacked = false;
 
-			// 本回合已攻击的怪兽
+			// 本回合已攻击过的怪兽
 			std::vector<state::CardInstanceId> attacked_monsters;
 		};
 
@@ -42,6 +43,10 @@ namespace cg::flow
 		Battle battle_;
 
 		TurnState state_;
+
+		std::optional<domain::Player> loser_;
+
+		auto perform_tribute_summon(state::CardInstanceId card, domain::FieldColumn column, std::span<const state::CardInstanceId> tributes, domain::Position position) noexcept -> bool;
 
 	public:
 		Duel() noexcept;
@@ -69,6 +74,12 @@ namespace cg::flow
 
 		// 盖放怪兽(里侧守备表示)
 		auto set_monster(state::CardInstanceId card, domain::FieldColumn column) noexcept -> bool;
+
+		// 上级召唤(祭品数 = 等级5~6:1,等级7+:2)
+		auto tribute_summon(state::CardInstanceId card, domain::FieldColumn column, std::span<const state::CardInstanceId> tributes) noexcept -> bool;
+
+		// 上级盖放(里侧守备表示)
+		auto tribute_set(state::CardInstanceId card, domain::FieldColumn column, std::span<const state::CardInstanceId> tributes) noexcept -> bool;
 
 		// 攻击宣言:target = 空表示直接攻击
 		auto declare_attack(state::CardInstanceId attacker, std::optional<state::CardInstanceId> target) noexcept -> bool;
