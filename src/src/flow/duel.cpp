@@ -392,71 +392,110 @@ namespace cg::flow
 
 		const auto attack_value = game_.attack(attacker).value_or(0);
 
-		if (!target.has_value())
-		{
-			game_.change_life_points(opponent, -attack_value);
-			return true;
-		}
+		// 战斗步骤:攻击宣言 → 伤害步骤
+		battle_.reset();
+		// START → BATTLE
+		battle_.advance_battle_step();
+		// BATTLE → DAMAGE
+		battle_.advance_battle_step();
 
-		auto target_position = monster_position(game_, *target);
-		if (!target_position.has_value())
+		// 伤害步骤开始:里侧守备 → 表侧守备
+		std::optional<MonsterPosition> target_position{};
+		if (target.has_value())
 		{
-			return false;
-		}
-
-		// 里侧守备 → 表侧守备(伤害计算前翻面)
-		if (target_position->position == domain::Position::FACE_DOWN_DEFENSE)
-		{
-			const auto placement = target_position->extra
-				                       ? domain::Placement{domain::ExtraMonsterPlacement{.column = target_position->column, .position = domain::Position::FACE_UP_DEFENSE}}
-				                       : domain::Placement{domain::MonsterPlacement{.column = target_position->column, .position = domain::Position::FACE_UP_DEFENSE}};
-
-			if (!game_.place(*target, placement))
+			target_position = monster_position(game_, *target);
+			if (!target_position.has_value())
 			{
 				return false;
 			}
 
-			target_position->position = domain::Position::FACE_UP_DEFENSE;
+			if (target_position->position == domain::Position::FACE_DOWN_DEFENSE)
+			{
+				const auto placement = target_position->extra
+					                       ? domain::Placement{domain::ExtraMonsterPlacement{.column = target_position->column, .position = domain::Position::FACE_UP_DEFENSE}}
+					                       : domain::Placement{domain::MonsterPlacement{.column = target_position->column, .position = domain::Position::FACE_UP_DEFENSE}};
+
+				if (!game_.place(*target, placement))
+				{
+					return false;
+				}
+
+				target_position->position = domain::Position::FACE_UP_DEFENSE;
+			}
 		}
 
-		const auto destroy = [&](const state::CardInstanceId card) noexcept -> bool
-		{
-			return game_.move_to_graveyard(card, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
-		};
+		// START → BEFORE_CALCULATION
+		battle_.advance_damage_step();
+		// BEFORE_CALCULATION → PERFORM_CALCULATION
+		battle_.advance_damage_step();
 
-		// 攻击表示
-		if (target_position->position == domain::Position::FACE_UP_ATTACK)
+		// 伤害计算
+		std::optional<state::CardInstanceId> destroy_attacker{};
+		std::optional<state::CardInstanceId> destroy_target{};
+		std::underlying_type_t<domain::AttackDefense> damage_to_opponent = 0;
+		std::underlying_type_t<domain::AttackDefense> damage_to_controller = 0;
+
+		if (!target.has_value())
+		{
+			damage_to_opponent = attack_value;
+		}
+		else if (target_position->position == domain::Position::FACE_UP_ATTACK)
 		{
 			if (const auto target_attack = game_.attack(*target).value_or(0);
 				attack_value > target_attack)
 			{
-				destroy(*target);
-				game_.change_life_points(opponent, -(attack_value - target_attack));
+				destroy_target = *target;
+				damage_to_opponent = attack_value - target_attack;
 			}
 			else if (attack_value < target_attack)
 			{
-				destroy(attacker);
-				game_.change_life_points(*controller, -(target_attack - attack_value));
+				destroy_attacker = attacker;
+				damage_to_controller = target_attack - attack_value;
 			}
 			else
 			{
-				destroy(attacker);
-				destroy(*target);
+				destroy_attacker = attacker;
+				destroy_target = *target;
 			}
-
-			return true;
 		}
-
-		// 守备表示
-		if (const auto target_defense = game_.defense(*target).value_or(0);
-			attack_value > target_defense)
+		else
 		{
-			destroy(*target);
+			if (const auto target_defense = game_.defense(*target).value_or(0);
+				attack_value > target_defense)
+			{
+				destroy_target = *target;
+			}
+			else if (attack_value < target_defense)
+			{
+				damage_to_controller = target_defense - attack_value;
+			}
 		}
-		else if (attack_value < target_defense)
+
+		// PERFORM_CALCULATION → AFTER_CALCULATION
+		battle_.advance_damage_step();
+		// AFTER_CALCULATION → END
+		battle_.advance_damage_step();
+
+		// 应用破坏与战斗伤害
+		if (destroy_target.has_value())
 		{
-			game_.change_life_points(*controller, -(target_defense - attack_value));
+			game_.move_to_graveyard(*destroy_target, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
 		}
+		if (destroy_attacker.has_value())
+		{
+			game_.move_to_graveyard(*destroy_attacker, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
+		}
+		if (damage_to_opponent != 0)
+		{
+			game_.change_life_points(opponent, -damage_to_opponent);
+		}
+		if (damage_to_controller != 0)
+		{
+			game_.change_life_points(*controller, -damage_to_controller);
+		}
+
+		// DAMAGE → END
+		battle_.advance_battle_step();
 
 		return true;
 	}

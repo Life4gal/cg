@@ -136,6 +136,10 @@ TEST_CASE("flow::Duel resolves an attack-position battle")
 	CHECK(game.life_points(domain::Player::SECOND) == 8000);
 	CHECK(duel.winner() == std::nullopt);
 
+	// 战斗/伤害步骤状态机推进到结束
+	CHECK(duel.battle().battle_step() == domain::BattleStep::END);
+	CHECK_FALSE(duel.battle().is_in_damage_step());
+
 	// 同一怪兽一回合只能攻击一次
 	CHECK_FALSE(duel.declare_attack(attacker, std::nullopt));
 }
