@@ -1089,7 +1089,47 @@ namespace cg::flow
 			return false;
 		}
 
-		auto chain = interpreter_.build_chain(triggered, context);
+		// 过滤使用次数已满的触发效果;同批内先占用次数,避免同名卡重复触发
+		execution::TriggeredEffectList usable{};
+		usable.reserve(triggered.size());
+
+		for (const auto& entry: triggered)
+		{
+			const auto* instance = game_.find_instance(entry.card);
+			if (instance == nullptr)
+			{
+				continue;
+			}
+
+			const auto* script = scripts_.find(instance->code());
+			if (script == nullptr)
+			{
+				continue;
+			}
+
+			// EffectId 为 1-based,转换为效果下标
+			const auto effect = entry.effect.raw();
+			if (effect == 0)
+			{
+				continue;
+			}
+
+			const auto index = static_cast<UsageKey::index_type>(effect - 1);
+			if (!can_use(*script, entry.card, index))
+			{
+				continue;
+			}
+
+			mark_used(*script, entry.card, index);
+			usable.push_back(entry);
+		}
+
+		if (usable.empty())
+		{
+			return false;
+		}
+
+		auto chain = interpreter_.build_chain(usable, context);
 		if (chain.empty())
 		{
 			return false;

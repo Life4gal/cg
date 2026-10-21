@@ -602,6 +602,118 @@ TEST_CASE("flow::Duel processes destruction events from effects")
 	CHECK(game.count_deck_zones_card(domain::Player::SECOND) == 0);
 }
 
+TEST_CASE("flow::Duel enforces triggered effect usage limits")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_usage";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"99000021.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"destroy","args":{"cards":{"call":"find_cards","args":{"players":["OPPONENT"],"zones":["MONSTER"]}},"reason":"EFFECT"}}]}]})"
+	);
+	write(
+		"99000022.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"usage_restrictions":[{"scope":"TURN","basis":"CARD_NAME","count":1,"refs":[0]}],"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":false,"condition":{"call":"is_in_zone","args":{"card":{"call":"this_card","args":{}},"zones":["GRAVEYARD"]}}},"effect":[{"call":"draw","args":{"players":["SELF"],"count":1}}]}]})"
+	);
+
+	constexpr domain::CardCode destroyer_code{99000021};
+	constexpr domain::CardCode victim_code{99000022};
+	constexpr domain::CardCode draw_code{99000023};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(destroyer_code, make_monster(destroyer_code));
+	game.register_definition(victim_code, make_monster(victim_code));
+	game.register_definition(draw_code, make_monster(draw_code));
+
+	REQUIRE(duel.load_scripts(directory));
+
+	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
+	REQUIRE(game.place(destroyer, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	const auto victim_a = game.create_instance(victim_code, domain::Player::SECOND);
+	REQUIRE(game.place(victim_a, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	const auto victim_b = game.create_instance(victim_code, domain::Player::SECOND);
+	REQUIRE(game.place(victim_b, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+
+	for (auto i = 0; i < 2; ++i)
+	{
+		const auto card = game.create_instance(draw_code, domain::Player::SECOND);
+		REQUIRE(game.place(card, domain::DeckPlacement{.index = 0}));
+	}
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	// 一次破坏两张同名卡,但「同名卡一回合一次」只允许抽1
+	CHECK(duel.activate_effect(destroyer, 0));
+
+	CHECK(game.zone_of(victim_a) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(victim_b) == domain::Zone::GRAVEYARD);
+	CHECK(game.count_hand_zones_card(domain::Player::SECOND) == 1);
+	CHECK(game.count_deck_zones_card(domain::Player::SECOND) == 1);
+}
+
+TEST_CASE("flow::Duel activates traps with an event timing")
+{
+	constexpr domain::CardCode torrential_code{53582587};
+	constexpr domain::CardCode monster_code{98000001};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(torrential_code, make_trap(torrential_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(monster_code, make_monster(monster_code));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto torrential = game.create_instance(torrential_code, domain::Player::SECOND);
+	REQUIRE(game.place(torrential, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+
+	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(game.place(monster, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+
+	// 先攻空过
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	advance_phase(duel); // END
+	REQUIRE(duel.end_turn());
+
+	// 后攻盖放 Torrential
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.set_spell_trap(torrential, domain::FieldColumn::C1));
+	advance_phase(duel); // BATTLE
+	advance_phase(duel); // MAIN_2
+	advance_phase(duel); // END
+	REQUIRE(duel.end_turn());
+
+	// 先攻召唤 → 召唤成功窗口
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.normal_summon(monster, domain::FieldColumn::C1));
+
+	// 先攻放弃优先权 → 后攻可发动带 WHEN 时点的陷阱
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.activate_card(torrential));
+
+	CHECK(game.zone_of(monster) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(torrential) == domain::Zone::GRAVEYARD);
+}
+
 TEST_CASE("flow::Duel activates ignition and quick effects")
 {
 	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_activation";
