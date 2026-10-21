@@ -139,6 +139,9 @@ namespace cg::state
 		// 是指定卡子类型
 		[[nodiscard]] auto is_card_subtype(domain::CardSubtype subtype) const noexcept -> bool;
 
+		// 是指定卡子类型之一
+		[[nodiscard]] auto is_card_subtype(utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool;
+
 		// 获取属性 -- 假定是怪兽卡
 		[[nodiscard]] auto attribute() const noexcept -> domain::Attribute;
 

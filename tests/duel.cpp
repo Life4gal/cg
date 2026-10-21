@@ -45,6 +45,17 @@ namespace
 		return definition;
 	}
 
+	[[nodiscard]] auto make_trap(const domain::CardCode code, const std::initializer_list<domain::CardSubtype> subtypes) -> state::CardDefinition
+	{
+		state::CardDefinition definition{};
+		definition.code = code;
+		definition.kind = {domain::CardType::TRAP};
+		definition.subtypes = subtypes;
+		definition.trap = state::CardDefinition::Trap{};
+
+		return definition;
+	}
+
 	// 双方放弃优先权后推进阶段
 	auto advance_phase(flow::Duel& duel) -> bool
 	{
@@ -595,4 +606,52 @@ TEST_CASE("flow::Duel activates spell cards")
 
 	// 非魔法卡不可用此接口
 	CHECK_FALSE(duel.activate_card(monster));
+}
+
+TEST_CASE("flow::Duel sets and activates a trap")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_trap";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	{
+		std::ofstream stream{directory / "97000001.json", std::ios::binary};
+		stream <<
+				R"({"identity":{"kind":"TRAP","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})";
+	}
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(domain::CardCode{97000001}, make_trap(domain::CardCode{97000001}, {domain::CardSubtype::NORMAL}));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto trap = game.create_instance(domain::CardCode{97000001}, domain::Player::FIRST);
+	REQUIRE(game.place(trap, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+
+	// 盖放
+	CHECK(duel.set_spell_trap(trap, domain::FieldColumn::C1));
+	CHECK(game.zone_of(trap) == domain::Zone::SPELL_TRAP);
+
+	// 盖放当回合不能发动
+	CHECK_FALSE(duel.activate_card(trap));
+
+	// 结束回合
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	// 对方回合:放弃优先权 → 陷阱控制者获得窗口
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.activate_card(trap));
+
+	CHECK(game.life_points(domain::Player::SECOND) == 7500);
+	CHECK(game.zone_of(trap) == domain::Zone::GRAVEYARD);
+
+	std::filesystem::remove_all(directory);
 }

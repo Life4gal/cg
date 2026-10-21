@@ -108,6 +108,13 @@ namespace cg::flow
 		std::map<UsageKey, UsageKey::size_type> usage_;
 
 		// ================================================================
+		// 盖放记录
+		// ================================================================
+
+		// 卡实例 -> 盖放时的回合ID(盖放当回合不可发动)
+		std::map<state::CardInstanceId, Turn::id_type> set_turns_;
+
+		// ================================================================
 		// 卡脚本与执行
 		// ================================================================
 
@@ -123,8 +130,8 @@ namespace cg::flow
 		auto perform_tribute_summon(state::CardInstanceId card, domain::FieldColumn column, std::span<const state::CardInstanceId> tributes, domain::Position position) noexcept -> bool;
 
 		// 当前攻击力/守备力(含静态修正)
-		[[nodiscard]] auto attack_value(state::CardInstanceId card) noexcept -> std::underlying_type_t<domain::AttackDefense>;
-		[[nodiscard]] auto defense_value(state::CardInstanceId card) noexcept -> std::underlying_type_t<domain::AttackDefense>;
+		[[nodiscard]] auto attack_value(const state::CardInstance& card) noexcept -> std::underlying_type_t<domain::AttackDefense>;
+		[[nodiscard]] auto defense_value(const state::CardInstance& card) noexcept -> std::underlying_type_t<domain::AttackDefense>;
 
 		// 使用次数
 		[[nodiscard]] auto usage_owner(dsl::UsageBasis basis, state::CardInstanceId card) const noexcept -> UsageKey::owner_type;
@@ -205,6 +212,9 @@ namespace cg::flow
 
 		// 发动魔法卡(当前仅手牌;场地/永续/装备留场,其余结算后送墓)
 		auto activate_card(state::CardInstanceId card) noexcept -> bool;
+
+		// 盖放魔法/陷阱卡(里侧守备表示)
+		auto set_spell_trap(state::CardInstanceId card, domain::FieldColumn column) noexcept -> bool;
 
 		// ================================================================
 		// 战斗

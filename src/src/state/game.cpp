@@ -157,7 +157,22 @@ namespace cg::state
 	{
 		LIBASSERT_DEBUG_ASSERT(card.valid());
 
-		return instance_invoke(card, &CardInstance::is_card_subtype, subtype);
+		return instance_invoke(
+			card,
+			static_cast<auto(CardInstance::*)(domain::CardSubtype subtype) const noexcept -> bool>(&CardInstance::is_card_subtype),
+			subtype
+		);
+	}
+
+	auto Game::is_card_subtype(const CardInstanceId card, const utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> std::optional<bool>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		return instance_invoke(
+			card,
+			static_cast<auto(CardInstance::*)(utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool>(&CardInstance::is_card_subtype),
+			subtypes
+		);
 	}
 
 	auto Game::attribute(const CardInstanceId card) const noexcept -> std::optional<domain::Attribute>

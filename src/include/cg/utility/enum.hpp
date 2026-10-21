@@ -197,56 +197,56 @@ namespace cg::utility
 			return fallback;
 		}
 
-		// constexpr auto operator|=(const EnumMask& other) noexcept -> EnumMask&
-		// {
-		// 	bits_ |= other.bits_;
-		// 	return *this;
-		// }
-		//
-		// [[nodiscard]] constexpr auto operator|(const EnumMask& other) const noexcept -> EnumMask
-		// {
-		// 	auto t = *this;
-		// 	t |= other;
-		// 	return t;
-		// }
-		//
-		// constexpr auto operator&=(const EnumMask& other) noexcept -> EnumMask&
-		// {
-		// 	bits_ &= other.bits_;
-		// 	return *this;
-		// }
-		//
-		// [[nodiscard]] constexpr auto operator&(const EnumMask& other) const noexcept -> EnumMask
-		// {
-		// 	auto t = *this;
-		// 	t &= other;
-		// 	return t;
-		// }
-		//
-		// constexpr auto operator^=(const EnumMask& other) noexcept -> EnumMask&
-		// {
-		// 	bits_ ^= other.bits_;
-		// 	return *this;
-		// }
-		//
-		// [[nodiscard]] constexpr auto operator^(const EnumMask& other) const noexcept -> EnumMask
-		// {
-		// 	auto t = *this;
-		// 	t ^= other;
-		// 	return t;
-		// }
-		//
-		// [[nodiscard]] constexpr auto operator~() const noexcept -> EnumMask
-		// {
-		// 	auto t = *this;
-		// 	t.bits_ = ~bits_ & all_enums_value;
-		// 	return t;
-		// }
-		//
-		// [[nodiscard]] constexpr auto operator!() const noexcept -> bool
-		// {
-		// 	return !empty();
-		// }
+		constexpr auto operator|=(const EnumMask& other) noexcept -> EnumMask&
+		{
+			bits_ |= other.bits_;
+			return *this;
+		}
+
+		[[nodiscard]] constexpr auto operator|(const EnumMask& other) const noexcept -> EnumMask
+		{
+			auto t = *this;
+			t |= other;
+			return t;
+		}
+
+		constexpr auto operator&=(const EnumMask& other) noexcept -> EnumMask&
+		{
+			bits_ &= other.bits_;
+			return *this;
+		}
+
+		[[nodiscard]] constexpr auto operator&(const EnumMask& other) const noexcept -> EnumMask
+		{
+			auto t = *this;
+			t &= other;
+			return t;
+		}
+
+		constexpr auto operator^=(const EnumMask& other) noexcept -> EnumMask&
+		{
+			bits_ ^= other.bits_;
+			return *this;
+		}
+
+		[[nodiscard]] constexpr auto operator^(const EnumMask& other) const noexcept -> EnumMask
+		{
+			auto t = *this;
+			t ^= other;
+			return t;
+		}
+
+		[[nodiscard]] constexpr auto operator~() const noexcept -> EnumMask
+		{
+			auto t = *this;
+			t.bits_ = ~bits_ & all_enums_value;
+			return t;
+		}
+
+		[[nodiscard]] constexpr auto operator!() const noexcept -> bool
+		{
+			return !empty();
+		}
 
 		[[nodiscard]] constexpr auto operator==(const EnumMask& other) const noexcept -> bool = default;
 	};

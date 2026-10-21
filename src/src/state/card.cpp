@@ -111,6 +111,14 @@ namespace cg::state
 		return definition_.get().subtypes.contains(subtype);
 	}
 
+	auto CardInstance::is_card_subtype(const utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool
+	{
+		// TODO
+
+		// 否则基于定义
+		return !(definition_.get().subtypes & subtypes).empty();
+	}
+
 	auto CardInstance::attribute() const noexcept -> domain::Attribute
 	{
 		// TODO

@@ -23,8 +23,14 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto controller = game_.controller(card);
-		if (!controller.has_value() || *controller != turn_.turn_player())
+		const auto* instance = game_.find_instance(card);
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		const auto controller = instance->controller();
+		if (controller != turn_.turn_player())
 		{
 			return false;
 		}
@@ -34,49 +40,49 @@ namespace cg::flow
 			return false;
 		}
 
-		if (const auto monster = game_.is_monster_card(card);
-			!monster.has_value() || !*monster)
+		if (const auto monster = instance->is_monster_card();
+			!monster)
 		{
 			return false;
 		}
 
-		const auto level = game_.level(card);
-		if (!level.has_value())
-		{
-			return false;
-		}
+		const auto level = instance->level();
 
 		// 等级 5~6 需要 1 个祭品,等级 7+ 需要 2 个
-		if (const auto required = *level >= 7 ? std::size_t{2} : (*level >= 5 ? std::size_t{1} : std::size_t{0});
+		if (const auto required = level >= 7 ? std::size_t{2} : (level >= 5 ? std::size_t{1} : std::size_t{0});
 			tributes.size() != required)
 		{
 			return false;
 		}
 
-		for (std::size_t i = 0; i < tributes.size(); ++i)
+		for (const auto [index, tribute]: tributes | std::views::enumerate)
 		{
-			if (const auto tribute_controller = game_.controller(tributes[i]);
-				!tribute_controller.has_value() || *tribute_controller != *controller)
+			const auto* tribute_instance = game_.find_instance(tribute);
+
+			if (tribute_instance == nullptr)
 			{
 				return false;
 			}
 
-			if (const auto zone = game_.zone_of(tributes[i]);
+			if (const auto tribute_controller = tribute_instance->controller();
+				tribute_controller != controller)
+			{
+				return false;
+			}
+
+			if (const auto zone = game_.zone_of(tribute);
 				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
 			{
 				return false;
 			}
 
-			for (std::size_t j = i + 1; j < tributes.size(); ++j)
+			if (std::ranges::contains(tributes.begin() + index + 1, tributes.end(), tribute))
 			{
-				if (tributes[i] == tributes[j])
-				{
-					return false;
-				}
+				return false;
 			}
 		}
 
-		if (!game_.is_location_empty(*controller, domain::MonsterLocation{.column = column}))
+		if (!game_.is_location_empty(controller, domain::MonsterLocation{.column = column}))
 		{
 			return false;
 		}
@@ -99,22 +105,26 @@ namespace cg::flow
 		return true;
 	}
 
-	auto Duel::attack_value(const state::CardInstanceId card) noexcept -> std::underlying_type_t<domain::AttackDefense>
+	auto Duel::attack_value(const state::CardInstance& card) noexcept -> std::underlying_type_t<domain::AttackDefense>
 	{
-		const auto base = game_.attack(card).value_or(0);
+		const auto controller = card.controller();
+		const auto base = card.attack();
+		const auto id = card.id();
 
-		execution::Context context{game_, game_.controller(card).value_or(turn_.turn_player())};
-		const auto bonus = interpreter_.static_numeric_bonus(scripts_, card, domain::NumericProperty::ATTACK, context);
+		execution::Context context{game_, controller};
+		const auto bonus = interpreter_.static_numeric_bonus(scripts_, id, domain::NumericProperty::ATTACK, context);
 
 		return static_cast<std::underlying_type_t<domain::AttackDefense>>(base + bonus);
 	}
 
-	auto Duel::defense_value(const state::CardInstanceId card) noexcept -> std::underlying_type_t<domain::AttackDefense>
+	auto Duel::defense_value(const state::CardInstance& card) noexcept -> std::underlying_type_t<domain::AttackDefense>
 	{
-		const auto base = game_.defense(card).value_or(0);
+		const auto controller = card.controller();
+		const auto base = card.defense();
+		const auto id = card.id();
 
-		execution::Context context{game_, game_.controller(card).value_or(turn_.turn_player())};
-		const auto bonus = interpreter_.static_numeric_bonus(scripts_, card, domain::NumericProperty::DEFENSE, context);
+		execution::Context context{game_, controller};
+		const auto bonus = interpreter_.static_numeric_bonus(scripts_, id, domain::NumericProperty::DEFENSE, context);
 
 		return static_cast<std::underlying_type_t<domain::AttackDefense>>(base + bonus);
 	}
@@ -295,8 +305,14 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto controller = game_.controller(card);
-		if (!controller.has_value() || *controller != turn_.turn_player())
+		const auto* instance = game_.find_instance(card);
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		const auto controller = instance->controller();
+		if (controller != turn_.turn_player())
 		{
 			return false;
 		}
@@ -306,20 +322,20 @@ namespace cg::flow
 			return false;
 		}
 
-		if (const auto monster = game_.is_monster_card(card);
-			!monster.has_value() || !*monster)
+		if (const auto monster = instance->is_monster_card();
+			!monster)
 		{
 			return false;
 		}
 
 		// 等级 5 以上需要祭品(使用 tribute_summon / tribute_set)
-		if (const auto level = game_.level(card);
-			!level.has_value() || *level >= 5)
+		if (const auto level = instance->level();
+			level >= 5)
 		{
 			return false;
 		}
 
-		if (!game_.is_location_empty(*controller, domain::MonsterLocation{.column = column}))
+		if (!game_.is_location_empty(controller, domain::MonsterLocation{.column = column}))
 		{
 			return false;
 		}
@@ -344,8 +360,14 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto controller = game_.controller(card);
-		if (!controller.has_value() || *controller != turn_.turn_player())
+		const auto* instance = game_.find_instance(card);
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		const auto controller = instance->controller();
+		if (controller != turn_.turn_player())
 		{
 			return false;
 		}
@@ -355,20 +377,20 @@ namespace cg::flow
 			return false;
 		}
 
-		if (const auto monster = game_.is_monster_card(card);
-			!monster.has_value() || !*monster)
+		if (const auto monster = instance->is_monster_card();
+			!monster)
 		{
 			return false;
 		}
 
 		// 等级 5 以上需要祭品(使用 tribute_summon / tribute_set)
-		if (const auto level = game_.level(card);
-			!level.has_value() || *level >= 5)
+		if (const auto level = instance->level();
+			level >= 5)
 		{
 			return false;
 		}
 
-		if (!game_.is_location_empty(*controller, domain::MonsterLocation{.column = column}))
+		if (!game_.is_location_empty(controller, domain::MonsterLocation{.column = column}))
 		{
 			return false;
 		}
@@ -392,23 +414,27 @@ namespace cg::flow
 		return perform_tribute_summon(card, column, tributes, domain::Position::FACE_DOWN_DEFENSE);
 	}
 
-	auto Duel::activate_card(const state::CardInstanceId card) noexcept -> bool
+	auto Duel::set_spell_trap(const state::CardInstanceId card, const domain::FieldColumn column) noexcept -> bool
 	{
-		const auto controller = game_.controller(card);
-		if (!controller.has_value())
+		const auto* instance = game_.find_instance(card);
+		if (instance == nullptr)
 		{
 			return false;
 		}
 
-		if (priority_.holder_player(turn_.turn_player()) != *controller)
+		const auto controller = instance->controller();
+		if (controller != turn_.turn_player())
 		{
 			return false;
 		}
 
-		const auto definition = game_.definition(card);
-		if (!definition.has_value() || !definition->get().kind.contains(domain::CardType::SPELL))
+		if (priority_.holder_player(turn_.turn_player()) != controller)
 		{
-			// TODO: 陷阱卡(需盖放/时点)
+			return false;
+		}
+
+		if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
+		{
 			return false;
 		}
 
@@ -417,22 +443,91 @@ namespace cg::flow
 			return false;
 		}
 
-		if (*controller != turn_.turn_player())
-		{
-			return false;
-		}
-		if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
+		if (!instance->is_spell_card() && !instance->is_trap_card())
 		{
 			return false;
 		}
 
-		const auto code = game_.code(card);
-		if (!code.has_value())
+		if (!game_.is_location_empty(controller, domain::SpellTrapLocation{.column = column}))
 		{
 			return false;
 		}
 
-		const auto* script = scripts_.find(*code);
+		if (!game_.place(card, domain::SpellTrapPlacement{.column = column, .position = domain::Position::FACE_DOWN_DEFENSE}))
+		{
+			return false;
+		}
+
+		set_turns_.insert_or_assign(card, turn_.turn_id());
+
+		return true;
+	}
+
+	auto Duel::activate_card(const state::CardInstanceId card) noexcept -> bool
+	{
+		const auto* instance = game_.find_instance(card);
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		const auto controller = instance->controller();
+
+		if (priority_.holder_player(turn_.turn_player()) != controller)
+		{
+			return false;
+		}
+
+		const auto is_spell = instance->is_spell_card();
+		const auto is_trap = instance->is_trap_card();
+		if (!is_spell && !is_trap)
+		{
+			return false;
+		}
+
+		const auto zone = game_.zone_of(card);
+
+		if (zone == domain::Zone::HAND)
+		{
+			// 陷阱必须先盖放
+			if (is_trap)
+			{
+				return false;
+			}
+			if (controller != turn_.turn_player())
+			{
+				return false;
+			}
+			if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
+			{
+				return false;
+			}
+		}
+		else if (zone == domain::Zone::SPELL_TRAP)
+		{
+			// 盖放当回合不可发动
+			if (const auto it = set_turns_.find(card);
+				it == set_turns_.end() || it->second >= turn_.turn_id())
+			{
+				return false;
+			}
+
+			const auto placement = instance->placement();
+
+			if (const auto* spell_trap = std::get_if<domain::SpellTrapPlacement>(&placement);
+				spell_trap == nullptr || spell_trap->position != domain::Position::FACE_DOWN_DEFENSE)
+			{
+				return false;
+			}
+		}
+		else
+		{
+			return false;
+		}
+
+		const auto code = instance->code();
+
+		const auto* script = scripts_.find(code);
 		if (script == nullptr)
 		{
 			return false;
@@ -447,9 +542,16 @@ namespace cg::flow
 			{
 				continue;
 			}
-			if (!std::holds_alternative<dsl::CardActivation>(candidate->activation))
+			const auto* card_activation = std::get_if<dsl::CardActivation>(&candidate->activation);
+			if (card_activation == nullptr)
 			{
 				continue;
+			}
+
+			// TODO: 事件时点(CardActivation::timing)尚未接入
+			if (card_activation->timing.has_value())
+			{
+				return false;
 			}
 
 			activated = candidate;
@@ -463,43 +565,63 @@ namespace cg::flow
 			return false;
 		}
 
-		execution::Context context{game_, *controller, card};
+		execution::Context context{game_, controller, card};
 		if (activated != nullptr && !interpreter_.activate(*activated, context))
 		{
 			return false;
 		}
 
-		// 放置:场地魔法区 / 魔陷区
-		if (definition->get().subtypes.contains(domain::CardSubtype::FIELD))
+		// 放置/翻面
+		if (zone == domain::Zone::HAND)
 		{
-			if (!game_.is_field_spell_zones_empty(*controller))
+			if (const auto field = instance->is_card_subtype(domain::CardSubtype::FIELD);
+				field)
 			{
-				return false;
-			}
+				if (!game_.is_field_spell_zones_empty(controller))
+				{
+					return false;
+				}
 
-			if (!game_.place(card, domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}))
+				if (!game_.place(card, domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}))
+				{
+					return false;
+				}
+			}
+			else
 			{
-				return false;
+				std::optional<domain::FieldColumn> column;
+				for (const auto candidate: domain::field_columns)
+				{
+					if (game_.is_location_empty(controller, domain::SpellTrapLocation{.column = candidate}))
+					{
+						column = candidate;
+						break;
+					}
+				}
+
+				if (!column.has_value())
+				{
+					return false;
+				}
+
+				if (!game_.place(card, domain::SpellTrapPlacement{.column = *column, .position = domain::Position::FACE_UP_ATTACK}))
+				{
+					return false;
+				}
 			}
 		}
 		else
 		{
-			std::optional<domain::FieldColumn> column;
-			for (const auto candidate: domain::field_columns)
-			{
-				if (game_.is_location_empty(*controller, domain::SpellTrapLocation{.column = candidate}))
-				{
-					column = candidate;
-					break;
-				}
-			}
+			// 盖放的卡:翻至表侧
+			const auto placement = instance->placement();
+			const auto* spell_trap = std::get_if<domain::SpellTrapPlacement>(&placement);
 
-			if (!column.has_value())
+			if (spell_trap == nullptr)
 			{
 				return false;
 			}
 
-			if (!game_.place(card, domain::SpellTrapPlacement{.column = *column, .position = domain::Position::FACE_UP_ATTACK}))
+			if (!game_.place(card, domain::SpellTrapPlacement{.column = spell_trap->column, .position = domain::Position::FACE_UP_ATTACK}))
 			{
 				return false;
 			}
@@ -515,12 +637,9 @@ namespace cg::flow
 			mark_used(*script, card, static_cast<UsageKey::index_type>(effect_index));
 		}
 
-		// 永续/场地/装备留场,其余结算后送墓
-		const auto stays = definition->get().subtypes.contains(domain::CardSubtype::CONTINUOUS)
-		                   || definition->get().subtypes.contains(domain::CardSubtype::FIELD)
-		                   || definition->get().subtypes.contains(domain::CardSubtype::EQUIP);
-
-		if (!stays)
+		// 留场:魔法(永续/场地/装备) / 陷阱(永续);其余送墓
+		if (const auto stays = instance->is_card_subtype({domain::CardSubtype::CONTINUOUS, domain::CardSubtype::FIELD, domain::CardSubtype::EQUIP});
+			!stays)
 		{
 			game_.move_to_graveyard(card, {domain::Reason::RULE});
 		}
@@ -537,8 +656,14 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto controller = game_.controller(attacker);
-		if (!controller.has_value() || *controller != turn_.turn_player())
+		const auto* instance = game_.find_instance(attacker);
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		const auto controller = instance->controller();
+		if (controller != turn_.turn_player())
 		{
 			return false;
 		}
@@ -549,14 +674,9 @@ namespace cg::flow
 			return false;
 		}
 
-		if (const auto placement = game_.placement(attacker);
-			!placement.has_value())
 		{
-			return false;
-		}
-		else
-		{
-			const auto field_info = domain::field_info_of(*placement);
+			const auto placement = instance->placement();
+			const auto field_info = domain::field_info_of(placement);
 			if (!field_info.has_value())
 			{
 				return false;
@@ -573,12 +693,18 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto opponent = domain::opponent_of(*controller);
+		const auto opponent = domain::opponent_of(controller);
 
 		if (target.has_value())
 		{
-			if (const auto target_controller = game_.controller(*target);
-				!target_controller.has_value() || *target_controller != opponent)
+			const auto* target_instance = game_.find_instance(*target);
+			if (target_instance == nullptr)
+			{
+				return false;
+			}
+
+			if (const auto target_controller = target_instance->controller();
+				target_controller != opponent)
 			{
 				return false;
 			}
@@ -599,7 +725,7 @@ namespace cg::flow
 		state_.attacked = true;
 		state_.entered_battle_phase = true;
 
-		const auto attacker_attack = attack_value(attacker);
+		const auto attacker_attack = attack_value(*instance);
 
 		// 战斗步骤:攻击宣言 → 伤害步骤
 		battle_.reset();
@@ -628,20 +754,20 @@ namespace cg::flow
 			if (target_position == domain::Position::FACE_DOWN_DEFENSE)
 			{
 				target_position = domain::Position::FACE_UP_DEFENSE;
-			}
 
-			if (std::holds_alternative<domain::ExtraMonsterPlacement>(*placement))
-			{
-				if (!game_.place(*target, domain::ExtraMonsterPlacement{.column = field_info->column, .position = field_info->position}))
+				if (std::holds_alternative<domain::ExtraMonsterPlacement>(*placement))
 				{
-					return false;
+					if (!game_.place(*target, domain::ExtraMonsterPlacement{.column = field_info->column, .position = target_position}))
+					{
+						return false;
+					}
 				}
-			}
-			else
-			{
-				if (!game_.place(*target, domain::MonsterPlacement{.column = field_info->column, .position = field_info->position}))
+				else
 				{
-					return false;
+					if (!game_.place(*target, domain::MonsterPlacement{.column = field_info->column, .position = target_position}))
+					{
+						return false;
+					}
 				}
 			}
 		}
@@ -661,35 +787,44 @@ namespace cg::flow
 		{
 			damage_to_opponent = attacker_attack;
 		}
-		else if (target_position == domain::Position::FACE_UP_ATTACK)
+		else
 		{
-			if (const auto target_attack = attack_value(*target);
-				attacker_attack > target_attack)
+			const auto* target_instance = game_.find_instance(*target);
+			if (target_instance == nullptr)
 			{
-				destroy_target = *target;
-				damage_to_opponent = attacker_attack - target_attack;
+				return false;
 			}
-			else if (attacker_attack < target_attack)
+
+			if (target_position == domain::Position::FACE_UP_ATTACK)
 			{
-				destroy_attacker = attacker;
-				damage_to_controller = target_attack - attacker_attack;
+				if (const auto target_attack = attack_value(*target_instance);
+					attacker_attack > target_attack)
+				{
+					destroy_target = *target;
+					damage_to_opponent = attacker_attack - target_attack;
+				}
+				else if (attacker_attack < target_attack)
+				{
+					destroy_attacker = attacker;
+					damage_to_controller = target_attack - attacker_attack;
+				}
+				else
+				{
+					destroy_attacker = attacker;
+					destroy_target = *target;
+				}
 			}
 			else
 			{
-				destroy_attacker = attacker;
-				destroy_target = *target;
-			}
-		}
-		else
-		{
-			if (const auto target_defense = defense_value(*target);
-				attacker_attack > target_defense)
-			{
-				destroy_target = *target;
-			}
-			else if (attacker_attack < target_defense)
-			{
-				damage_to_controller = target_defense - attacker_attack;
+				if (const auto target_defense = defense_value(*target_instance);
+					attacker_attack > target_defense)
+				{
+					destroy_target = *target;
+				}
+				else if (attacker_attack < target_defense)
+				{
+					damage_to_controller = target_defense - attacker_attack;
+				}
 			}
 		}
 
@@ -713,7 +848,7 @@ namespace cg::flow
 		}
 		if (damage_to_controller != 0)
 		{
-			game_.change_life_points(*controller, -damage_to_controller);
+			game_.change_life_points(controller, -damage_to_controller);
 		}
 
 		// DAMAGE → END
@@ -729,13 +864,14 @@ namespace cg::flow
 			return card.raw();
 		}
 
-		const auto code = game_.code(card);
-		if (!code.has_value())
+		const auto* instance = game_.find_instance(card);
+		if (instance == nullptr)
 		{
 			return 0;
 		}
 
-		return std::to_underlying(*code);
+		const auto code = instance->code();
+		return std::to_underlying(code);
 	}
 
 	auto Duel::can_use(const dsl::CardScript& script, const state::CardInstanceId card, const UsageKey::index_type effect_index) const noexcept -> bool
@@ -790,26 +926,23 @@ namespace cg::flow
 
 	auto Duel::activate_effect(const state::CardInstanceId card, const UsageKey::index_type effect_index) noexcept -> bool
 	{
-		const auto controller = game_.controller(card);
-		if (!controller.has_value())
+		const auto* instance = game_.find_instance(card);
+		if (instance == nullptr)
 		{
 			return false;
 		}
+
+		const auto controller = instance->controller();
 
 		// 只有当前优先权持有者可以发动
-		if (const auto player = priority_.holder_player(turn_.turn_player());
-			player != *controller)
+		if (priority_.holder_player(turn_.turn_player()) != controller)
 		{
 			return false;
 		}
 
-		const auto code = game_.code(card);
-		if (!code.has_value())
-		{
-			return false;
-		}
+		const auto code = instance->code();
 
-		const auto* script = scripts_.find(*code);
+		const auto* script = scripts_.find(code);
 		if (script == nullptr || effect_index >= script->effects.size())
 		{
 			return false;
@@ -830,7 +963,7 @@ namespace cg::flow
 			ignition != nullptr)
 		{
 			// 启动效果:回合玩家、主要阶段
-			if (*controller != turn_.turn_player())
+			if (controller != turn_.turn_player())
 			{
 				return false;
 			}
@@ -850,7 +983,7 @@ namespace cg::flow
 			return false;
 		}
 
-		if (execution::Context context{game_, *controller, card};
+		if (execution::Context context{game_, controller, card};
 			!interpreter_.execute(*activated, context))
 		{
 			return false;
