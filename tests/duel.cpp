@@ -1,5 +1,7 @@
 #include <cg/flow/duel.hpp>
 
+#include <fstream>
+
 #include <doctest/doctest.h>
 
 namespace
@@ -428,4 +430,62 @@ TEST_CASE("flow::Duel applies static modifiers in battle")
 	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
 	CHECK(game.life_points(domain::Player::FIRST) == 7800);
 	CHECK(game.life_points(domain::Player::SECOND) == 8000);
+}
+
+TEST_CASE("flow::Duel activates ignition and quick effects")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_activation";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94000001.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})"
+	);
+	write(
+		"94000002.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})"
+	);
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(domain::CardCode{94000001}, make_monster(domain::CardCode{94000001}));
+	game.register_definition(domain::CardCode{94000002}, make_monster(domain::CardCode{94000002}));
+
+	REQUIRE(duel.load_scripts(directory));
+
+	game.change_life_points(domain::Player::FIRST, 8000);
+	game.change_life_points(domain::Player::SECOND, 8000);
+
+	const auto ignition_card = game.create_instance(domain::CardCode{94000001}, domain::Player::FIRST);
+	const auto quick_card = game.create_instance(domain::CardCode{94000002}, domain::Player::SECOND);
+	REQUIRE(game.place(ignition_card, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(quick_card, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+
+	// DRAW → STANDBY → MAIN_1
+	CHECK(advance_phase(duel));
+	CHECK(advance_phase(duel));
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	// 启动效果:回合玩家、主要阶段
+	CHECK(duel.activate_effect(ignition_card, 0));
+	CHECK(game.life_points(domain::Player::SECOND) == 7500);
+
+	// 对手的诱发即时:优先权仍在回合玩家 → 失败
+	CHECK_FALSE(duel.activate_effect(quick_card, 0));
+	CHECK(game.life_points(domain::Player::FIRST) == 8000);
+
+	// 回合玩家放弃 → 对手获得优先权 → 成功
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.activate_effect(quick_card, 0));
+	CHECK(game.life_points(domain::Player::FIRST) == 7500);
+
+	std::filesystem::remove_all(directory);
 }

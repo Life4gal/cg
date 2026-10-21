@@ -163,6 +163,9 @@ namespace cg::flow
 		// 效果
 		// ================================================================
 
+		// 主动发动(Ignition/Quick):需当前优先权持有者控制该卡
+		auto activate_effect(state::CardInstanceId card, std::size_t effect_index) noexcept -> bool;
+
 		// 事件发生后:收集触发 → 构建连锁 → 逆序结算
 		auto trigger_event(dsl::TriggerSource source, std::optional<state::CardInstanceId> event_card = std::nullopt) noexcept -> bool;
 	};

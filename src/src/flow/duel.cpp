@@ -581,6 +581,75 @@ namespace cg::flow
 		return true;
 	}
 
+	auto Duel::activate_effect(const state::CardInstanceId card, const std::size_t effect_index) noexcept -> bool
+	{
+		const auto controller = game_.controller(card);
+		if (!controller.has_value())
+		{
+			return false;
+		}
+
+		// 只有当前优先权持有者可以发动
+		if (const auto player = priority_.holder_player(turn_.turn_player());
+			player != *controller)
+		{
+			return false;
+		}
+
+		const auto code = game_.code(card);
+		if (!code.has_value())
+		{
+			return false;
+		}
+
+		const auto* script = scripts_.find(*code);
+		if (script == nullptr || effect_index >= script->effects.size())
+		{
+			return false;
+		}
+
+		const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[effect_index].body);
+		if (activated == nullptr)
+		{
+			return false;
+		}
+
+		if (const auto* ignition = std::get_if<dsl::Ignition>(&activated->activation);
+			ignition != nullptr)
+		{
+			// 启动效果:回合玩家、主要阶段
+			if (*controller != turn_.turn_player())
+			{
+				return false;
+			}
+			if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
+			{
+				return false;
+			}
+		}
+		else if (!std::holds_alternative<dsl::Quick>(activated->activation))
+		{
+			// 卡发动/诱发效果不可手动激活
+			return false;
+		}
+
+		if (!activated->activation_zones.empty() && !activated->activation_zones.contains(game_.zone_of(card)))
+		{
+			return false;
+		}
+
+		if (execution::Context context{game_, *controller, card};
+			!interpreter_.execute(*activated, context))
+		{
+			return false;
+		}
+
+		// 连锁结算后回到回合玩家的开放状态
+		priority_.reset();
+
+		return true;
+	}
+
 	auto Duel::trigger_event(const dsl::TriggerSource source, const std::optional<state::CardInstanceId> event_card) noexcept -> bool
 	{
 		execution::Context context{game_, turn_.turn_player()};
