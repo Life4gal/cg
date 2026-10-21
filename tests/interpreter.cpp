@@ -506,3 +506,16 @@ TEST_CASE("execution::Interpreter applies static numeric modifiers")
 	CHECK(interpreter.static_numeric_bonus(scripts, dragon, domain::NumericProperty::DEFENSE, context) == 200);
 	CHECK(interpreter.static_numeric_bonus(scripts, warrior, domain::NumericProperty::ATTACK, context) == 0);
 }
+
+TEST_CASE("execution::ScriptRegistry loads the card corpus")
+{
+	execution::ScriptRegistry scripts{};
+
+	CHECK(scripts.load_directory(std::filesystem::path{CG_CARDS_DIR}, g_types, g_vocabulary));
+	CHECK(scripts.take_errors().empty());
+	CHECK(scripts.size() > 0);
+
+	CHECK(scripts.find(domain::CardCode{12580477}) != nullptr);
+	CHECK(scripts.find(domain::CardCode{33508719}) != nullptr);
+	CHECK(scripts.find(domain::CardCode{50913601}) != nullptr);
+}

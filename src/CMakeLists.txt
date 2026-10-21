@@ -45,6 +45,7 @@ add_library(
 	# ===================================
 
 	src/execution/interpreter.cpp
+	src/execution/script_registry.cpp
 )
 
 target_sources(
