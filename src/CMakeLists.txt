@@ -164,6 +164,7 @@ target_sources(
 
 	include/cg/execution/value.hpp
 	include/cg/execution/effect.hpp
+	include/cg/execution/event.hpp
 	include/cg/execution/context.hpp
 	include/cg/execution/chain.hpp
 	include/cg/execution/interpreter.hpp

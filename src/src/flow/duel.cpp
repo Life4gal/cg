@@ -631,6 +631,8 @@ namespace cg::flow
 			mark_used(*script, card, static_cast<UsageKey::index_type>(effect_index));
 		}
 
+		process_pending_events();
+
 		// 留场:魔法(永续/场地/装备) / 陷阱(永续);其余送墓
 		if (const auto stays = instance->is_card_subtype({domain::CardSubtype::CONTINUOUS, domain::CardSubtype::FIELD, domain::CardSubtype::EQUIP});
 			!stays)
@@ -877,6 +879,32 @@ namespace cg::flow
 		return true;
 	}
 
+	auto Duel::process_pending_events() noexcept -> void
+	{
+		if (processing_events_)
+		{
+			return;
+		}
+
+		// TODO: 一次最多处理多少轮事件?
+		constexpr std::size_t max_pass_per_turn = 64;
+
+		processing_events_ = true;
+
+		auto events = interpreter_.take_events();
+		for (std::size_t pass = 0; pass < max_pass_per_turn && !events.empty(); ++pass)
+		{
+			for (const auto& [code, card]: events)
+			{
+				trigger_event(dsl::TriggerSource{code}, card);
+			}
+
+			events = interpreter_.take_events();
+		}
+
+		processing_events_ = false;
+	}
+
 	auto Duel::usage_owner(const dsl::UsageBasis basis, const state::CardInstanceId card) const noexcept -> UsageKey::owner_type
 	{
 		if (basis == dsl::UsageBasis::THIS_CARD)
@@ -1011,6 +1039,8 @@ namespace cg::flow
 
 		mark_used(*script, card, effect_index);
 
+		process_pending_events();
+
 		// 连锁结算后回到回合玩家的开放状态
 		priority_.reset();
 
@@ -1035,6 +1065,8 @@ namespace cg::flow
 			return false;
 		}
 
-		return interpreter_.resolve(chain);
+		const auto resolved = interpreter_.resolve(chain);
+		process_pending_events();
+		return resolved;
 	}
 }

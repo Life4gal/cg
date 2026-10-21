@@ -4,6 +4,7 @@
 #include <optional>
 
 #include <cg/execution/effect.hpp>
+#include <cg/execution/event.hpp>
 #include <cg/execution/context.hpp>
 
 namespace cg::dsl
@@ -33,6 +34,7 @@ namespace cg::execution
 
 	private:
 		std::reference_wrapper<const dsl::Vocabulary> vocabulary_;
+		PendingEventList pending_events_;
 
 		[[nodiscard]] auto evaluate_arguments(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<std::vector<std::optional<Value>>>;
 		[[nodiscard]] auto evaluate_list(const dsl::ExpressionList& expressions, Context& context) noexcept -> std::optional<std::vector<Value>>;
@@ -83,6 +85,9 @@ namespace cg::execution
 
 	public:
 		explicit Interpreter(const dsl::Vocabulary& vocabulary) noexcept;
+
+		// 取出并清空结算过程中产生的事件
+		[[nodiscard]] auto take_events() noexcept -> PendingEventList;
 
 		// 静态数值修正(场上卡脚本的 StaticEffect;累加匹配属性的add_numeric_property)
 		[[nodiscard]] auto static_numeric_bonus(const ScriptRegistry& scripts, state::CardInstanceId card, domain::NumericProperty property, Context& context) noexcept -> Integer::value_type;

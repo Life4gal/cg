@@ -546,6 +546,62 @@ TEST_CASE("flow::Duel fires battle destruction triggers automatically")
 	CHECK(game.zone_of(recruit) == domain::Zone::MONSTER);
 }
 
+TEST_CASE("flow::Duel processes destruction events from effects")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_event_queue";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"97000011.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"destroy","args":{"cards":{"call":"find_cards","args":{"players":["OPPONENT"],"zones":["MONSTER"]}},"reason":"EFFECT"}}]}]})"
+	);
+	write(
+		"97000012.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":false,"condition":{"call":"is_in_zone","args":{"card":{"call":"this_card","args":{}},"zones":["GRAVEYARD"]}}},"effect":[{"call":"draw","args":{"players":["SELF"],"count":1}}]}]})"
+	);
+
+	constexpr domain::CardCode igniter_code{97000011};
+	constexpr domain::CardCode victim_code{97000012};
+	constexpr domain::CardCode draw_code{97000013};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(igniter_code, make_monster(igniter_code));
+	game.register_definition(victim_code, make_monster(victim_code));
+	game.register_definition(draw_code, make_monster(draw_code));
+
+	REQUIRE(duel.load_scripts(directory));
+
+	const auto igniter = game.create_instance(igniter_code, domain::Player::FIRST);
+	REQUIRE(game.place(igniter, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	const auto victim = game.create_instance(victim_code, domain::Player::SECOND);
+	REQUIRE(game.place(victim, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	const auto draw_card = game.create_instance(draw_code, domain::Player::SECOND);
+	REQUIRE(game.place(draw_card, domain::DeckPlacement{.index = 0}));
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	// 效果破坏 → 结算后统一开 DESTROYED 时点
+	CHECK(duel.activate_effect(igniter, 0));
+
+	CHECK(game.zone_of(victim) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(igniter) == domain::Zone::MONSTER);
+	CHECK(game.count_hand_zones_card(domain::Player::SECOND) == 1);
+	CHECK(game.count_deck_zones_card(domain::Player::SECOND) == 0);
+}
+
 TEST_CASE("flow::Duel activates ignition and quick effects")
 {
 	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_activation";

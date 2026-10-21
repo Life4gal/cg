@@ -740,6 +740,9 @@ namespace cg::execution
 			{
 				return std::nullopt;
 			}
+
+			pending_events_.emplace_back(domain::EventCode::DESTROYED, card);
+			pending_events_.emplace_back(domain::EventCode::EFFECT_DESTROYED, card);
 		}
 
 		return Value{Void{}};
@@ -1320,6 +1323,7 @@ namespace cg::execution
 				return std::nullopt;
 			}
 
+			pending_events_.emplace_back(domain::EventCode::SPECIAL_SUMMON_SUCCESS, *card);
 			return Value{Void{}};
 		}
 
@@ -1356,6 +1360,11 @@ namespace cg::execution
 
 	Interpreter::Interpreter(const dsl::Vocabulary& vocabulary) noexcept
 		: vocabulary_{vocabulary} {}
+
+	auto Interpreter::take_events() noexcept -> PendingEventList
+	{
+		return std::exchange(pending_events_, {});
+	}
 
 	auto Interpreter::static_numeric_bonus(const ScriptRegistry& scripts, const state::CardInstanceId card, const domain::NumericProperty property, Context& context) noexcept -> Integer::value_type
 	{

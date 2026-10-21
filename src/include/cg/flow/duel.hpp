@@ -126,11 +126,17 @@ namespace cg::flow
 
 		StatResolver stats_;
 
+		// 事件队列处理中(防重入)
+		bool processing_events_{false};
+
 		// ================================================================
 		// 内部动作
 		// ================================================================
 
 		auto perform_tribute_summon(state::CardInstanceId card, domain::FieldColumn column, std::span<const state::CardInstanceId> tributes, domain::Position position) noexcept -> bool;
+
+		// 结算后统一处理 Interpreter 产生的事件(破坏/特召等)
+		auto process_pending_events() noexcept -> void;
 
 		// 使用次数
 		[[nodiscard]] auto usage_owner(dsl::UsageBasis basis, state::CardInstanceId card) const noexcept -> UsageKey::owner_type;
