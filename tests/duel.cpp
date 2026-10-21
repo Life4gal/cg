@@ -333,3 +333,53 @@ TEST_CASE("flow::Duel requires both players to pass before advancing phase")
 	CHECK_FALSE(duel.priority().passed());
 	CHECK(duel.priority().holder() == flow::Priority::Holder::TURN_PLAYER);
 }
+
+TEST_CASE("flow::Duel triggers effects from scripts")
+{
+	constexpr domain::CardCode jar_code{33508719};
+	constexpr domain::CardCode monster_code{92000001};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(jar_code, make_monster(jar_code));
+	game.register_definition(monster_code, make_monster(monster_code));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	const auto jar = game.create_instance(jar_code, domain::Player::FIRST);
+	REQUIRE(game.place(jar, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}));
+
+	const auto add_to_hand = [&](const domain::Player player) -> void
+	{
+		const auto card = game.create_instance(monster_code, player);
+		REQUIRE(game.place(card, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	};
+	const auto add_to_deck = [&](const domain::Player player) -> void
+	{
+		const auto card = game.create_instance(monster_code, player);
+		REQUIRE(game.place(card, domain::DeckPlacement{.index = 0}));
+	};
+
+	for (auto i = 0; i < 2; ++i)
+	{
+		add_to_hand(domain::Player::FIRST);
+		add_to_hand(domain::Player::SECOND);
+	}
+
+	for (auto i = 0; i < 5; ++i)
+	{
+		add_to_deck(domain::Player::FIRST);
+		add_to_deck(domain::Player::SECOND);
+	}
+
+	CHECK(duel.trigger_event(dsl::TriggerSource{domain::EventCode::FLIP}, jar));
+
+	CHECK(game.count_hand_zones_card(domain::Player::FIRST) == 5);
+	CHECK(game.count_hand_zones_card(domain::Player::SECOND) == 5);
+	CHECK(game.count_graveyard_zones_card(domain::Player::FIRST) == 2);
+	CHECK(game.count_graveyard_zones_card(domain::Player::SECOND) == 2);
+
+	// 不匹配的事件不触发
+	CHECK_FALSE(duel.trigger_event(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, jar));
+}

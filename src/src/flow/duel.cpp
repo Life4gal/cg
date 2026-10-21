@@ -1,6 +1,9 @@
 #include <cg/flow/duel.hpp>
 
 #include <algorithm>
+#include <ranges>
+
+#include <cg/execution/chain.hpp>
 
 namespace cg::flow
 {
@@ -129,11 +132,17 @@ namespace cg::flow
 	}
 
 	Duel::Duel() noexcept
-	// : game_{},
-	// turn_{},
-	// priority_{},
-	// battle_{} {}
-	= default;
+		:
+		// game_{},
+		// turn_{},
+		// priority_{},
+		// battle_{},
+		// state_{},
+		loser_{std::nullopt},
+		// types_{},
+		vocabulary_{types_},
+		// scripts_{},
+		interpreter_{vocabulary_} {}
 
 	auto Duel::game() noexcept -> state::Game&
 	{
@@ -145,30 +154,30 @@ namespace cg::flow
 		return game_;
 	}
 
-	auto Duel::turn() noexcept -> Turn&
-	{
-		return turn_;
-	}
+	// auto Duel::turn() noexcept -> Turn&
+	// {
+	// 	return turn_;
+	// }
 
 	auto Duel::turn() const noexcept -> const Turn&
 	{
 		return turn_;
 	}
 
-	auto Duel::priority() noexcept -> Priority&
-	{
-		return priority_;
-	}
+	// auto Duel::priority() noexcept -> Priority&
+	// {
+	// 	return priority_;
+	// }
 
 	auto Duel::priority() const noexcept -> const Priority&
 	{
 		return priority_;
 	}
 
-	auto Duel::battle() noexcept -> Battle&
-	{
-		return battle_;
-	}
+	// auto Duel::battle() noexcept -> Battle&
+	// {
+	// 	return battle_;
+	// }
 
 	auto Duel::battle() const noexcept -> const Battle&
 	{
@@ -201,6 +210,21 @@ namespace cg::flow
 		return std::nullopt;
 	}
 
+	auto Duel::load_scripts(const std::filesystem::path& directory) noexcept -> bool
+	{
+		return scripts_.load_directory(directory, types_, vocabulary_);
+	}
+
+	// auto Duel::scripts() noexcept -> execution::ScriptRegistry&
+	// {
+	// 	return scripts_;
+	// }
+
+	auto Duel::scripts() const noexcept -> const execution::ScriptRegistry&
+	{
+		return scripts_;
+	}
+
 	auto Duel::draw_for_turn() noexcept -> bool
 	{
 		if (turn_.phase() != domain::Phase::DRAW || state_.drew_in_draw_phase)
@@ -223,6 +247,43 @@ namespace cg::flow
 		}
 
 		state_.drew_in_draw_phase = true;
+		return true;
+	}
+
+	auto Duel::change_phase() noexcept -> bool
+	{
+		if (!priority_.both_passed())
+		{
+			return false;
+		}
+
+		if (!turn_.advance_phase())
+		{
+			return false;
+		}
+
+		priority_.reset();
+		return true;
+	}
+
+	auto Duel::pass_priority() noexcept -> bool
+	{
+		priority_.pass();
+		return priority_.both_passed();
+	}
+
+	auto Duel::end_turn() noexcept -> bool
+	{
+		if (turn_.phase() != domain::Phase::END)
+		{
+			return false;
+		}
+
+		turn_.end_turn();
+		priority_.reset();
+		battle_.reset();
+		state_ = TurnState{};
+
 		return true;
 	}
 
@@ -500,40 +561,24 @@ namespace cg::flow
 		return true;
 	}
 
-	auto Duel::change_phase() noexcept -> bool
+	auto Duel::trigger_event(const dsl::TriggerSource source, const std::optional<state::CardInstanceId> event_card) noexcept -> bool
 	{
-		if (!priority_.both_passed())
+		execution::Context context{game_, turn_.turn_player()};
+		context.trigger_source = source;
+		context.event_card = event_card;
+
+		const auto triggered = interpreter_.collect_triggered(scripts_, context, turn_.turn_player());
+		if (triggered.empty())
 		{
 			return false;
 		}
 
-		if (!turn_.advance_phase())
+		auto chain = interpreter_.build_chain(triggered, context);
+		if (chain.empty())
 		{
 			return false;
 		}
 
-		priority_.reset();
-		return true;
-	}
-
-	auto Duel::pass_priority() noexcept -> bool
-	{
-		priority_.pass();
-		return priority_.both_passed();
-	}
-
-	auto Duel::end_turn() noexcept -> bool
-	{
-		if (turn_.phase() != domain::Phase::END)
-		{
-			return false;
-		}
-
-		turn_.end_turn();
-		priority_.reset();
-		battle_.reset();
-		state_ = TurnState{};
-
-		return true;
+		return interpreter_.resolve(chain);
 	}
 }
