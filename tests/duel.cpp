@@ -34,6 +34,17 @@ namespace
 		return definition;
 	}
 
+	[[nodiscard]] auto make_spell(const domain::CardCode code, const std::initializer_list<domain::CardSubtype> subtypes) -> state::CardDefinition
+	{
+		state::CardDefinition definition{};
+		definition.code = code;
+		definition.kind = {domain::CardType::SPELL};
+		definition.subtypes = subtypes;
+		definition.spell = state::CardDefinition::Spell{};
+
+		return definition;
+	}
+
 	// 双方放弃优先权后推进阶段
 	auto advance_phase(flow::Duel& duel) -> bool
 	{
@@ -542,4 +553,46 @@ TEST_CASE("flow::Duel enforces per-turn usage restrictions")
 	CHECK(game.life_points(domain::Player::SECOND) == 7000);
 
 	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel activates spell cards")
+{
+	constexpr domain::CardCode raigeki_code{12580477};
+	constexpr domain::CardCode mountain_code{50913601};
+	constexpr domain::CardCode monster_code{96000001};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(raigeki_code, make_spell(raigeki_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(mountain_code, make_spell(mountain_code, {domain::CardSubtype::FIELD}));
+	game.register_definition(monster_code, make_monster(monster_code));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	const auto raigeki = game.create_instance(raigeki_code, domain::Player::FIRST);
+	const auto mountain = game.create_instance(mountain_code, domain::Player::FIRST);
+	const auto monster = game.create_instance(monster_code, domain::Player::SECOND);
+
+	REQUIRE(game.place(raigeki, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(mountain, domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(monster, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	// 抽卡阶段不能发动魔法
+	CHECK_FALSE(duel.activate_card(raigeki));
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+
+	// 通常魔法:结算后送墓
+	CHECK(duel.activate_card(raigeki));
+	CHECK(game.zone_of(monster) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(raigeki) == domain::Zone::GRAVEYARD);
+
+	// 场地魔法:留场
+	CHECK(duel.activate_card(mountain));
+	CHECK(game.zone_of(mountain) == domain::Zone::FIELD_SPELL);
+
+	// 非魔法卡不可用此接口
+	CHECK_FALSE(duel.activate_card(monster));
 }

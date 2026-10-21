@@ -200,6 +200,13 @@ namespace cg::flow
 		auto tribute_set(state::CardInstanceId card, domain::FieldColumn column, std::span<const state::CardInstanceId> tributes) noexcept -> bool;
 
 		// ================================================================
+		// 卡牌发动(魔法/陷阱)
+		// ================================================================
+
+		// 发动魔法卡(当前仅手牌;场地/永续/装备留场,其余结算后送墓)
+		auto activate_card(state::CardInstanceId card) noexcept -> bool;
+
+		// ================================================================
 		// 战斗
 		// ================================================================
 

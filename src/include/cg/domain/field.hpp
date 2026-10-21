@@ -2,6 +2,9 @@
 
 #include <array>
 #include <variant>
+#include <optional>
+
+#include <cg/utility/functional.hpp>
 
 namespace cg::domain
 {
@@ -64,6 +67,13 @@ namespace cg::domain
 		// FACE_DOWN_ATTACK,
 		// 里侧+守备表示
 		FACE_DOWN_DEFENSE,
+	};
+
+	class FieldInfo
+	{
+	public:
+		FieldColumn column;
+		Position position;
 	};
 
 	// ==============================================================
@@ -249,6 +259,88 @@ namespace cg::domain
 				//
 			> {};
 
+	[[nodiscard]] constexpr auto index_of(const Location& location) noexcept -> std::optional<DeckLocation::size_type>
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[]<typename L>(const L& l) noexcept -> std::optional<DeckLocation::size_type> //
+						requires(
+							std::is_same_v<L, DeckLocation> ||
+							std::is_same_v<L, ExtraDeckLocation> ||
+							std::is_same_v<L, HandLocation> ||
+							std::is_same_v<L, GraveyardLocation> ||
+							std::is_same_v<L, BanishedLocation>
+						)
+					{
+						return l.index;
+					},
+					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<DeckLocation::size_type>
+					{
+						return std::nullopt;
+					}
+			},
+			location
+		);
+	}
+
+	[[nodiscard]] constexpr auto column_of(const Location& location) noexcept -> std::optional<FieldColumn>
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[]<typename L>(const L& l) noexcept -> std::optional<FieldColumn> //
+						requires(
+							std::is_same_v<L, MonsterLocation> ||
+							std::is_same_v<L, ExtraMonsterLocation> ||
+							std::is_same_v<L, SpellTrapLocation>
+						)
+					{
+						return l.column;
+					},
+					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldColumn>
+					{
+						return std::nullopt;
+					}
+			},
+			location
+		);
+	}
+
+	[[nodiscard]] constexpr auto column_of(const FieldLocation& location) noexcept -> std::optional<FieldColumn>
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[]<typename L>(const L& l) noexcept -> std::optional<FieldColumn> //
+						requires(
+							std::is_same_v<L, MonsterLocation> ||
+							std::is_same_v<L, ExtraMonsterLocation> ||
+							std::is_same_v<L, SpellTrapLocation>
+						)
+					{
+						return l.column;
+					},
+					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldColumn>
+					{
+						return std::nullopt;
+					}
+			},
+			location
+		);
+	}
+
+	[[nodiscard]] constexpr auto column_of(const AnyMonsterLocation& location) noexcept -> FieldColumn
+	{
+		return std::visit(
+			[](const auto& l) noexcept -> FieldColumn
+			{
+				return l.column;
+			},
+			location
+		);
+	}
+
 	// ==============================================================
 	// 卡牌当前形态
 	// ==============================================================
@@ -408,4 +500,143 @@ namespace cg::domain
 				ExtraMonsterPlacement
 				//
 			> {};
+
+	[[nodiscard]] constexpr auto index_of(const Placement& placement) noexcept -> std::optional<DeckPlacement::size_type>
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[]<typename P>(const P& p) noexcept -> std::optional<DeckPlacement::size_type> //
+						requires(
+							std::is_same_v<P, DeckPlacement> ||
+							std::is_same_v<P, ExtraDeckPlacement> ||
+							std::is_same_v<P, HandPlacement> ||
+							std::is_same_v<P, GraveyardPlacement> ||
+							std::is_same_v<P, BanishedPlacement>
+						)
+					{
+						return p.index;
+					},
+					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<DeckPlacement::size_type>
+					{
+						return std::nullopt;
+					}
+			},
+			placement
+		);
+	}
+
+	[[nodiscard]] constexpr auto column_of(const Placement& placement) noexcept -> std::optional<FieldColumn>
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[]<typename P>(const P& p) noexcept -> std::optional<FieldColumn> //
+						requires(
+							std::is_same_v<P, MonsterPlacement> ||
+							std::is_same_v<P, ExtraMonsterPlacement> ||
+							std::is_same_v<P, SpellTrapPlacement>
+						)
+					{
+						return p.column;
+					},
+					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldColumn>
+					{
+						return std::nullopt;
+					}
+			},
+			placement
+		);
+	}
+
+	[[nodiscard]] constexpr auto column_of(const FieldPlacement& placement) noexcept -> std::optional<FieldColumn>
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[]<typename P>(const P& p) noexcept -> std::optional<FieldColumn> //
+						requires(
+							std::is_same_v<P, MonsterPlacement> ||
+							std::is_same_v<P, ExtraMonsterPlacement> ||
+							std::is_same_v<P, SpellTrapPlacement>
+						)
+					{
+						return p.column;
+					},
+					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldColumn>
+					{
+						return std::nullopt;
+					}
+			},
+			placement
+		);
+	}
+
+	[[nodiscard]] constexpr auto column_of(const AnyMonsterPlacement& placement) noexcept -> FieldColumn
+	{
+		return std::visit(
+			[](const auto& p) noexcept -> FieldColumn
+			{
+				return p.column;
+			},
+			placement
+		);
+	}
+
+	[[nodiscard]] constexpr auto field_info_of(const Placement& placement) noexcept -> std::optional<FieldInfo>
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[]<typename P>(const P& p) noexcept -> std::optional<FieldInfo> //
+						requires(
+							std::is_same_v<P, MonsterPlacement> ||
+							std::is_same_v<P, ExtraMonsterPlacement> ||
+							std::is_same_v<P, SpellTrapPlacement>
+						)
+					{
+						return FieldInfo{.column = p.column, .position = p.position};
+					},
+					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldInfo>
+					{
+						return std::nullopt;
+					}
+			},
+			placement
+		);
+	}
+
+	[[nodiscard]] constexpr auto field_info_of(const FieldPlacement& placement) noexcept -> std::optional<FieldInfo>
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[]<typename P>(const P& p) noexcept -> std::optional<FieldInfo> //
+						requires(
+							std::is_same_v<P, MonsterPlacement> ||
+							std::is_same_v<P, ExtraMonsterPlacement> ||
+							std::is_same_v<P, SpellTrapPlacement>
+						)
+					{
+						return FieldInfo{.column = p.column, .position = p.position};
+					},
+					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldInfo>
+					{
+						return std::nullopt;
+					}
+			},
+			placement
+		);
+	}
+
+	[[nodiscard]] constexpr auto field_info_of(const AnyMonsterPlacement& placement) noexcept -> FieldInfo
+	{
+		return std::visit(
+			[](const auto& p) noexcept -> FieldInfo
+			{
+				return {.column = p.column, .position = p.position};
+			},
+			placement
+		);
+	}
 }

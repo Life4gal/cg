@@ -7,38 +7,6 @@
 
 namespace cg::flow
 {
-	namespace
-	{
-		class MonsterPosition
-		{
-		public:
-			domain::FieldColumn column;
-			domain::Position position;
-			bool extra;
-		};
-
-		[[nodiscard]] auto monster_position(const state::Game& game, const state::CardInstanceId card) noexcept -> std::optional<MonsterPosition>
-		{
-			const auto placement = game.placement(card);
-			if (!placement.has_value())
-			{
-				return std::nullopt;
-			}
-
-			if (const auto* p = std::get_if<domain::MonsterPlacement>(&*placement))
-			{
-				return MonsterPosition{.column = p->column, .position = p->position, .extra = false};
-			}
-
-			if (const auto* p = std::get_if<domain::ExtraMonsterPlacement>(&*placement))
-			{
-				return MonsterPosition{.column = p->column, .position = p->position, .extra = true};
-			}
-
-			return std::nullopt;
-		}
-	}
-
 	auto Duel::perform_tribute_summon(
 		const state::CardInstanceId card,
 		const domain::FieldColumn column,
@@ -122,7 +90,7 @@ namespace cg::flow
 			}
 		}
 
-		if (!game_.place(card, domain::Placement{domain::MonsterPlacement{.column = column, .position = position}}))
+		if (!game_.place(card, domain::MonsterPlacement{.column = column, .position = position}))
 		{
 			return false;
 		}
@@ -356,7 +324,7 @@ namespace cg::flow
 			return false;
 		}
 
-		if (!game_.place(card, domain::Placement{domain::MonsterPlacement{.column = column, .position = domain::Position::FACE_UP_ATTACK}}))
+		if (!game_.place(card, domain::MonsterPlacement{.column = column, .position = domain::Position::FACE_UP_ATTACK}))
 		{
 			return false;
 		}
@@ -405,7 +373,7 @@ namespace cg::flow
 			return false;
 		}
 
-		if (!game_.place(card, domain::Placement{domain::MonsterPlacement{.column = column, .position = domain::Position::FACE_DOWN_DEFENSE}}))
+		if (!game_.place(card, domain::MonsterPlacement{.column = column, .position = domain::Position::FACE_DOWN_DEFENSE}))
 		{
 			return false;
 		}
@@ -422,6 +390,144 @@ namespace cg::flow
 	auto Duel::tribute_set(const state::CardInstanceId card, const domain::FieldColumn column, const std::span<const state::CardInstanceId> tributes) noexcept -> bool
 	{
 		return perform_tribute_summon(card, column, tributes, domain::Position::FACE_DOWN_DEFENSE);
+	}
+
+	auto Duel::activate_card(const state::CardInstanceId card) noexcept -> bool
+	{
+		const auto controller = game_.controller(card);
+		if (!controller.has_value())
+		{
+			return false;
+		}
+
+		if (priority_.holder_player(turn_.turn_player()) != *controller)
+		{
+			return false;
+		}
+
+		const auto definition = game_.definition(card);
+		if (!definition.has_value() || !definition->get().kind.contains(domain::CardType::SPELL))
+		{
+			// TODO: 陷阱卡(需盖放/时点)
+			return false;
+		}
+
+		if (game_.zone_of(card) != domain::Zone::HAND)
+		{
+			return false;
+		}
+
+		if (*controller != turn_.turn_player())
+		{
+			return false;
+		}
+		if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
+		{
+			return false;
+		}
+
+		const auto code = game_.code(card);
+		if (!code.has_value())
+		{
+			return false;
+		}
+
+		const auto* script = scripts_.find(*code);
+		if (script == nullptr)
+		{
+			return false;
+		}
+
+		const dsl::ActivatedEffect* activated = nullptr;
+		std::size_t effect_index = 0;
+		for (const auto [index, effect]: script->effects | std::views::enumerate)
+		{
+			const auto* candidate = std::get_if<dsl::ActivatedEffect>(&effect.body);
+			if (candidate == nullptr)
+			{
+				continue;
+			}
+			if (!std::holds_alternative<dsl::CardActivation>(candidate->activation))
+			{
+				continue;
+			}
+
+			activated = candidate;
+			effect_index = index;
+			break;
+		}
+
+		// 纯静态卡(如场地魔法)可以没有卡自身发动效果
+		if (activated != nullptr && !can_use(*script, card, static_cast<UsageKey::index_type>(effect_index)))
+		{
+			return false;
+		}
+
+		execution::Context context{game_, *controller, card};
+		if (activated != nullptr && !interpreter_.activate(*activated, context))
+		{
+			return false;
+		}
+
+		// 放置:场地魔法区 / 魔陷区
+		if (definition->get().subtypes.contains(domain::CardSubtype::FIELD))
+		{
+			if (!game_.is_field_spell_zones_empty(*controller))
+			{
+				return false;
+			}
+
+			if (!game_.place(card, domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}))
+			{
+				return false;
+			}
+		}
+		else
+		{
+			std::optional<domain::FieldColumn> column;
+			for (const auto candidate: domain::field_columns)
+			{
+				if (game_.is_location_empty(*controller, domain::SpellTrapLocation{.column = candidate}))
+				{
+					column = candidate;
+					break;
+				}
+			}
+
+			if (!column.has_value())
+			{
+				return false;
+			}
+
+			if (!game_.place(card, domain::SpellTrapPlacement{.column = *column, .position = domain::Position::FACE_UP_ATTACK}))
+			{
+				return false;
+			}
+		}
+
+		if (activated != nullptr)
+		{
+			if (!interpreter_.resolve(*activated, context))
+			{
+				return false;
+			}
+
+			mark_used(*script, card, static_cast<UsageKey::index_type>(effect_index));
+		}
+
+		// 永续/场地/装备留场,其余结算后送墓
+		const auto stays = definition->get().subtypes.contains(domain::CardSubtype::CONTINUOUS)
+		                   || definition->get().subtypes.contains(domain::CardSubtype::FIELD)
+		                   || definition->get().subtypes.contains(domain::CardSubtype::EQUIP);
+
+		if (!stays)
+		{
+			game_.move_to_graveyard(card, {domain::Reason::RULE});
+		}
+
+		priority_.reset();
+
+		return true;
 	}
 
 	auto Duel::declare_attack(const state::CardInstanceId attacker, const std::optional<state::CardInstanceId> target) noexcept -> bool
@@ -443,10 +549,23 @@ namespace cg::flow
 			return false;
 		}
 
-		if (const auto attacker_position = monster_position(game_, attacker);
-			!attacker_position.has_value() || attacker_position->position != domain::Position::FACE_UP_ATTACK)
+		if (const auto placement = game_.placement(attacker);
+			!placement.has_value())
 		{
 			return false;
+		}
+		else
+		{
+			const auto field_info = domain::field_info_of(*placement);
+			if (!field_info.has_value())
+			{
+				return false;
+			}
+
+			if (field_info->position != domain::Position::FACE_UP_ATTACK)
+			{
+				return false;
+			}
 		}
 
 		if (std::ranges::contains(state_.attacked_monsters, attacker))
@@ -490,27 +609,40 @@ namespace cg::flow
 		battle_.advance_battle_step();
 
 		// 伤害步骤开始:里侧守备 → 表侧守备
-		std::optional<MonsterPosition> target_position{};
+		auto target_position = domain::Position::FACE_UP_ATTACK;
 		if (target.has_value())
 		{
-			target_position = monster_position(game_, *target);
-			if (!target_position.has_value())
+			const auto placement = game_.placement(*target);
+			if (!placement.has_value())
 			{
 				return false;
 			}
 
-			if (target_position->position == domain::Position::FACE_DOWN_DEFENSE)
+			const auto field_info = domain::field_info_of(*placement);
+			if (!field_info.has_value())
 			{
-				const auto placement = target_position->extra
-					                       ? domain::Placement{domain::ExtraMonsterPlacement{.column = target_position->column, .position = domain::Position::FACE_UP_DEFENSE}}
-					                       : domain::Placement{domain::MonsterPlacement{.column = target_position->column, .position = domain::Position::FACE_UP_DEFENSE}};
+				return false;
+			}
 
-				if (!game_.place(*target, placement))
+			target_position = field_info->position;
+			if (target_position == domain::Position::FACE_DOWN_DEFENSE)
+			{
+				target_position = domain::Position::FACE_UP_DEFENSE;
+			}
+
+			if (std::holds_alternative<domain::ExtraMonsterPlacement>(*placement))
+			{
+				if (!game_.place(*target, domain::ExtraMonsterPlacement{.column = field_info->column, .position = field_info->position}))
 				{
 					return false;
 				}
-
-				target_position->position = domain::Position::FACE_UP_DEFENSE;
+			}
+			else
+			{
+				if (!game_.place(*target, domain::MonsterPlacement{.column = field_info->column, .position = field_info->position}))
+				{
+					return false;
+				}
 			}
 		}
 
@@ -529,7 +661,7 @@ namespace cg::flow
 		{
 			damage_to_opponent = attacker_attack;
 		}
-		else if (target_position->position == domain::Position::FACE_UP_ATTACK)
+		else if (target_position == domain::Position::FACE_UP_ATTACK)
 		{
 			if (const auto target_attack = attack_value(*target);
 				attacker_attack > target_attack)
