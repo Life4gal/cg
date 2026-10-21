@@ -304,6 +304,15 @@ namespace cg::flow
 		battle_.reset();
 		state_ = TurnState{};
 
+		// 清除本回合的使用记录(DUEL范围保留)
+		std::erase_if(
+			usage_,
+			[](const std::pair<const UsageKey&, const UsageKey::size_type>& p) noexcept -> bool
+			{
+				return p.first.scope == dsl::UsageScope::TURN;
+			}
+		);
+
 		return true;
 	}
 
@@ -581,7 +590,73 @@ namespace cg::flow
 		return true;
 	}
 
-	auto Duel::activate_effect(const state::CardInstanceId card, const std::size_t effect_index) noexcept -> bool
+	auto Duel::usage_owner(const dsl::UsageBasis basis, const state::CardInstanceId card) const noexcept -> UsageKey::owner_type
+	{
+		if (basis == dsl::UsageBasis::THIS_CARD)
+		{
+			return card.raw();
+		}
+
+		const auto code = game_.code(card);
+		if (!code.has_value())
+		{
+			return 0;
+		}
+
+		return std::to_underlying(*code);
+	}
+
+	auto Duel::can_use(const dsl::CardScript& script, const state::CardInstanceId card, const UsageKey::index_type effect_index) const noexcept -> bool
+	{
+		for (const auto [index, restriction]: script.usage_restrictions | std::views::enumerate)
+		{
+			if (!std::ranges::contains(restriction.refs, effect_index))
+			{
+				continue;
+			}
+
+			const UsageKey key
+			{
+					.owner = usage_owner(restriction.basis, card),
+					.scope = restriction.scope,
+					.basis = restriction.basis,
+					.index = static_cast<UsageKey::size_type>(index),
+			};
+
+			const auto it = usage_.find(key);
+			if (const auto used = it == usage_.end() ? 0u : it->second;
+				used >= restriction.count)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	auto Duel::mark_used(const dsl::CardScript& script, const state::CardInstanceId card, const UsageKey::index_type effect_index) noexcept -> void
+	{
+		for (const auto [index, restriction]: script.usage_restrictions | std::views::enumerate)
+		{
+			if (!std::ranges::contains(restriction.refs, effect_index))
+			{
+				continue;
+			}
+
+			const UsageKey key
+			{
+					.owner = usage_owner(restriction.basis, card),
+					.scope = restriction.scope,
+					.basis = restriction.basis,
+					.index = static_cast<UsageKey::size_type>(index),
+			};
+			auto& count = usage_[key];
+
+			count += 1;
+		}
+	}
+
+	auto Duel::activate_effect(const state::CardInstanceId card, const UsageKey::index_type effect_index) noexcept -> bool
 	{
 		const auto controller = game_.controller(card);
 		if (!controller.has_value())
@@ -610,6 +685,11 @@ namespace cg::flow
 
 		const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[effect_index].body);
 		if (activated == nullptr)
+		{
+			return false;
+		}
+
+		if (!can_use(*script, card, effect_index))
 		{
 			return false;
 		}
@@ -643,6 +723,8 @@ namespace cg::flow
 		{
 			return false;
 		}
+
+		mark_used(*script, card, effect_index);
 
 		// 连锁结算后回到回合玩家的开放状态
 		priority_.reset();

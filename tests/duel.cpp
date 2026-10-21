@@ -461,8 +461,8 @@ TEST_CASE("flow::Duel activates ignition and quick effects")
 
 	REQUIRE(duel.load_scripts(directory));
 
-	game.change_life_points(domain::Player::FIRST, 8000);
-	game.change_life_points(domain::Player::SECOND, 8000);
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto ignition_card = game.create_instance(domain::CardCode{94000001}, domain::Player::FIRST);
 	const auto quick_card = game.create_instance(domain::CardCode{94000002}, domain::Player::SECOND);
@@ -486,6 +486,60 @@ TEST_CASE("flow::Duel activates ignition and quick effects")
 	CHECK_FALSE(duel.pass_priority());
 	CHECK(duel.activate_effect(quick_card, 0));
 	CHECK(game.life_points(domain::Player::FIRST) == 7500);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel enforces per-turn usage restrictions")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_usage";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	{
+		std::ofstream stream{directory / "95000001.json", std::ios::binary};
+		stream <<
+				R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}],"usage_restrictions":[{"scope":"TURN","basis":"CARD_NAME","verb":"USE","count":1,"refs":[0]}]})";
+	}
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(domain::CardCode{95000001}, make_monster(domain::CardCode{95000001}));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto card = game.create_instance(domain::CardCode{95000001}, domain::Player::FIRST);
+	REQUIRE(game.place(card, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	// 本回合第一次成功,第二次被次数限制拒绝
+	CHECK(duel.activate_effect(card, 0));
+	CHECK(duel.activate_effect(card, 0) == false);
+	CHECK(game.life_points(domain::Player::SECOND) == 7500);
+
+	// 结束本回合
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	// 对方回合空过
+	for (auto i = 0; i < 5; ++i)
+	{
+		CHECK(advance_phase(duel));
+	}
+	REQUIRE(duel.turn().phase() == domain::Phase::END);
+	CHECK(duel.end_turn());
+
+	// 回到先攻回合:限制已重置
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.activate_effect(card, 0));
+	CHECK(game.life_points(domain::Player::SECOND) == 7000);
 
 	std::filesystem::remove_all(directory);
 }

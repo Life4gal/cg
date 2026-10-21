@@ -66,6 +66,48 @@ namespace cg::flow
 		std::optional<domain::Player> loser_;
 
 		// ================================================================
+		// 使用次数记录
+		// ================================================================
+
+		class UsageKey
+		{
+		public:
+			using owner_type = state::CardInstanceId::value_type;
+			using size_type = dsl::UsageRestriction::size_type;
+			using index_type = dsl::UsageRestriction::index_type;
+
+			// state::CardInstanceId / domain::CardCode
+			owner_type owner;
+
+			dsl::UsageScope scope;
+			dsl::UsageBasis basis;
+			// dsl::CardScript::usage_restrictions[index]
+			size_type index;
+
+			[[nodiscard]] constexpr auto operator<(const UsageKey& other) const noexcept -> bool
+			{
+				// 严格弱序:依次比较全部字段
+				if (owner != other.owner)
+				{
+					return owner < other.owner;
+				}
+				if (scope != other.scope)
+				{
+					return scope < other.scope;
+				}
+				if (basis != other.basis)
+				{
+					return basis < other.basis;
+				}
+
+				return index < other.index;
+			}
+		};
+
+		// 键 = (范围,依据,拥有者ID,限制下标);值 = 已使用次数
+		std::map<UsageKey, UsageKey::size_type> usage_;
+
+		// ================================================================
 		// 卡脚本与执行
 		// ================================================================
 
@@ -83,6 +125,11 @@ namespace cg::flow
 		// 当前攻击力/守备力(含静态修正)
 		[[nodiscard]] auto attack_value(state::CardInstanceId card) noexcept -> std::underlying_type_t<domain::AttackDefense>;
 		[[nodiscard]] auto defense_value(state::CardInstanceId card) noexcept -> std::underlying_type_t<domain::AttackDefense>;
+
+		// 使用次数
+		[[nodiscard]] auto usage_owner(dsl::UsageBasis basis, state::CardInstanceId card) const noexcept -> UsageKey::owner_type;
+		[[nodiscard]] auto can_use(const dsl::CardScript& script, state::CardInstanceId card, UsageKey::index_type effect_index) const noexcept -> bool;
+		auto mark_used(const dsl::CardScript& script, state::CardInstanceId card, UsageKey::index_type effect_index) noexcept -> void;
 
 	public:
 		Duel() noexcept;
@@ -164,7 +211,7 @@ namespace cg::flow
 		// ================================================================
 
 		// 主动发动(Ignition/Quick):需当前优先权持有者控制该卡
-		auto activate_effect(state::CardInstanceId card, std::size_t effect_index) noexcept -> bool;
+		auto activate_effect(state::CardInstanceId card, UsageKey::index_type effect_index) noexcept -> bool;
 
 		// 事件发生后:收集触发 → 构建连锁 → 逆序结算
 		auto trigger_event(dsl::TriggerSource source, std::optional<state::CardInstanceId> event_card = std::nullopt) noexcept -> bool;

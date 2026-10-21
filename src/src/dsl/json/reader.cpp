@@ -2792,6 +2792,8 @@ namespace cg::dsl::json
 			{
 				return std::nullopt;
 			}
+
+			usage_restrictions = *std::move(list);
 		}
 
 		return CardScript{.identity = std::move(identity), .summons = std::move(summons), .effects = std::move(effects), .usage_restrictions = std::move(usage_restrictions)};
