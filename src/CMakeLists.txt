@@ -36,6 +36,7 @@ add_library(
 	# FLOW
 	# ===================================
 
+	src/flow/duel.cpp
 	src/flow/turn.cpp
 	src/flow/battle.cpp
 	src/flow/priority.cpp
@@ -150,6 +151,7 @@ target_sources(
 	# FLOW
 	# ===================================
 
+	include/cg/flow/duel.hpp
 	include/cg/flow/turn.hpp
 	include/cg/flow/battle.hpp
 	include/cg/flow/priority.hpp

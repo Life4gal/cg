@@ -7,6 +7,7 @@ add_executable(
 	${CMAKE_CURRENT_SOURCE_DIR}/dsl.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/interpreter.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/state.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/duel.cpp
 )
 
 target_compile_definitions(

@@ -56,6 +56,7 @@ namespace cg::state
 		domain::CardCode code;
 		// 主类型(怪兽/魔法/陷阱)
 		// 实卡目前仅存在"陷阱怪兽"一种复合类型
+		// TODO: 实际上卡定义不需要EnumMask,一定只有一种类型,复合类型由效果产生
 		utility::EnumMask<domain::CardType> kind;
 		// 子类型
 		utility::EnumMask<domain::CardSubtype> subtypes;
