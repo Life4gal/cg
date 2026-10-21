@@ -3,8 +3,7 @@
 #include <functional>
 #include <optional>
 
-#include <cg/dsl/effect.hpp>
-
+#include <cg/execution/effect.hpp>
 #include <cg/execution/context.hpp>
 
 namespace cg::dsl
@@ -24,6 +23,8 @@ namespace cg::dsl
 
 namespace cg::execution
 {
+	class ScriptRegistry;
+
 	class Interpreter
 	{
 	public:
@@ -84,6 +85,9 @@ namespace cg::execution
 
 		// 触发效果是否匹配当前事件(触发源 + 触发时条件)
 		[[nodiscard]] auto matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool;
+
+		// 收集当前事件触发的全部效果(SEGOC 顺序:必发优先,回合玩家优先)
+		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, domain::Player turn_player) noexcept -> TriggeredEffectList;
 
 		// 执行一张发动类效果:条件 → 费用 → 对象 → 结算
 		[[nodiscard]] auto execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;

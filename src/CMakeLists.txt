@@ -158,8 +158,10 @@ target_sources(
 	# ===================================
 
 	include/cg/execution/value.hpp
+	include/cg/execution/effect.hpp
 	include/cg/execution/context.hpp
 	include/cg/execution/interpreter.hpp
+	include/cg/execution/script_registry.hpp
 )
 
 target_include_directories(

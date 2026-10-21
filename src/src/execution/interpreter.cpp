@@ -11,6 +11,7 @@
 #include <cg/dsl/types.hpp>
 #include <cg/dsl/vocabulary.hpp>
 #include <cg/state/game.hpp>
+#include <cg/execution/script_registry.hpp>
 
 namespace cg::execution
 {
@@ -1392,6 +1393,68 @@ namespace cg::execution
 		}
 
 		return true;
+	}
+
+	auto Interpreter::collect_triggered(const ScriptRegistry& scripts, const Context& context, const domain::Player turn_player) noexcept -> TriggeredEffectList
+	{
+		TriggeredEffectList result{};
+
+		for (const auto& game = context.game.get();
+		     const auto& instance: game.card_instances)
+		{
+			const auto* script = scripts.find(instance.code());
+			if (script == nullptr)
+			{
+				continue;
+			}
+
+			const auto zone = game.zone_of(instance.id());
+
+			for (const auto& effect: script->effects)
+			{
+				const auto* activated = std::get_if<dsl::ActivatedEffect>(&effect.body);
+				if (activated == nullptr)
+				{
+					continue;
+				}
+
+				const auto* trigger = std::get_if<dsl::Trigger>(&activated->activation);
+				if (trigger == nullptr)
+				{
+					continue;
+				}
+
+				if (!activated->activation_zones.empty() && !activated->activation_zones.contains(zone))
+				{
+					continue;
+				}
+
+				auto card_context = context;
+				card_context.source = instance.id();
+				card_context.controller = instance.controller();
+
+				if (!matches(*trigger, card_context))
+				{
+					continue;
+				}
+
+				result.emplace_back(instance.id(), instance.controller(), effect.id, *activated, *trigger);
+			}
+		}
+
+		// SEGOC:必发优先;同组内回合玩家优先
+		std::ranges::stable_sort(
+			result,
+			[&](const TriggeredEffect& lhs, const TriggeredEffect& rhs) noexcept -> bool
+			{
+				const auto lhs_priority = std::tuple{!lhs.trigger.get().optional ? 0 : 1, lhs.controller == turn_player ? 0 : 1};
+				const auto rhs_priority = std::tuple{!rhs.trigger.get().optional ? 0 : 1, rhs.controller == turn_player ? 0 : 1};
+
+				return lhs_priority < rhs_priority;
+			}
+		);
+
+		return result;
 	}
 
 	auto Interpreter::execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool
