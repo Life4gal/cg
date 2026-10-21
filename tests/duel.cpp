@@ -10,7 +10,8 @@ namespace
 		const domain::CardCode code,
 		const std::underlying_type_t<domain::AttackDefense> attack = 1000,
 		const std::underlying_type_t<domain::AttackDefense> defense = 1000,
-		const std::underlying_type_t<domain::LevelRank> level = 4
+		const std::underlying_type_t<domain::LevelRank> level = 4,
+		const domain::Race race = domain::Race::DRAGON
 	) -> state::CardDefinition
 	{
 		state::CardDefinition definition{};
@@ -20,7 +21,7 @@ namespace
 		definition.monster = state::CardDefinition::Monster
 		{
 				.attribute = domain::Attribute::EARTH,
-				.race = domain::Race::DRAGON,
+				.race = race,
 				.level = level,
 				.attack = attack,
 				.defense = defense,
@@ -382,4 +383,49 @@ TEST_CASE("flow::Duel triggers effects from scripts")
 
 	// 不匹配的事件不触发
 	CHECK_FALSE(duel.trigger_event(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, jar));
+}
+
+TEST_CASE("flow::Duel applies static modifiers in battle")
+{
+	constexpr domain::CardCode mountain_code{50913601};
+	constexpr domain::CardCode dragon_code{93000001};
+	constexpr domain::CardCode warrior_code{93000002};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	state::CardDefinition mountain{};
+	mountain.code = mountain_code;
+	mountain.kind = {domain::CardType::SPELL};
+	mountain.subtypes = {domain::CardSubtype::FIELD};
+	mountain.spell = state::CardDefinition::Spell{};
+	game.register_definition(mountain_code, mountain);
+
+	game.register_definition(dragon_code, make_monster(dragon_code, 1000, 1000, 4, domain::Race::DRAGON));
+	game.register_definition(warrior_code, make_monster(warrior_code, 1000, 1000, 4, domain::Race::WARRIOR));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto mountain_card = game.create_instance(mountain_code, domain::Player::FIRST);
+	REQUIRE(game.place(mountain_card, domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}));
+
+	const auto defender = game.create_instance(warrior_code, domain::Player::FIRST);
+	REQUIRE(game.place(defender, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	const auto attacker = game.create_instance(dragon_code, domain::Player::SECOND);
+	REQUIRE(game.place(attacker, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	// 龙族 1000 + Mountain 200 = 1200 > 战士 1000
+	CHECK(duel.declare_attack(attacker, defender));
+
+	CHECK(game.zone_of(defender) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
+	CHECK(game.life_points(domain::Player::FIRST) == 7800);
+	CHECK(game.life_points(domain::Player::SECOND) == 8000);
 }

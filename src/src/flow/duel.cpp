@@ -131,6 +131,26 @@ namespace cg::flow
 		return true;
 	}
 
+	auto Duel::attack_value(const state::CardInstanceId card) noexcept -> std::underlying_type_t<domain::AttackDefense>
+	{
+		const auto base = game_.attack(card).value_or(0);
+
+		execution::Context context{game_, game_.controller(card).value_or(turn_.turn_player())};
+		const auto bonus = interpreter_.static_numeric_bonus(scripts_, card, domain::NumericProperty::ATTACK, context);
+
+		return static_cast<std::underlying_type_t<domain::AttackDefense>>(base + bonus);
+	}
+
+	auto Duel::defense_value(const state::CardInstanceId card) noexcept -> std::underlying_type_t<domain::AttackDefense>
+	{
+		const auto base = game_.defense(card).value_or(0);
+
+		execution::Context context{game_, game_.controller(card).value_or(turn_.turn_player())};
+		const auto bonus = interpreter_.static_numeric_bonus(scripts_, card, domain::NumericProperty::DEFENSE, context);
+
+		return static_cast<std::underlying_type_t<domain::AttackDefense>>(base + bonus);
+	}
+
 	Duel::Duel() noexcept
 		:
 		// game_{},
@@ -451,7 +471,7 @@ namespace cg::flow
 		state_.attacked = true;
 		state_.entered_battle_phase = true;
 
-		const auto attack_value = game_.attack(attacker).value_or(0);
+		const auto attacker_attack = attack_value(attacker);
 
 		// 战斗步骤:攻击宣言 → 伤害步骤
 		battle_.reset();
@@ -498,20 +518,20 @@ namespace cg::flow
 
 		if (!target.has_value())
 		{
-			damage_to_opponent = attack_value;
+			damage_to_opponent = attacker_attack;
 		}
 		else if (target_position->position == domain::Position::FACE_UP_ATTACK)
 		{
-			if (const auto target_attack = game_.attack(*target).value_or(0);
-				attack_value > target_attack)
+			if (const auto target_attack = attack_value(*target);
+				attacker_attack > target_attack)
 			{
 				destroy_target = *target;
-				damage_to_opponent = attack_value - target_attack;
+				damage_to_opponent = attacker_attack - target_attack;
 			}
-			else if (attack_value < target_attack)
+			else if (attacker_attack < target_attack)
 			{
 				destroy_attacker = attacker;
-				damage_to_controller = target_attack - attack_value;
+				damage_to_controller = target_attack - attacker_attack;
 			}
 			else
 			{
@@ -521,14 +541,14 @@ namespace cg::flow
 		}
 		else
 		{
-			if (const auto target_defense = game_.defense(*target).value_or(0);
-				attack_value > target_defense)
+			if (const auto target_defense = defense_value(*target);
+				attacker_attack > target_defense)
 			{
 				destroy_target = *target;
 			}
-			else if (attack_value < target_defense)
+			else if (attacker_attack < target_defense)
 			{
-				damage_to_controller = target_defense - attack_value;
+				damage_to_controller = target_defense - attacker_attack;
 			}
 		}
 

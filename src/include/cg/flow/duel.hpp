@@ -80,6 +80,10 @@ namespace cg::flow
 
 		auto perform_tribute_summon(state::CardInstanceId card, domain::FieldColumn column, std::span<const state::CardInstanceId> tributes, domain::Position position) noexcept -> bool;
 
+		// 当前攻击力/守备力(含静态修正)
+		[[nodiscard]] auto attack_value(state::CardInstanceId card) noexcept -> std::underlying_type_t<domain::AttackDefense>;
+		[[nodiscard]] auto defense_value(state::CardInstanceId card) noexcept -> std::underlying_type_t<domain::AttackDefense>;
+
 	public:
 		Duel() noexcept;
 
