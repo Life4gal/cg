@@ -27,7 +27,7 @@ namespace
 	{
 		auto script = g_reader.read_card_script(json, "<test>");
 
-		return {.script = std::move(script), .diagnostics = g_reader.diagnostics()};
+		return {.script = std::move(script), .diagnostics = g_reader.take_diagnostics()};
 	}
 
 	[[nodiscard]] auto make_card(const std::string_view condition, const std::string_view effect) -> nlohmann::json

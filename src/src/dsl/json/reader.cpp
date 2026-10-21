@@ -2692,9 +2692,9 @@ namespace cg::dsl::json
 		return diagnostics_;
 	}
 
-	auto Reader::clear_diagnostics() noexcept -> void
+	auto Reader::take_diagnostics() noexcept -> Diagnostics
 	{
-		diagnostics_.clear();
+		return std::exchange(diagnostics_, {});
 	}
 
 	auto Reader::read_card_script(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<CardScript>

@@ -122,11 +122,11 @@ namespace cg::dsl::json
 	public:
 		Reader(const TypeRegistry& types, const Vocabulary& vocabulary) noexcept;
 
-		// 上次清理前读取产生的诊断(按产生顺序;空 = 无错误)
+		// 读取产生的诊断(不会清除)(按产生顺序;空 = 无错误)
 		[[nodiscard]] auto diagnostics() const noexcept -> const Diagnostics&;
 
-		// 清理已存在的诊断信息
-		auto clear_diagnostics() noexcept -> void;
+		// 获取产生的诊断
+		[[nodiscard]] auto take_diagnostics() noexcept -> Diagnostics;
 
 		[[nodiscard]] auto read_card_script(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<CardScript>;
 	};

@@ -65,6 +65,7 @@ namespace cg::execution
 		[[nodiscard]] auto attack(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 		[[nodiscard]] auto defense(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 		[[nodiscard]] auto this_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
+		[[nodiscard]] auto event_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 		[[nodiscard]] auto sole_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 
 		// 动作
@@ -81,7 +82,10 @@ namespace cg::execution
 	public:
 		explicit Interpreter(const dsl::Vocabulary& vocabulary) noexcept;
 
-		// 执行一张发动类效果:condition → cost → target → resolve
+		// 触发效果是否匹配当前事件(触发源 + 触发时条件)
+		[[nodiscard]] auto matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool;
+
+		// 执行一张发动类效果:条件 → 费用 → 对象 → 结算
 		[[nodiscard]] auto execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;
 	};
 }

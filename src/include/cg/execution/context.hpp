@@ -2,13 +2,13 @@
 
 #include <functional>
 #include <map>
+#include <optional>
 #include <vector>
 
 #include <cg/domain/player.hpp>
 
 #include <cg/dsl/id.hpp>
-
-#include <cg/state/id.hpp>
+#include <cg/dsl/trigger.hpp>
 
 #include <cg/execution/value.hpp>
 
@@ -37,5 +37,16 @@ namespace cg::execution
 		std::vector<state::CardInstanceId> element_scopes;
 		// 选择回调(测试/UI 注入)
 		selector_type selector;
+
+		// ================================================================
+		// 触发上下文
+		// ================================================================
+
+		// 当前事件/期间
+		std::optional<dsl::TriggerSource> trigger_source;
+		// 事件关联卡
+		std::optional<state::CardInstanceId> event_card;
+		// 事件玩家
+		std::optional<domain::Player> event_player;
 	};
 }

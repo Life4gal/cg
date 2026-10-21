@@ -192,9 +192,6 @@ namespace cg::execution
 		}
 	}
 
-	Interpreter::Interpreter(const dsl::Vocabulary& vocabulary) noexcept
-		: vocabulary_{vocabulary} {}
-
 	auto Interpreter::evaluate_arguments(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<std::vector<std::optional<Value>>>
 	{
 		std::vector<std::optional<Value>> values{};
@@ -469,6 +466,10 @@ namespace cg::execution
 		{
 			return this_card(*definition, call, context);
 		}
+		if (definition->name == "event_card")
+		{
+			return event_card(*definition, call, context);
+		}
 		if (definition->name == "sole_card")
 		{
 			return sole_card(*definition, call, context);
@@ -614,63 +615,6 @@ namespace cg::execution
 		}
 
 		return true;
-	}
-
-	auto Interpreter::execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool
-	{
-		if (effect.condition.has_value())
-		{
-			const auto value = evaluate(*effect.condition, context);
-			if (!value.has_value())
-			{
-				return false;
-			}
-
-			if (const auto condition = as<dsl::ValueClass::BOOL>(*value);
-				condition == nullptr || !*condition)
-			{
-				return false;
-			}
-		}
-
-		if (!execute_statements(effect.cost, context))
-		{
-			return false;
-		}
-		if (!execute_statements(effect.target, context))
-		{
-			return false;
-		}
-
-		return execute_statements(effect.effect, context);
-	}
-
-	auto Interpreter::filter(Context& context, const dsl::Expression& predicate, const Group& candidates) noexcept -> std::optional<Group>
-	{
-		Group result{};
-		result.reserve(candidates.size());
-
-		for (const auto card: candidates)
-		{
-			auto value = evaluate_scoped(predicate, card, context);
-			if (!value.has_value())
-			{
-				return std::nullopt;
-			}
-
-			const auto condition = as<dsl::ValueClass::BOOL>(*value);
-			if (condition == nullptr)
-			{
-				return std::nullopt;
-			}
-
-			if (*condition)
-			{
-				result.push_back(card);
-			}
-		}
-
-		return result;
 	}
 
 	auto Interpreter::find_cards(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1105,6 +1049,22 @@ namespace cg::execution
 		return Value{Card{context.source}};
 	}
 
+	auto Interpreter::event_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		if (const auto args = evaluate_arguments(definition, call, context);
+			!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		if (!context.event_card.has_value())
+		{
+			return std::nullopt;
+		}
+
+		return Value{Card{*context.event_card}};
+	}
+
 	auto Interpreter::sole_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
 		const auto args = evaluate_arguments(definition, call, context);
@@ -1363,5 +1323,103 @@ namespace cg::execution
 		}
 
 		return std::nullopt;
+	}
+
+	auto Interpreter::filter(Context& context, const dsl::Expression& predicate, const Group& candidates) noexcept -> std::optional<Group>
+	{
+		Group result{};
+		result.reserve(candidates.size());
+
+		for (const auto card: candidates)
+		{
+			auto value = evaluate_scoped(predicate, card, context);
+			if (!value.has_value())
+			{
+				return std::nullopt;
+			}
+
+			const auto condition = as<dsl::ValueClass::BOOL>(*value);
+			if (condition == nullptr)
+			{
+				return std::nullopt;
+			}
+
+			if (*condition)
+			{
+				result.push_back(card);
+			}
+		}
+
+		return result;
+	}
+
+	Interpreter::Interpreter(const dsl::Vocabulary& vocabulary) noexcept
+		: vocabulary_{vocabulary} {}
+
+	auto Interpreter::matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool
+	{
+		if (!context.trigger_source.has_value())
+		{
+			return false;
+		}
+
+		const auto matched = std::ranges::any_of(
+			trigger.spec.sources,
+			[&](const dsl::TriggerSource& source) noexcept -> bool
+			{
+				return source == *context.trigger_source;
+			}
+		);
+
+		if (!matched)
+		{
+			return false;
+		}
+
+		if (trigger.spec.condition.has_value())
+		{
+			const auto value = evaluate(*trigger.spec.condition, context);
+			if (!value.has_value())
+			{
+				return false;
+			}
+
+			if (const auto condition = as<dsl::ValueClass::BOOL>(*value);
+				condition == nullptr || !static_cast<bool>(*condition))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	auto Interpreter::execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool
+	{
+		if (effect.condition.has_value())
+		{
+			const auto value = evaluate(*effect.condition, context);
+			if (!value.has_value())
+			{
+				return false;
+			}
+
+			if (const auto condition = as<dsl::ValueClass::BOOL>(*value);
+				condition == nullptr || !*condition)
+			{
+				return false;
+			}
+		}
+
+		if (!execute_statements(effect.cost, context))
+		{
+			return false;
+		}
+		if (!execute_statements(effect.target, context))
+		{
+			return false;
+		}
+
+		return execute_statements(effect.effect, context);
 	}
 }

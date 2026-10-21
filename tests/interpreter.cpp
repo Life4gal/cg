@@ -62,6 +62,7 @@ namespace
 		std::stringstream buffer{};
 		buffer << stream.rdbuf();
 
+		std::ignore = g_reader.take_diagnostics();
 		return g_reader.read_card_script(nlohmann::json::parse(buffer.str()), file);
 	}
 }
@@ -306,4 +307,65 @@ TEST_CASE("execution::Interpreter changes life points")
 	}
 
 	CHECK(game.life_points(domain::Player::FIRST) == 9000);
+}
+
+TEST_CASE("execution::Interpreter matches a FLIP trigger and resolves")
+{
+	constexpr domain::CardCode jar_code{33508719};
+	constexpr domain::CardCode monster_code{90000020};
+
+	state::Game game{};
+	game.card_definitions.emplace(jar_code, make_definition(jar_code, domain::CardType::MONSTER));
+	game.card_definitions.emplace(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
+
+	constexpr state::CardInstanceId jar{1};
+	game.card_instances.emplace_back(jar, domain::Player::FIRST, game.card_definitions.at(jar_code));
+	REQUIRE(game.place(jar, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}));
+
+	const auto add_to_hand = [&](const state::CardInstanceId card, const domain::Player player) -> void
+	{
+		game.card_instances.emplace_back(card, player, game.card_definitions.at(monster_code));
+		REQUIRE(game.place(card, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	};
+	const auto add_to_deck = [&](const state::CardInstanceId card, const domain::Player player) -> void
+	{
+		game.card_instances.emplace_back(card, player, game.card_definitions.at(monster_code));
+		REQUIRE(game.place(card, domain::DeckPlacement{.index = 0}));
+	};
+
+	add_to_hand(state::CardInstanceId{10}, domain::Player::FIRST);
+	add_to_hand(state::CardInstanceId{11}, domain::Player::FIRST);
+	add_to_hand(state::CardInstanceId{12}, domain::Player::SECOND);
+	add_to_hand(state::CardInstanceId{13}, domain::Player::SECOND);
+
+	for (state::CardInstanceId::value_type i = 0; i < 5; ++i)
+	{
+		add_to_deck(state::CardInstanceId{static_cast<state::CardInstanceId::value_type>(20 + i)}, domain::Player::FIRST);
+		add_to_deck(state::CardInstanceId{static_cast<state::CardInstanceId::value_type>(30 + i)}, domain::Player::SECOND);
+	}
+
+	const auto script = read_card_script("33508719.json");
+	REQUIRE(script.has_value());
+	REQUIRE(script->effects.size() == 1);
+
+	const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
+	REQUIRE(activated != nullptr);
+
+	const auto* trigger = std::get_if<dsl::Trigger>(&activated->activation);
+	REQUIRE(trigger != nullptr);
+
+	execution::Interpreter interpreter{g_vocabulary};
+	execution::Context context{.game = game, .controller = domain::Player::FIRST, .source = jar};
+	context.trigger_source = dsl::TriggerSource{domain::EventCode::FLIP};
+	context.event_card = jar;
+
+	CHECK(interpreter.matches(*trigger, context));
+	CHECK(interpreter.execute(*activated, context));
+
+	CHECK(game.count_hand_zones_card(domain::Player::FIRST) == 5);
+	CHECK(game.count_hand_zones_card(domain::Player::SECOND) == 5);
+	CHECK(game.count_graveyard_zones_card(domain::Player::FIRST) == 2);
+	CHECK(game.count_graveyard_zones_card(domain::Player::SECOND) == 2);
+	CHECK(game.is_deck_zones_empty(domain::Player::FIRST));
+	CHECK(game.is_deck_zones_empty(domain::Player::SECOND));
 }
