@@ -13,6 +13,7 @@
 
 #include <cg/state/game.hpp>
 
+#include <cg/flow/event.hpp>
 #include <cg/flow/battle.hpp>
 #include <cg/flow/priority.hpp>
 #include <cg/flow/stat_resolver.hpp>
@@ -127,7 +128,10 @@ namespace cg::flow
 		StatResolver stats_;
 
 		// 事件队列处理中(防重入)
-		bool processing_events_{false};
+		bool processing_events_;
+
+		// 当前事件窗口(卡发动时点匹配)
+		std::optional<Window> window_;
 
 		// ================================================================
 		// 内部动作

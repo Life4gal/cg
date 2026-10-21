@@ -128,7 +128,9 @@ namespace cg::flow
 		vocabulary_{types_},
 		// scripts_{},
 		interpreter_{vocabulary_},
-		stats_{game_, scripts_, interpreter_} {}
+		stats_{game_, scripts_, interpreter_},
+		processing_events_{false},
+		window_{std::nullopt} {}
 
 	auto Duel::game() noexcept -> state::Game&
 	{
@@ -249,13 +251,22 @@ namespace cg::flow
 		}
 
 		priority_.reset();
+		window_.reset();
 		return true;
 	}
 
 	auto Duel::pass_priority() noexcept -> bool
 	{
 		priority_.pass();
-		return priority_.both_passed();
+
+		if (!priority_.both_passed())
+		{
+			return false;
+		}
+
+		// 双方通过后关闭事件窗口
+		window_.reset();
+		return true;
 	}
 
 	auto Duel::end_turn() noexcept -> bool
@@ -269,6 +280,7 @@ namespace cg::flow
 		priority_.reset();
 		battle_.reset();
 		state_ = TurnState{};
+		window_.reset();
 
 		// 清除本回合的使用记录(DUEL范围保留)
 		std::erase_if(
@@ -542,10 +554,22 @@ namespace cg::flow
 				continue;
 			}
 
-			// TODO: 事件时点(CardActivation::timing)尚未接入
+			// 事件型发动时点:当前窗口须匹配
 			if (card_activation->timing.has_value())
 			{
-				return false;
+				if (!window_.has_value())
+				{
+					return false;
+				}
+
+				execution::Context timing_context{game_, controller, card};
+				timing_context.trigger_source = window_->source;
+				timing_context.event_card = window_->card;
+
+				if (!interpreter_.matches(dsl::Trigger{.spec = *card_activation->timing, .optional = false}, timing_context))
+				{
+					return false;
+				}
 			}
 
 			activated = candidate;
@@ -716,6 +740,9 @@ namespace cg::flow
 			// 对方场上有怪兽时不能直接攻击
 			return false;
 		}
+
+		// 攻击宣言开启新的窗口
+		window_.reset();
 
 		state_.attacked_monsters.push_back(attacker);
 		state_.attacked = true;
@@ -1049,6 +1076,9 @@ namespace cg::flow
 
 	auto Duel::trigger_event(const dsl::TriggerSource source, const std::optional<state::CardInstanceId> event_card) noexcept -> bool
 	{
+		// 记录当前事件窗口,供 CardActivation::timing 匹配
+		window_ = {.source = source, .card = event_card};
+
 		execution::Context context{game_, turn_.turn_player()};
 		context.trigger_source = source;
 		context.event_card = event_card;
