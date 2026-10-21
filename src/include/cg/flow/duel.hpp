@@ -84,8 +84,11 @@ namespace cg::flow
 		// 攻击宣言:target = 空表示直接攻击
 		auto declare_attack(state::CardInstanceId attacker, std::optional<state::CardInstanceId> target) noexcept -> bool;
 
-		// 推进阶段(委托Turn::advance_phase)
+		// 推进阶段(需双方均已放弃优先权)
 		auto change_phase() noexcept -> bool;
+
+		// 当前优先权持有者放弃;双方均放弃时返回 true(窗口关闭)
+		auto pass_priority() noexcept -> bool;
 
 		// 结束回合(仅END阶段有效)
 		auto end_turn() noexcept -> bool;

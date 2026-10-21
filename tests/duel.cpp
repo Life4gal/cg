@@ -31,17 +31,25 @@ namespace
 		return definition;
 	}
 
+	// 双方放弃优先权后推进阶段
+	auto advance_phase(flow::Duel& duel) -> bool
+	{
+		duel.pass_priority();
+		duel.pass_priority();
+		return duel.change_phase();
+	}
+
 	// 先攻空过;返回时轮到后攻的战斗阶段
 	auto enter_second_player_battle(flow::Duel& duel) -> void
 	{
-		duel.change_phase(); // STANDBY
-		duel.change_phase(); // MAIN_1
-		duel.change_phase(); // END
+		advance_phase(duel); // STANDBY
+		advance_phase(duel); // MAIN_1
+		advance_phase(duel); // END
 		duel.end_turn();
 
-		duel.change_phase(); // STANDBY
-		duel.change_phase(); // MAIN_1
-		duel.change_phase(); // BATTLE
+		advance_phase(duel); // STANDBY
+		advance_phase(duel); // MAIN_1
+		advance_phase(duel); // BATTLE
 	}
 }
 
@@ -66,8 +74,8 @@ TEST_CASE("flow::Duel performs core actions")
 	CHECK_FALSE(duel.draw_for_turn());
 
 	// 进入主要阶段
-	CHECK(duel.change_phase());
-	CHECK(duel.change_phase());
+	CHECK(advance_phase(duel));
+	CHECK(advance_phase(duel));
 	CHECK(duel.turn().phase() == domain::Phase::MAIN_1);
 
 	// 通常召唤
@@ -81,7 +89,7 @@ TEST_CASE("flow::Duel performs core actions")
 	CHECK_FALSE(duel.set_monster(second, domain::FieldColumn::C2));
 
 	// 第一回合:MAIN_1 → END → 交换回合
-	CHECK(duel.change_phase());
+	CHECK(advance_phase(duel));
 	CHECK(duel.turn().phase() == domain::Phase::END);
 	CHECK(duel.end_turn());
 	CHECK(duel.turn().turn_player() == domain::Player::SECOND);
@@ -90,8 +98,8 @@ TEST_CASE("flow::Duel performs core actions")
 	const auto opponent_deck = game.create_instance(monster_code, domain::Player::SECOND);
 	REQUIRE(game.place(opponent_deck, domain::DeckPlacement{.index = 0}));
 	CHECK(duel.draw_for_turn());
-	CHECK(duel.change_phase());
-	CHECK(duel.change_phase());
+	CHECK(advance_phase(duel));
+	CHECK(advance_phase(duel));
 	CHECK(duel.turn().phase() == domain::Phase::MAIN_1);
 
 	const auto opponent_hand = game.create_instance(monster_code, domain::Player::SECOND);
@@ -242,8 +250,8 @@ TEST_CASE("flow::Duel tribute summons a level 5 monster")
 	game.register_definition(high_code, make_monster(high_code, 2000, 2000, 5));
 	game.register_definition(low_code, make_monster(low_code, 1000, 1000));
 
-	duel.change_phase(); // STANDBY
-	duel.change_phase(); // MAIN_1
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
 	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
 
 	const auto high = game.create_instance(high_code, domain::Player::FIRST);
@@ -273,8 +281,8 @@ TEST_CASE("flow::Duel requires two tributes for a level 7 monster")
 	game.register_definition(high_code, make_monster(high_code, 2500, 2500, 7));
 	game.register_definition(low_code, make_monster(low_code, 1000, 1000));
 
-	duel.change_phase(); // STANDBY
-	duel.change_phase(); // MAIN_1
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
 
 	const auto high = game.create_instance(high_code, domain::Player::FIRST);
 	REQUIRE(game.place(high, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
@@ -301,4 +309,27 @@ TEST_CASE("flow::Duel loses when drawing from an empty deck")
 
 	CHECK_FALSE(duel.draw_for_turn());
 	CHECK(duel.winner() == domain::Player::SECOND);
+}
+
+TEST_CASE("flow::Duel requires both players to pass before advancing phase")
+{
+	flow::Duel duel{};
+
+	CHECK(duel.turn().phase() == domain::Phase::DRAW);
+
+	// 未放弃优先权时不能推进
+	CHECK_FALSE(duel.change_phase());
+
+	// 回合玩家放弃 → 对手窗口
+	CHECK_FALSE(duel.pass_priority());
+	CHECK_FALSE(duel.change_phase());
+
+	// 对手放弃 → 双方通过
+	CHECK(duel.pass_priority());
+	CHECK(duel.change_phase());
+	CHECK(duel.turn().phase() == domain::Phase::STANDBY);
+
+	// 新阶段优先权重置
+	CHECK_FALSE(duel.priority().passed());
+	CHECK(duel.priority().holder() == flow::Priority::Holder::TURN_PLAYER);
 }

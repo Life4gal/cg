@@ -502,7 +502,24 @@ namespace cg::flow
 
 	auto Duel::change_phase() noexcept -> bool
 	{
-		return turn_.advance_phase();
+		if (!priority_.both_passed())
+		{
+			return false;
+		}
+
+		if (!turn_.advance_phase())
+		{
+			return false;
+		}
+
+		priority_.reset();
+		return true;
+	}
+
+	auto Duel::pass_priority() noexcept -> bool
+	{
+		priority_.pass();
+		return priority_.both_passed();
 	}
 
 	auto Duel::end_turn() noexcept -> bool
