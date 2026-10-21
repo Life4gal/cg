@@ -8,7 +8,7 @@ namespace
 
 	[[nodiscard]] auto make_definition(const domain::CardCode code) -> state::CardDefinition
 	{
-		auto definition = state::CardDefinition{};
+		state::CardDefinition definition{};
 		definition.code = code;
 		definition.kind = {domain::CardType::MONSTER};
 		definition.subtypes = {domain::CardSubtype::NORMAL};
@@ -27,9 +27,9 @@ namespace
 
 TEST_CASE("state::Game moves cards into the requested zones")
 {
-	constexpr auto monster_code = domain::CardCode{90000002};
+	constexpr domain::CardCode monster_code{90000002};
 
-	auto game = state::Game{};
+	state::Game game{};
 	game.card_definitions.emplace(monster_code, make_definition(monster_code));
 
 	constexpr state::CardInstanceId own{1};

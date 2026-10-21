@@ -29,6 +29,20 @@ namespace cg::state
 	// extra_monster_zones_{}
 	{}
 
+	auto Field::life_points(const domain::Player player) const noexcept -> std::underlying_type_t<domain::AttackDefense>
+	{
+		const auto& player_zone = player_zone_of(player);
+
+		return player_zone.life_points;
+	}
+
+	auto Field::change_life_points(const domain::Player player, const std::underlying_type_t<domain::AttackDefense> delta) noexcept -> void
+	{
+		auto& player_zone = player_zone_of(player);
+
+		player_zone.life_points += delta;
+	}
+
 	auto Field::zone_of(const CardInstanceId card) const noexcept -> domain::Zone
 	{
 		LIBASSERT_DEBUG_ASSERT(card.valid());

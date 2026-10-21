@@ -65,6 +65,13 @@ namespace cg::state
 		Field() noexcept;
 
 		// ==================================================================================
+		// 生命值
+		// ==================================================================================
+
+		[[nodiscard]] auto life_points(domain::Player player) const noexcept -> std::underlying_type_t<domain::AttackDefense>;
+		auto change_life_points(domain::Player player, std::underlying_type_t<domain::AttackDefense> delta) noexcept -> void;
+
+		// ==================================================================================
 		// 指定卡牌的区域/位置
 		// ==================================================================================
 

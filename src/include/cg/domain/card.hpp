@@ -152,7 +152,7 @@ namespace cg::domain
 
 	// 卡牌攻击力/守备力(怪兽卡)
 	// 不会为负数,但是使用有符号类型方便计算
-	enum class AttackDefense : std::int16_t {};
+	enum class AttackDefense : std::int32_t {};
 
 	// 卡牌等级/阶级(怪兽卡)
 	enum class LevelRank : std::uint16_t {};

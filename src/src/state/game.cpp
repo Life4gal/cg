@@ -55,6 +55,13 @@ namespace cg::state
 		return nullptr;
 	}
 
+	auto Game::definition(const CardInstanceId card) const noexcept -> std::optional<std::reference_wrapper<const CardDefinition>>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		return instance_invoke(card, &CardInstance::definition);
+	}
+
 	auto Game::owner(const CardInstanceId card) const noexcept -> std::optional<domain::Player>
 	{
 		LIBASSERT_DEBUG_ASSERT(card.valid());
@@ -83,6 +90,13 @@ namespace cg::state
 		return instance_invoke(card, &CardInstance::code);
 	}
 
+	auto Game::is_card_type(const CardInstanceId card, domain::CardType type) const noexcept -> std::optional<bool>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		return instance_invoke(card, &CardInstance::is_card_type, type);
+	}
+
 	auto Game::is_monster_card(const CardInstanceId card) const noexcept -> std::optional<bool>
 	{
 		LIBASSERT_DEBUG_ASSERT(card.valid());
@@ -102,6 +116,153 @@ namespace cg::state
 		LIBASSERT_DEBUG_ASSERT(card.valid());
 
 		return instance_invoke(card, &CardInstance::is_trap_card);
+	}
+
+	auto Game::is_card_subtype(const CardInstanceId card, const domain::CardSubtype subtype) const noexcept -> std::optional<bool>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		return instance_invoke(card, &CardInstance::is_card_subtype, subtype);
+	}
+
+	auto Game::attribute(const CardInstanceId card) const noexcept -> std::optional<domain::Attribute>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto monster = is_monster_card(card);
+			!monster.has_value() || !*monster)
+		{
+			return std::nullopt;
+		}
+
+		return instance_invoke(card, &CardInstance::attribute);
+	}
+
+	auto Game::is_attribute(const CardInstanceId card, const domain::Attribute attribute) const noexcept -> std::optional<bool>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto monster = is_monster_card(card);
+			!monster.has_value() || !*monster)
+		{
+			return std::nullopt;
+		}
+
+		return instance_invoke(card, &CardInstance::is_attribute, attribute);
+	}
+
+	auto Game::race(const CardInstanceId card) const noexcept -> std::optional<domain::Race>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto monster = is_monster_card(card);
+			!monster.has_value() || !*monster)
+		{
+			return std::nullopt;
+		}
+
+		return instance_invoke(card, &CardInstance::race);
+	}
+
+	auto Game::is_race(const CardInstanceId card, const domain::Race race) const noexcept -> std::optional<bool>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto monster = is_monster_card(card);
+			!monster.has_value() || !*monster)
+		{
+			return std::nullopt;
+		}
+
+		return instance_invoke(card, &CardInstance::is_race, race);
+	}
+
+	auto Game::level(const CardInstanceId card) const noexcept -> std::optional<std::underlying_type_t<domain::LevelRank>>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto monster = is_monster_card(card);
+			!monster.has_value() || !*monster)
+		{
+			return std::nullopt;
+		}
+
+		return instance_invoke(card, &CardInstance::level);
+	}
+
+	auto Game::is_level(const CardInstanceId card, const std::underlying_type_t<domain::LevelRank> level) const noexcept -> std::optional<bool>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto monster = is_monster_card(card);
+			!monster.has_value() || !*monster)
+		{
+			return std::nullopt;
+		}
+
+		return instance_invoke(card, &CardInstance::is_level, level);
+	}
+
+	auto Game::attack(const CardInstanceId card) const noexcept -> std::optional<std::underlying_type_t<domain::AttackDefense>>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto monster = is_monster_card(card);
+			!monster.has_value() || !*monster)
+		{
+			return std::nullopt;
+		}
+
+		return instance_invoke(card, &CardInstance::attack);
+	}
+
+	auto Game::is_attack(const CardInstanceId card, const std::underlying_type_t<domain::AttackDefense> attack) const noexcept -> std::optional<bool>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto monster = is_monster_card(card);
+			!monster.has_value() || !*monster)
+		{
+			return std::nullopt;
+		}
+
+		return instance_invoke(card, &CardInstance::is_attack, attack);
+	}
+
+	auto Game::defense(const CardInstanceId card) const noexcept -> std::optional<std::underlying_type_t<domain::AttackDefense>>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto monster = is_monster_card(card);
+			!monster.has_value() || !*monster)
+		{
+			return std::nullopt;
+		}
+
+		return instance_invoke(card, &CardInstance::defense);
+	}
+
+	auto Game::is_defense(const CardInstanceId card, const std::underlying_type_t<domain::AttackDefense> defense) const noexcept -> std::optional<bool>
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto monster = is_monster_card(card);
+			!monster.has_value() || !*monster)
+		{
+			return std::nullopt;
+		}
+
+		return instance_invoke(card, &CardInstance::is_defense, defense);
+	}
+
+	auto Game::life_points(const domain::Player player) const noexcept -> std::underlying_type_t<domain::AttackDefense>
+	{
+		return field_invoke(&Field::life_points, player);
+	}
+
+	auto Game::change_life_points(const domain::Player player, const std::underlying_type_t<domain::AttackDefense> delta) noexcept -> void
+	{
+		return field_invoke(&Field::change_life_points, player, delta);
 	}
 
 	auto Game::zone_of(const CardInstanceId card) const noexcept -> domain::Zone

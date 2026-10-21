@@ -97,6 +97,11 @@ namespace cg::state
 	public:
 		CardInstance(CardInstanceId id, domain::Player owner, const CardDefinition& definition) noexcept;
 
+		// 卡牌定义
+		[[nodiscard]] auto definition() const noexcept -> const CardDefinition&;
+
+		// TODO: `原本`属性/种族/等级/阶级/攻击力/守备力...
+
 		// ================================================================
 		// 实例信息
 		// ================================================================
@@ -119,6 +124,9 @@ namespace cg::state
 		// 卡牌卡密
 		[[nodiscard]] auto code() const noexcept -> domain::CardCode;
 
+		// 是指定卡类型
+		[[nodiscard]] auto is_card_type(domain::CardType type) const noexcept -> bool;
+
 		// 是否是怪兽卡
 		[[nodiscard]] auto is_monster_card() const noexcept -> bool;
 
@@ -127,6 +135,39 @@ namespace cg::state
 
 		// 是否是陷阱卡
 		[[nodiscard]] auto is_trap_card() const noexcept -> bool;
+
+		// 是指定卡子类型
+		[[nodiscard]] auto is_card_subtype(domain::CardSubtype subtype) const noexcept -> bool;
+
+		// 获取属性 -- 假定是怪兽卡
+		[[nodiscard]] auto attribute() const noexcept -> domain::Attribute;
+
+		// 是指定属性 -- 假定是怪兽卡
+		[[nodiscard]] auto is_attribute(domain::Attribute attribute) const noexcept -> bool;
+
+		// 获取种族 -- 假定是怪兽卡
+		[[nodiscard]] auto race() const noexcept -> domain::Race;
+
+		// 是指定种族 -- 假定是怪兽卡
+		[[nodiscard]] auto is_race(domain::Race race) const noexcept -> bool;
+
+		// 获取等级/阶级 -- 假定是怪兽卡
+		[[nodiscard]] auto level() const noexcept -> std::underlying_type_t<domain::LevelRank>;
+
+		// 是指定等级/阶级 -- 假定是怪兽卡
+		[[nodiscard]] auto is_level(std::underlying_type_t<domain::LevelRank> level) const noexcept -> bool;
+
+		// 获取攻击力 -- 假定是怪兽卡
+		[[nodiscard]] auto attack() const noexcept -> std::underlying_type_t<domain::AttackDefense>;
+
+		// 是指定攻击力 -- 假定是怪兽卡
+		[[nodiscard]] auto is_attack(std::underlying_type_t<domain::AttackDefense> attack) const noexcept -> bool;
+
+		// 获取守备力 -- 假定是怪兽卡
+		[[nodiscard]] auto defense() const noexcept -> std::underlying_type_t<domain::AttackDefense>;
+
+		// 是指定守备力 -- 假定是怪兽卡
+		[[nodiscard]] auto is_defense(std::underlying_type_t<domain::AttackDefense> defense) const noexcept -> bool;
 
 		// ================================================================
 		// 变更(引擎内部使用)

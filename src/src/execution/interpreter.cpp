@@ -59,6 +59,18 @@ namespace cg::execution
 			return &*args[index];
 		}
 
+		template<dsl::ValueClass Class>
+		[[nodiscard]] auto as_argument(const std::vector<std::optional<Value>>& args, const std::size_t index) noexcept -> const auto*
+		{
+			const auto* value = argument(args, index);
+			if (value == nullptr)
+			{
+				return static_cast<decltype(as<Class>(*value))>(nullptr);
+			}
+
+			return as<Class>(*value);
+		}
+
 		[[nodiscard]] auto integer_compare(const dsl::CompareOperator op, const Integer lhs, const Integer rhs) noexcept -> bool
 		{
 			switch (op)
@@ -417,6 +429,78 @@ namespace cg::execution
 		{
 			return discard(*definition, call, context);
 		}
+		if (definition->name == "is_card_type")
+		{
+			return is_card_type(*definition, call, context);
+		}
+		if (definition->name == "is_card_subtype")
+		{
+			return is_card_subtype(*definition, call, context);
+		}
+		if (definition->name == "is_attribute")
+		{
+			return is_attribute(*definition, call, context);
+		}
+		if (definition->name == "is_race")
+		{
+			return is_race(*definition, call, context);
+		}
+		if (definition->name == "is_in_zone")
+		{
+			return is_in_zone(*definition, call, context);
+		}
+		if (definition->name == "is_face_up")
+		{
+			return is_face_up(*definition, call, context);
+		}
+		if (definition->name == "attack")
+		{
+			return attack(*definition, call, context);
+		}
+		if (definition->name == "defense")
+		{
+			return defense(*definition, call, context);
+		}
+		if (definition->name == "level")
+		{
+			return level(*definition, call, context);
+		}
+		if (definition->name == "this_card")
+		{
+			return this_card(*definition, call, context);
+		}
+		if (definition->name == "sole_card")
+		{
+			return sole_card(*definition, call, context);
+		}
+		if (definition->name == "draw")
+		{
+			return draw(*definition, call, context);
+		}
+		if (definition->name == "add_to_hand")
+		{
+			return add_to_hand(*definition, call, context);
+		}
+		if (definition->name == "banish")
+		{
+			return banish(*definition, call, context);
+		}
+		if (definition->name == "effect_damage")
+		{
+			return effect_damage(*definition, call, context);
+		}
+		if (definition->name == "recover_life")
+		{
+			return recover_life(*definition, call, context);
+		}
+		if (definition->name == "change_position")
+		{
+			return change_position(*definition, call, context);
+		}
+		if (definition->name == "special_summon")
+		{
+			return special_summon(*definition, call, context);
+		}
 
 		// TODO: 其余原语
 		return std::nullopt;
@@ -597,8 +681,8 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* players = as<dsl::ValueClass::ENUM_SET>(*argument(*args, 0));
-		const auto* zones = as<dsl::ValueClass::ENUM_SET>(*argument(*args, 1));
+		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* zones = as_argument<dsl::ValueClass::ENUM_SET>(*args, 1);
 		if (players == nullptr || zones == nullptr)
 		{
 			return std::nullopt;
@@ -628,9 +712,9 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* players = as<dsl::ValueClass::ENUM_SET>(*argument(*args, 0));
-		const auto* zones = as<dsl::ValueClass::ENUM_SET>(*argument(*args, 1));
-		const auto* min = as<dsl::ValueClass::INT>(*argument(*args, 2));
+		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* zones = as_argument<dsl::ValueClass::ENUM_SET>(*args, 1);
+		const auto* min = as_argument<dsl::ValueClass::INT>(*args, 2);
 		if (players == nullptr || zones == nullptr || min == nullptr)
 		{
 			return std::nullopt;
@@ -660,10 +744,10 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* players = as<dsl::ValueClass::ENUM_SET>(*argument(*args, 0));
-		const auto* zones = as<dsl::ValueClass::ENUM_SET>(*argument(*args, 1));
-		const auto* min = as<dsl::ValueClass::INT>(*argument(*args, 2));
-		const auto* max = as<dsl::ValueClass::INT>(*argument(*args, 3));
+		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* zones = as_argument<dsl::ValueClass::ENUM_SET>(*args, 1);
+		const auto* min = as_argument<dsl::ValueClass::INT>(*args, 2);
+		const auto* max = as_argument<dsl::ValueClass::INT>(*args, 3);
 		if (players == nullptr || zones == nullptr || min == nullptr || max == nullptr)
 		{
 			return std::nullopt;
@@ -695,8 +779,8 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* cards = as<dsl::ValueClass::GROUP>(*argument(*args, 0));
-		const auto* reason = as<dsl::ValueClass::INT>(*argument(*args, 1));
+		const auto* cards = as_argument<dsl::ValueClass::GROUP>(*args, 0);
+		const auto* reason = as_argument<dsl::ValueClass::INT>(*args, 1);
 		if (cards == nullptr || reason == nullptr)
 		{
 			return std::nullopt;
@@ -724,7 +808,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* cards = as<dsl::ValueClass::GROUP>(*argument(*args, 0));
+		const auto* cards = as_argument<dsl::ValueClass::GROUP>(*args, 0);
 		if (cards == nullptr)
 		{
 			return std::nullopt;
@@ -739,5 +823,545 @@ namespace cg::execution
 		}
 
 		return Value{Void{}};
+	}
+
+	auto Interpreter::is_card_type(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		const auto* kind = as_argument<dsl::ValueClass::INT>(*args, 1);
+		if (card == nullptr || kind == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto value = static_cast<domain::CardType>(static_cast<std::underlying_type_t<domain::CardType>>(*kind));
+		const auto r = context.game.get().is_card_type(*card, value);
+
+		if (!r.has_value())
+		{
+			return std::nullopt;
+		}
+
+		return Value{Boolean{*r}};
+	}
+
+	auto Interpreter::is_card_subtype(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		const auto* subtype = as_argument<dsl::ValueClass::INT>(*args, 1);
+		if (card == nullptr || subtype == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto value = static_cast<domain::CardSubtype>(static_cast<std::underlying_type_t<domain::CardSubtype>>(*subtype));
+		const auto r = context.game.get().is_card_subtype(*card, value);
+
+		if (!r.has_value())
+		{
+			return std::nullopt;
+		}
+
+		return Value{Boolean{*r}};
+	}
+
+	auto Interpreter::is_attribute(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		const auto* attribute = as_argument<dsl::ValueClass::INT>(*args, 1);
+		if (card == nullptr || attribute == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto value = static_cast<domain::Attribute>(static_cast<std::underlying_type_t<domain::Attribute>>(*attribute));
+		const auto r = context.game.get().is_attribute(*card, value);
+
+		if (!r.has_value())
+		{
+			return std::nullopt;
+		}
+
+		return Value{Boolean{*r}};
+	}
+
+	auto Interpreter::is_race(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		const auto* race = as_argument<dsl::ValueClass::INT>(*args, 1);
+		if (card == nullptr || race == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto value = static_cast<domain::Race>(static_cast<std::underlying_type_t<domain::Race>>(*race));
+		const auto r = context.game.get().is_race(*card, value);
+
+		if (!r.has_value())
+		{
+			return std::nullopt;
+		}
+
+		return Value{Boolean{*r}};
+	}
+
+	auto Interpreter::is_in_zone(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		const auto* zones = as_argument<dsl::ValueClass::ENUM_SET>(*args, 1);
+		if (card == nullptr || zones == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto zones_mask = to_enum_mask<domain::Zone>(*zones);
+		const auto zone = context.game.get().zone_of(*card);
+
+		return Value{Boolean{zones_mask.contains(zone)}};
+	}
+
+	auto Interpreter::is_face_up(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		if (card == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto placement = context.game.get().placement(*card);
+		if (!placement.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto position_is_face_up = [](const domain::Position position) noexcept -> bool
+		{
+			return position == domain::Position::FACE_UP_ATTACK || position == domain::Position::FACE_UP_DEFENSE;
+		};
+
+		const auto face_up = std::visit(
+			utility::Overloaded
+			{
+					[&](const domain::MonsterPlacement p) noexcept -> bool
+					{
+						return position_is_face_up(p.position);
+					},
+					[&](const domain::ExtraMonsterPlacement p) noexcept -> bool
+					{
+						return position_is_face_up(p.position);
+					},
+					[&](const domain::SpellTrapPlacement p) noexcept -> bool
+					{
+						return position_is_face_up(p.position);
+					},
+					[&](const domain::FieldSpellPlacement p) noexcept -> bool
+					{
+						return position_is_face_up(p.position);
+					},
+					[&](const domain::ExtraDeckPlacement p) noexcept -> bool
+					{
+						return position_is_face_up(p.position);
+					},
+					[&](const domain::BanishedPlacement p) noexcept -> bool
+					{
+						return position_is_face_up(p.position);
+					},
+					[]([[maybe_unused]] const domain::GraveyardPlacement& p) noexcept -> bool
+					{
+						return true;
+					},
+					[]([[maybe_unused]] const domain::DeckPlacement& p) noexcept -> bool
+					{
+						return false;
+					},
+					[]([[maybe_unused]] const domain::HandPlacement& p) noexcept -> bool
+					{
+						return false;
+					},
+					[]([[maybe_unused]] const domain::NotExistPlacement& p) noexcept -> bool
+					{
+						return false;
+					},
+			},
+			*placement
+		);
+
+		return Value{Boolean{face_up}};
+	}
+
+	auto Interpreter::level(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		if (card == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto level = context.game.get().level(*card);
+		if (!level.has_value())
+		{
+			return std::nullopt;
+		}
+
+		return Value{Integer{static_cast<Integer::value_type>(*level)}};
+	}
+
+	auto Interpreter::attack(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		if (card == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto attack = context.game.get().attack(*card);
+		if (!attack.has_value())
+		{
+			return std::nullopt;
+		}
+
+		return Value{Integer{static_cast<Integer::value_type>(*attack)}};
+	}
+
+	auto Interpreter::defense(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		if (card == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto defense = context.game.get().defense(*card);
+		if (!defense.has_value())
+		{
+			return std::nullopt;
+		}
+
+		return Value{Integer{static_cast<Integer::value_type>(*defense)}};
+	}
+
+	auto Interpreter::this_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		if (const auto args = evaluate_arguments(definition, call, context);
+			!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		return Value{Card{context.source}};
+	}
+
+	auto Interpreter::sole_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* group = as_argument<dsl::ValueClass::GROUP>(*args, 0);
+		if (group == nullptr || group->size() != 1)
+		{
+			return std::nullopt;
+		}
+
+		return Value{Card{*group->begin()}};
+	}
+
+	auto Interpreter::draw(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* count = as_argument<dsl::ValueClass::INT>(*args, 1);
+		if (players == nullptr || count == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		for (const auto player: players_of(*players, context))
+		{
+			for (Integer::value_type i = 0; i < *count; ++i)
+			{
+				const auto deck = context.game.get().collect_deck_zones_card(player);
+				if (deck.empty())
+				{
+					break;
+				}
+
+				if (!context.game.get().move_to_hand(deck.front(), {domain::Reason::DRAW}, domain::Position::FACE_DOWN_DEFENSE))
+				{
+					return std::nullopt;
+				}
+			}
+		}
+
+		return Value{Void{}};
+	}
+
+	auto Interpreter::add_to_hand(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* cards = as_argument<dsl::ValueClass::GROUP>(*args, 0);
+		if (cards == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		for (const auto card: *cards)
+		{
+			if (!context.game.get().move_to_hand(card, {domain::Reason::EFFECT}, domain::Position::FACE_DOWN_DEFENSE))
+			{
+				return std::nullopt;
+			}
+		}
+
+		return Value{Void{}};
+	}
+
+	auto Interpreter::banish(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* cards = as_argument<dsl::ValueClass::GROUP>(*args, 0);
+		const auto* face_down = as_argument<dsl::ValueClass::BOOL>(*args, 1);
+		if (cards == nullptr || face_down == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto position = *face_down ? domain::Position::FACE_DOWN_DEFENSE : domain::Position::FACE_UP_ATTACK;
+
+		for (const auto card: *cards)
+		{
+			if (!context.game.get().move_to_banished(card, {domain::Reason::EFFECT}, position))
+			{
+				return std::nullopt;
+			}
+		}
+
+		return Value{Void{}};
+	}
+
+	auto Interpreter::effect_damage(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* amount = as_argument<dsl::ValueClass::INT>(*args, 1);
+		if (players == nullptr || amount == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto value = static_cast<std::underlying_type_t<domain::AttackDefense>>(*amount);
+
+		for (const auto player: players_of(*players, context))
+		{
+			context.game.get().change_life_points(player, -value);
+		}
+
+		return Value{Void{}};
+	}
+
+	auto Interpreter::recover_life(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* amount = as_argument<dsl::ValueClass::INT>(*args, 1);
+		if (players == nullptr || amount == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto value = static_cast<std::underlying_type_t<domain::AttackDefense>>(*amount);
+
+		for (const auto player: players_of(*players, context))
+		{
+			context.game.get().change_life_points(player, value);
+		}
+
+		return Value{Void{}};
+	}
+
+	auto Interpreter::change_position(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		const auto* position = as_argument<dsl::ValueClass::INT>(*args, 1);
+		if (card == nullptr || position == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto placement = context.game.get().placement(*card);
+		if (!placement.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto value = static_cast<domain::Position>(static_cast<std::underlying_type_t<domain::Position>>(*position));
+
+		const auto updated = std::visit(
+			utility::Overloaded
+			{
+					[&](const domain::MonsterPlacement p) noexcept -> std::optional<domain::Placement>
+					{
+						return domain::Placement{domain::MonsterPlacement{.column = p.column, .position = value}};
+					},
+					[&](const domain::ExtraMonsterPlacement p) noexcept -> std::optional<domain::Placement>
+					{
+						return domain::Placement{domain::ExtraMonsterPlacement{.column = p.column, .position = value}};
+					},
+					[&](const domain::SpellTrapPlacement p) noexcept -> std::optional<domain::Placement>
+					{
+						return domain::Placement{domain::SpellTrapPlacement{.column = p.column, .position = value}};
+					},
+					[&](const domain::FieldSpellPlacement) noexcept -> std::optional<domain::Placement>
+					{
+						return domain::Placement{domain::FieldSpellPlacement{.position = value}};
+					},
+					[](const auto&) noexcept -> std::optional<domain::Placement>
+					{
+						return std::nullopt;
+					},
+			},
+			*placement
+		);
+
+		if (!updated.has_value())
+		{
+			return std::nullopt;
+		}
+
+		if (!context.game.get().place(*card, *updated))
+		{
+			return std::nullopt;
+		}
+
+		return Value{Void{}};
+	}
+
+	auto Interpreter::special_summon(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		const auto* method = as_argument<dsl::ValueClass::INT>(*args, 1);
+		const auto* position = as_argument<dsl::ValueClass::INT>(*args, 2);
+		if (card == nullptr || method == nullptr || position == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		// TODO: 记录召唤方式(method)
+		std::ignore = method;
+
+		const auto value = static_cast<domain::Position>(static_cast<std::underlying_type_t<domain::Position>>(*position));
+
+		// TODO: 指定召唤位置
+		for (const auto column: domain::field_columns)
+		{
+			if (const auto location = domain::MonsterLocation{.column = column};
+				!context.game.get().field.is_location_empty(context.controller, location))
+			{
+				continue;
+			}
+
+			if (const auto placement = domain::MonsterPlacement{.column = column, .position = value};
+				!context.game.get().move_to_monster(*card, {domain::Reason::EFFECT}, placement))
+			{
+				return std::nullopt;
+			}
+
+			return Value{Void{}};
+		}
+
+		return std::nullopt;
 	}
 }

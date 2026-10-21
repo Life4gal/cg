@@ -44,7 +44,17 @@ namespace cg::state
 
 		template<typename Interface, typename... Args>
 			requires std::is_invocable_v<Interface, const CardInstance*, Args...>
-		auto instance_invoke(const CardInstanceId card, Interface&& interface, Args&&... args) const noexcept -> std::optional<std::invoke_result_t<Interface, const CardInstance*, Args...>>
+		auto instance_invoke(
+			const CardInstanceId card,
+			Interface&& interface,
+			Args&&... args) const noexcept
+			-> std::optional<std::conditional_t<
+				std::is_lvalue_reference_v<std::invoke_result_t<Interface, const CardInstance*, Args...>>,
+				// 引用类型
+				std::reference_wrapper<std::remove_reference_t<std::invoke_result_t<Interface, const CardInstance*, Args...>>>,
+				// 值类型
+				std::invoke_result_t<Interface, const CardInstance*, Args...>
+			>>
 		{
 			const auto* instance = find_instance(card);
 			if (instance == nullptr)
@@ -59,6 +69,9 @@ namespace cg::state
 		// ================================================================
 		// 实例信息
 		// ================================================================
+
+		// 卡牌定义
+		[[nodiscard]] auto definition(CardInstanceId card) const noexcept -> std::optional<std::reference_wrapper<const CardDefinition>>;
 
 		// 卡牌拥有者
 		[[nodiscard]] auto owner(CardInstanceId card) const noexcept -> std::optional<domain::Player>;
@@ -76,6 +89,9 @@ namespace cg::state
 		// 卡牌卡密
 		[[nodiscard]] auto code(CardInstanceId card) const noexcept -> std::optional<domain::CardCode>;
 
+		// 是指定卡类型
+		[[nodiscard]] auto is_card_type(CardInstanceId card, domain::CardType type) const noexcept -> std::optional<bool>;
+
 		// 是否是怪兽卡
 		[[nodiscard]] auto is_monster_card(CardInstanceId card) const noexcept -> std::optional<bool>;
 
@@ -84,6 +100,39 @@ namespace cg::state
 
 		// 是否是陷阱卡
 		[[nodiscard]] auto is_trap_card(CardInstanceId card) const noexcept -> std::optional<bool>;
+
+		// 是指定卡子类型
+		[[nodiscard]] auto is_card_subtype(CardInstanceId card, domain::CardSubtype subtype) const noexcept -> std::optional<bool>;
+
+		// 获取属性 -- 不是怪兽卡也返回null-opt
+		[[nodiscard]] auto attribute(CardInstanceId card) const noexcept -> std::optional<domain::Attribute>;
+
+		// 是指定属性 -- 不是怪兽卡也返回null-opt
+		[[nodiscard]] auto is_attribute(CardInstanceId card, domain::Attribute attribute) const noexcept -> std::optional<bool>;
+
+		// 获取种族 -- 不是怪兽卡也返回null-opt
+		[[nodiscard]] auto race(CardInstanceId card) const noexcept -> std::optional<domain::Race>;
+
+		// 是指定种族 -- 不是怪兽卡也返回null-opt
+		[[nodiscard]] auto is_race(CardInstanceId card, domain::Race race) const noexcept -> std::optional<bool>;
+
+		// 获取等级/阶级 -- 不是怪兽卡也返回null-opt
+		[[nodiscard]] auto level(CardInstanceId card) const noexcept -> std::optional<std::underlying_type_t<domain::LevelRank>>;
+
+		// 是指定等级/阶级 -- 不是怪兽卡也返回null-opt
+		[[nodiscard]] auto is_level(CardInstanceId card, std::underlying_type_t<domain::LevelRank> level) const noexcept -> std::optional<bool>;
+
+		// 获取攻击力 -- 不是怪兽卡也返回null-opt
+		[[nodiscard]] auto attack(CardInstanceId card) const noexcept -> std::optional<std::underlying_type_t<domain::AttackDefense>>;
+
+		// 是指定攻击力 -- 不是怪兽卡也返回null-opt
+		[[nodiscard]] auto is_attack(CardInstanceId card, std::underlying_type_t<domain::AttackDefense> attack) const noexcept -> std::optional<bool>;
+
+		// 获取守备力 -- 不是怪兽卡也返回null-opt
+		[[nodiscard]] auto defense(CardInstanceId card) const noexcept -> std::optional<std::underlying_type_t<domain::AttackDefense>>;
+
+		// 是指定守备力 -- 不是怪兽卡也返回null-opt
+		[[nodiscard]] auto is_defense(CardInstanceId card, std::underlying_type_t<domain::AttackDefense> defense) const noexcept -> std::optional<bool>;
 
 		// ================================================================
 		//
@@ -97,6 +146,13 @@ namespace cg::state
 
 	private:
 		template<typename Interface, typename... Args>
+			requires std::is_invocable_v<Interface, Field&, Args...>
+		auto field_invoke(Interface&& interface, Args&&... args) noexcept -> decltype(auto)
+		{
+			return std::invoke(std::forward<Interface>(interface), field, std::forward<Args>(args)...);
+		}
+
+		template<typename Interface, typename... Args>
 			requires std::is_invocable_v<Interface, const Field&, Args...>
 		auto field_invoke(Interface&& interface, Args&&... args) const noexcept -> decltype(auto)
 		{
@@ -104,6 +160,13 @@ namespace cg::state
 		}
 
 	public:
+		// ================================================================
+		// 生命值
+		// ================================================================
+
+		[[nodiscard]] auto life_points(domain::Player player) const noexcept -> std::underlying_type_t<domain::AttackDefense>;
+		auto change_life_points(domain::Player player, std::underlying_type_t<domain::AttackDefense> delta) noexcept -> void;
+
 		// ==================================================================================
 		// 指定卡牌的区域/位置
 		// ==================================================================================

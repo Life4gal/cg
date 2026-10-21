@@ -12,6 +12,10 @@ namespace
 {
 	using namespace cg;
 
+	const dsl::TypeRegistry g_types{};
+	const dsl::Vocabulary g_vocabulary{g_types};
+	dsl::json::Reader g_reader{g_types, g_vocabulary};
+
 	class ReadResult
 	{
 	public:
@@ -21,13 +25,9 @@ namespace
 
 	[[nodiscard]] auto read_card(const nlohmann::json& json) -> ReadResult
 	{
-		const dsl::TypeRegistry types{};
-		const dsl::Vocabulary vocabulary{types};
-		dsl::json::Reader reader{types, vocabulary};
+		auto script = g_reader.read_card_script(json, "<test>");
 
-		auto script = reader.read_card_script(json, "<test>");
-
-		return {.script = std::move(script), .diagnostics = reader.diagnostics()};
+		return {.script = std::move(script), .diagnostics = g_reader.diagnostics()};
 	}
 
 	[[nodiscard]] auto make_card(const std::string_view condition, const std::string_view effect) -> nlohmann::json
@@ -62,16 +62,13 @@ namespace
 
 TEST_CASE("dsl::Vocabulary is consistent")
 {
-	const auto types = dsl::TypeRegistry{};
-	const auto vocabulary = dsl::Vocabulary{types};
-
-	CHECK_FALSE(vocabulary.empty());
-	CHECK(vocabulary.validate(types).empty());
+	CHECK_FALSE(g_vocabulary.empty());
+	CHECK(g_vocabulary.validate(g_types).empty());
 }
 
 TEST_CASE("dsl::json::Reader reads bundled cards")
 {
-	const auto directory = std::filesystem::path{CG_CARDS_DIR};
+	const std::filesystem::path directory{CG_CARDS_DIR};
 	REQUIRE(std::filesystem::is_directory(directory));
 
 	auto count = 0;
