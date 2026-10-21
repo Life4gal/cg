@@ -84,6 +84,9 @@ namespace cg::execution
 	public:
 		explicit Interpreter(const dsl::Vocabulary& vocabulary) noexcept;
 
+		// 静态数值修正(场上卡脚本的 StaticEffect;累加匹配属性的add_numeric_property)
+		[[nodiscard]] auto static_numeric_bonus(const ScriptRegistry& scripts, state::CardInstanceId card, domain::NumericProperty property, Context& context) noexcept -> Integer::value_type;
+
 		// 触发效果是否匹配当前事件(触发源 + 触发时条件)
 		[[nodiscard]] auto matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool;
 

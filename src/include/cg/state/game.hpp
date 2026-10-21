@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <span>
 #include <vector>
 
 #include <cg/state/id.hpp>
@@ -30,14 +31,17 @@ namespace cg::state
 		// 注册定义
 		auto register_definition(domain::CardCode code, const CardDefinition& definition) noexcept -> const CardDefinition&;
 
-		// 创建实例
-		[[nodiscard]] auto create_instance(domain::CardCode code, domain::Player owner) noexcept -> CardInstanceId;
-
 		// 指定卡密所属卡牌是否存在定义
 		[[nodiscard]] auto has_definition(domain::CardCode code) const noexcept -> bool;
 
 		// 获取指定卡密所属卡牌的定义
 		[[nodiscard]] auto find_definition(domain::CardCode code) const noexcept -> const CardDefinition*;
+
+		// 创建实例
+		[[nodiscard]] auto create_instance(domain::CardCode code, domain::Player owner) noexcept -> CardInstanceId;
+
+		// 全部实例(只读)
+		[[nodiscard]] auto instances() const noexcept -> std::span<const CardInstance>;
 
 		// 指定实例ID所属实例是否存在
 		[[nodiscard]] auto has_instance(CardInstanceId card) const noexcept -> bool;

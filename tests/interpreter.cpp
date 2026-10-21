@@ -465,3 +465,44 @@ TEST_CASE("execution::Interpreter builds and resolves a chain")
 	CHECK(game.count_graveyard_zones_card(domain::Player::FIRST) == 1);
 	CHECK(game.count_graveyard_zones_card(domain::Player::SECOND) == 1);
 }
+
+TEST_CASE("execution::Interpreter applies static numeric modifiers")
+{
+	const auto make_monster = [](const domain::CardCode code, const domain::Race race) -> state::CardDefinition
+	{
+		auto definition = make_definition(code, domain::CardType::MONSTER);
+		definition.monster->race = race;
+
+		return definition;
+	};
+
+	constexpr domain::CardCode mountain_code{50913601};
+	constexpr domain::CardCode dragon_code{90000050};
+	constexpr domain::CardCode warrior_code{90000051};
+
+	state::Game game{};
+	game.register_definition(mountain_code, make_definition(mountain_code, domain::CardType::SPELL));
+	game.register_definition(dragon_code, make_monster(dragon_code, domain::Race::DRAGON));
+	game.register_definition(warrior_code, make_monster(warrior_code, domain::Race::WARRIOR));
+
+	const auto mountain = game.create_instance(mountain_code, domain::Player::FIRST);
+	const auto dragon = game.create_instance(dragon_code, domain::Player::FIRST);
+	const auto warrior = game.create_instance(warrior_code, domain::Player::FIRST);
+
+	REQUIRE(game.place(mountain, domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(dragon, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(warrior, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+
+	const auto mountain_script = read_card_script("50913601.json");
+	REQUIRE(mountain_script.has_value());
+
+	execution::ScriptRegistry scripts{};
+	scripts.add(mountain_code, *mountain_script);
+
+	execution::Interpreter interpreter{g_vocabulary};
+	execution::Context context{game, domain::Player::FIRST};
+
+	CHECK(interpreter.static_numeric_bonus(scripts, dragon, domain::NumericProperty::ATTACK, context) == 200);
+	CHECK(interpreter.static_numeric_bonus(scripts, dragon, domain::NumericProperty::DEFENSE, context) == 200);
+	CHECK(interpreter.static_numeric_bonus(scripts, warrior, domain::NumericProperty::ATTACK, context) == 0);
+}

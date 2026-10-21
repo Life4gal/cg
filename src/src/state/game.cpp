@@ -22,20 +22,6 @@ namespace cg::state
 		return card_definitions_.insert_or_assign(code, definition).first->second;
 	}
 
-	auto Game::create_instance(const domain::CardCode code, const domain::Player owner) noexcept -> CardInstanceId
-	{
-		const auto* definition = find_definition(code);
-		if (definition == nullptr)
-		{
-			return CardInstanceId{CardInstanceId::invalid_id};
-		}
-
-		const auto id = generate_instance_id();
-		card_instances_.emplace_back(id, owner, *definition);
-
-		return id;
-	}
-
 	auto Game::has_definition(const domain::CardCode code) const noexcept -> bool
 	{
 		return card_definitions_.contains(code);
@@ -50,6 +36,25 @@ namespace cg::state
 		}
 
 		return nullptr;
+	}
+
+	auto Game::create_instance(const domain::CardCode code, const domain::Player owner) noexcept -> CardInstanceId
+	{
+		const auto* definition = find_definition(code);
+		if (definition == nullptr)
+		{
+			return CardInstanceId{CardInstanceId::invalid_id};
+		}
+
+		const auto id = generate_instance_id();
+		card_instances_.emplace_back(id, owner, *definition);
+
+		return id;
+	}
+
+	auto Game::instances() const noexcept -> std::span<const CardInstance>
+	{
+		return card_instances_;
 	}
 
 	auto Game::has_instance(const CardInstanceId card) const noexcept -> bool

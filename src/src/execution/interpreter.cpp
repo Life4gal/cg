@@ -1309,7 +1309,7 @@ namespace cg::execution
 		for (const auto column: domain::field_columns)
 		{
 			if (const auto location = domain::MonsterLocation{.column = column};
-				!context.game.get().field.is_location_empty(context.controller, location))
+				!context.game.get().is_location_empty(context.controller, location))
 			{
 				continue;
 			}
@@ -1357,6 +1357,93 @@ namespace cg::execution
 	Interpreter::Interpreter(const dsl::Vocabulary& vocabulary) noexcept
 		: vocabulary_{vocabulary} {}
 
+	auto Interpreter::static_numeric_bonus(const ScriptRegistry& scripts, const state::CardInstanceId card, const domain::NumericProperty property, Context& context) noexcept -> Integer::value_type
+	{
+		Integer::value_type total = 0;
+
+		for (const auto& game = context.game.get();
+		     const auto& instance: game.instances())
+		{
+			if (const auto zone = game.zone_of(instance.id());
+				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER && zone != domain::Zone::SPELL_TRAP && zone != domain::Zone::FIELD_SPELL)
+			{
+				continue;
+			}
+
+			const auto* script = scripts.find(instance.code());
+			if (script == nullptr)
+			{
+				continue;
+			}
+
+			for (const auto& effect: script->effects)
+			{
+				const auto* static_effect = std::get_if<dsl::StaticEffect>(&effect.body);
+				if (static_effect == nullptr)
+				{
+					continue;
+				}
+
+				// apply_to:以目标卡为`$`求值
+				const auto applies = evaluate_scoped(static_effect->apply_to.expression, card, context);
+				if (!applies.has_value())
+				{
+					continue;
+				}
+
+				if (const auto* condition = as<dsl::ValueClass::BOOL>(*applies);
+					condition == nullptr || !static_cast<bool>(*condition))
+				{
+					continue;
+				}
+
+				if (static_effect->condition.has_value())
+				{
+					const auto value = evaluate(*static_effect->condition, context);
+					if (!value.has_value())
+					{
+						continue;
+					}
+
+					if (const auto* condition = as<dsl::ValueClass::BOOL>(*value);
+						condition == nullptr || !static_cast<bool>(*condition))
+					{
+						continue;
+					}
+				}
+
+				for (const auto& modifier: static_effect->modifiers)
+				{
+					if (const auto* definition = vocabulary_.get().find(modifier.primitive);
+						definition == nullptr || definition->name != "add_numeric_property")
+					{
+						continue;
+					}
+
+					const auto args = evaluate_list(modifier.args, context);
+					if (!args.has_value() || args->size() != 2)
+					{
+						continue;
+					}
+
+					const auto* property_value = as<dsl::ValueClass::INT>((*args)[0]);
+					const auto* amount = as<dsl::ValueClass::INT>((*args)[1]);
+					if (property_value == nullptr || amount == nullptr)
+					{
+						continue;
+					}
+
+					if (static_cast<domain::NumericProperty>(static_cast<std::underlying_type_t<domain::NumericProperty>>(*property_value)) == property)
+					{
+						total += static_cast<Integer::value_type>(*amount);
+					}
+				}
+			}
+		}
+
+		return total;
+	}
+
 	auto Interpreter::matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool
 	{
 		if (!context.trigger_source.has_value())
@@ -1400,7 +1487,7 @@ namespace cg::execution
 		TriggeredEffectList result{};
 
 		for (const auto& game = context.game.get();
-		     const auto& instance: game.card_instances)
+		     const auto& instance: game.instances())
 		{
 			const auto* script = scripts.find(instance.code());
 			if (script == nullptr)
