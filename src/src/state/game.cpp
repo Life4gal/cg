@@ -6,15 +6,45 @@
 
 namespace cg::state
 {
+	auto Game::generate_instance_id() const noexcept -> CardInstanceId
+	{
+		const auto id = card_instances_.size();
+		return CardInstanceId{static_cast<CardInstanceId::value_type>(id)};
+	}
+
+	auto Game::is_valid_instance_id(const CardInstanceId card) const noexcept -> bool
+	{
+		return card.valid() && card.raw() < card_instances_.size();
+	}
+
+	auto Game::register_definition(const domain::CardCode code, const CardDefinition& definition) noexcept -> const CardDefinition&
+	{
+		return card_definitions_.insert_or_assign(code, definition).first->second;
+	}
+
+	auto Game::create_instance(const domain::CardCode code, const domain::Player owner) noexcept -> CardInstanceId
+	{
+		const auto* definition = find_definition(code);
+		if (definition == nullptr)
+		{
+			return CardInstanceId{CardInstanceId::invalid_id};
+		}
+
+		const auto id = generate_instance_id();
+		card_instances_.emplace_back(id, owner, *definition);
+
+		return id;
+	}
+
 	auto Game::has_definition(const domain::CardCode code) const noexcept -> bool
 	{
-		return card_definitions.contains(code);
+		return card_definitions_.contains(code);
 	}
 
 	auto Game::find_definition(const domain::CardCode code) const noexcept -> const CardDefinition*
 	{
-		if (const auto it = card_definitions.find(code);
-			it != card_definitions.end())
+		if (const auto it = card_definitions_.find(code);
+			it != card_definitions_.end())
 		{
 			return &it->second;
 		}
@@ -26,15 +56,15 @@ namespace cg::state
 	{
 		LIBASSERT_DEBUG_ASSERT(card.valid());
 
-		return std::ranges::contains(card_instances, card, &CardInstance::id);
+		return std::ranges::contains(card_instances_, card, &CardInstance::id);
 	}
 
 	auto Game::find_instance(const CardInstanceId card) const noexcept -> const CardInstance*
 	{
 		LIBASSERT_DEBUG_ASSERT(card.valid());
 
-		if (const auto it = std::ranges::find(card_instances, card, &CardInstance::id);
-			it != card_instances.end())
+		if (const auto it = std::ranges::find(card_instances_, card, &CardInstance::id);
+			it != card_instances_.end())
 		{
 			return &*it;
 		}
@@ -46,8 +76,8 @@ namespace cg::state
 	{
 		LIBASSERT_DEBUG_ASSERT(card.valid());
 
-		if (const auto it = std::ranges::find(card_instances, card, &CardInstance::id);
-			it != card_instances.end())
+		if (const auto it = std::ranges::find(card_instances_, card, &CardInstance::id);
+			it != card_instances_.end())
 		{
 			return &*it;
 		}

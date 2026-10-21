@@ -8,6 +8,7 @@
 #include <cg/dsl/types.hpp>
 #include <cg/dsl/vocabulary.hpp>
 #include <cg/state/game.hpp>
+#include <cg/execution/chain.hpp>
 #include <cg/execution/interpreter.hpp>
 #include <cg/execution/script_registry.hpp>
 
@@ -21,7 +22,6 @@ namespace
 	const dsl::TypeRegistry g_types{};
 	const dsl::Vocabulary g_vocabulary{g_types};
 	dsl::json::Reader g_reader{g_types, g_vocabulary};
-	execution::ScriptRegistry g_scripts{};
 
 	[[nodiscard]] auto make_definition(const domain::CardCode code, const domain::CardType type) -> state::CardDefinition
 	{
@@ -73,16 +73,12 @@ TEST_CASE("execution::Interpreter resolves Raigeki")
 	constexpr domain::CardCode monster_code{90000001};
 
 	state::Game game{};
-	game.card_definitions.emplace(raigeki_code, make_definition(raigeki_code, domain::CardType::SPELL));
-	game.card_definitions.emplace(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
+	game.register_definition(raigeki_code, make_definition(raigeki_code, domain::CardType::SPELL));
+	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
 
-	constexpr state::CardInstanceId raigeki{1};
-	constexpr state::CardInstanceId own_monster{2};
-	constexpr state::CardInstanceId opponent_monster{3};
-
-	game.card_instances.emplace_back(raigeki, domain::Player::FIRST, game.card_definitions.at(raigeki_code));
-	game.card_instances.emplace_back(own_monster, domain::Player::FIRST, game.card_definitions.at(monster_code));
-	game.card_instances.emplace_back(opponent_monster, domain::Player::SECOND, game.card_definitions.at(monster_code));
+	const auto raigeki = game.create_instance(raigeki_code, domain::Player::FIRST);
+	const auto own_monster = game.create_instance(monster_code, domain::Player::FIRST);
+	const auto opponent_monster = game.create_instance(monster_code, domain::Player::SECOND);
 
 	REQUIRE(game.place(own_monster, domain::Placement{domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 	REQUIRE(game.place(opponent_monster, domain::Placement{domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
@@ -111,16 +107,12 @@ TEST_CASE("execution::Interpreter resolves Tribute to the Doomed")
 	constexpr domain::CardCode monster_code{90000003};
 
 	state::Game game{};
-	game.card_definitions.emplace(spell_code, make_definition(spell_code, domain::CardType::SPELL));
-	game.card_definitions.emplace(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
+	game.register_definition(spell_code, make_definition(spell_code, domain::CardType::SPELL));
+	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
 
-	constexpr state::CardInstanceId spell{1};
-	constexpr state::CardInstanceId hand_card{2};
-	constexpr state::CardInstanceId opponent_monster{3};
-
-	game.card_instances.emplace_back(spell, domain::Player::FIRST, game.card_definitions.at(spell_code));
-	game.card_instances.emplace_back(hand_card, domain::Player::FIRST, game.card_definitions.at(monster_code));
-	game.card_instances.emplace_back(opponent_monster, domain::Player::SECOND, game.card_definitions.at(monster_code));
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	const auto hand_card = game.create_instance(monster_code, domain::Player::FIRST);
+	const auto opponent_monster = game.create_instance(monster_code, domain::Player::SECOND);
 
 	REQUIRE(game.place(hand_card, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
 	REQUIRE(game.place(opponent_monster, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
@@ -186,23 +178,19 @@ TEST_CASE("execution::Interpreter searches a subtype from the deck")
 	constexpr domain::CardCode field_spell_code{90000012};
 
 	state::Game game{};
-	game.card_definitions.emplace(terraforming_code, make_definition(terraforming_code, domain::CardType::SPELL));
-	game.card_definitions.emplace(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
+	game.register_definition(terraforming_code, make_definition(terraforming_code, domain::CardType::SPELL));
+	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
 
 	state::CardDefinition field_spell{};
 	field_spell.code = field_spell_code;
 	field_spell.kind = {domain::CardType::SPELL};
 	field_spell.subtypes = {domain::CardSubtype::FIELD};
 	field_spell.spell = state::CardDefinition::Spell{};
-	game.card_definitions.emplace(field_spell_code, field_spell);
+	game.register_definition(field_spell_code, field_spell);
 
-	constexpr state::CardInstanceId terraforming{1};
-	constexpr state::CardInstanceId monster_in_deck{2};
-	constexpr state::CardInstanceId field_spell_in_deck{3};
-
-	game.card_instances.emplace_back(terraforming, domain::Player::FIRST, game.card_definitions.at(terraforming_code));
-	game.card_instances.emplace_back(monster_in_deck, domain::Player::FIRST, game.card_definitions.at(monster_code));
-	game.card_instances.emplace_back(field_spell_in_deck, domain::Player::FIRST, game.card_definitions.at(field_spell_code));
+	const auto terraforming = game.create_instance(terraforming_code, domain::Player::FIRST);
+	const auto monster_in_deck = game.create_instance(monster_code, domain::Player::FIRST);
+	const auto field_spell_in_deck = game.create_instance(field_spell_code, domain::Player::FIRST);
 
 	REQUIRE(game.place(monster_in_deck, domain::DeckPlacement{.index = 0}));
 	REQUIRE(game.place(field_spell_in_deck, domain::DeckPlacement{.index = 1}));
@@ -230,16 +218,12 @@ TEST_CASE("execution::Interpreter draws cards")
 	constexpr domain::CardCode monster_code{90000013};
 
 	state::Game game{};
-	game.card_definitions.emplace(pot_code, make_definition(pot_code, domain::CardType::SPELL));
-	game.card_definitions.emplace(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
+	game.register_definition(pot_code, make_definition(pot_code, domain::CardType::SPELL));
+	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
 
-	constexpr state::CardInstanceId pot{1};
-	constexpr state::CardInstanceId deck_a{2};
-	constexpr state::CardInstanceId deck_b{3};
-
-	game.card_instances.emplace_back(pot, domain::Player::FIRST, game.card_definitions.at(pot_code));
-	game.card_instances.emplace_back(deck_a, domain::Player::FIRST, game.card_definitions.at(monster_code));
-	game.card_instances.emplace_back(deck_b, domain::Player::FIRST, game.card_definitions.at(monster_code));
+	const auto pot = game.create_instance(pot_code, domain::Player::FIRST);
+	const auto deck_a = game.create_instance(monster_code, domain::Player::FIRST);
+	const auto deck_b = game.create_instance(monster_code, domain::Player::FIRST);
 
 	REQUIRE(game.place(deck_a, domain::DeckPlacement{.index = 0}));
 	REQUIRE(game.place(deck_b, domain::DeckPlacement{.index = 1}));
@@ -266,14 +250,11 @@ TEST_CASE("execution::Interpreter changes life points")
 	constexpr domain::CardCode dian_keto_code{84257639};
 
 	state::Game game{};
-	game.card_definitions.emplace(sparks_code, make_definition(sparks_code, domain::CardType::SPELL));
-	game.card_definitions.emplace(dian_keto_code, make_definition(dian_keto_code, domain::CardType::SPELL));
+	game.register_definition(sparks_code, make_definition(sparks_code, domain::CardType::SPELL));
+	game.register_definition(dian_keto_code, make_definition(dian_keto_code, domain::CardType::SPELL));
 
-	constexpr state::CardInstanceId sparks{1};
-	constexpr state::CardInstanceId dian_keto{2};
-
-	game.card_instances.emplace_back(sparks, domain::Player::FIRST, game.card_definitions.at(sparks_code));
-	game.card_instances.emplace_back(dian_keto, domain::Player::FIRST, game.card_definitions.at(dian_keto_code));
+	const auto sparks = game.create_instance(sparks_code, domain::Player::FIRST);
+	const auto dian_keto = game.create_instance(dian_keto_code, domain::Player::FIRST);
 
 	game.change_life_points(domain::Player::FIRST, 8000);
 	game.change_life_points(domain::Player::SECOND, 8000);
@@ -315,33 +296,32 @@ TEST_CASE("execution::Interpreter matches a FLIP trigger and resolves")
 	constexpr domain::CardCode monster_code{90000020};
 
 	state::Game game{};
-	game.card_definitions.emplace(jar_code, make_definition(jar_code, domain::CardType::MONSTER));
-	game.card_definitions.emplace(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
+	game.register_definition(jar_code, make_definition(jar_code, domain::CardType::MONSTER));
+	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
 
-	constexpr state::CardInstanceId jar{1};
-	game.card_instances.emplace_back(jar, domain::Player::FIRST, game.card_definitions.at(jar_code));
+	const auto jar = game.create_instance(jar_code, domain::Player::FIRST);
 	REQUIRE(game.place(jar, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}));
 
-	const auto add_to_hand = [&](const state::CardInstanceId card, const domain::Player player) -> void
+	const auto add_to_hand = [&](const domain::Player player) -> void
 	{
-		game.card_instances.emplace_back(card, player, game.card_definitions.at(monster_code));
-		REQUIRE(game.place(card, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+		const auto id = game.create_instance(monster_code, player);
+		REQUIRE(game.place(id, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
 	};
-	const auto add_to_deck = [&](const state::CardInstanceId card, const domain::Player player) -> void
+	const auto add_to_deck = [&](const domain::Player player) -> void
 	{
-		game.card_instances.emplace_back(card, player, game.card_definitions.at(monster_code));
-		REQUIRE(game.place(card, domain::DeckPlacement{.index = 0}));
+		const auto id = game.create_instance(monster_code, player);
+		REQUIRE(game.place(id, domain::DeckPlacement{.index = 0}));
 	};
 
-	add_to_hand(state::CardInstanceId{10}, domain::Player::FIRST);
-	add_to_hand(state::CardInstanceId{11}, domain::Player::FIRST);
-	add_to_hand(state::CardInstanceId{12}, domain::Player::SECOND);
-	add_to_hand(state::CardInstanceId{13}, domain::Player::SECOND);
+	add_to_hand(domain::Player::FIRST);
+	add_to_hand(domain::Player::FIRST);
+	add_to_hand(domain::Player::SECOND);
+	add_to_hand(domain::Player::SECOND);
 
 	for (state::CardInstanceId::value_type i = 0; i < 5; ++i)
 	{
-		add_to_deck(state::CardInstanceId{static_cast<state::CardInstanceId::value_type>(20 + i)}, domain::Player::FIRST);
-		add_to_deck(state::CardInstanceId{static_cast<state::CardInstanceId::value_type>(30 + i)}, domain::Player::SECOND);
+		add_to_deck(domain::Player::FIRST);
+		add_to_deck(domain::Player::SECOND);
 	}
 
 	const auto script = read_card_script("33508719.json");
@@ -376,17 +356,13 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 	constexpr domain::CardCode optional_code{90000030};
 
 	state::Game game{};
-	game.card_definitions.emplace(jar_code, make_definition(jar_code, domain::CardType::MONSTER));
-	game.card_definitions.emplace(optional_code, make_definition(optional_code, domain::CardType::MONSTER));
+	game.register_definition(jar_code, make_definition(jar_code, domain::CardType::MONSTER));
+	game.register_definition(optional_code, make_definition(optional_code, domain::CardType::MONSTER));
 
 	// 对手的壶实例ID更小,用于证明排序不是简单按实例顺序
-	constexpr state::CardInstanceId opponent_jar{1};
-	constexpr state::CardInstanceId turn_jar{2};
-	constexpr state::CardInstanceId optional_card{3};
-
-	game.card_instances.emplace_back(opponent_jar, domain::Player::SECOND, game.card_definitions.at(jar_code));
-	game.card_instances.emplace_back(turn_jar, domain::Player::FIRST, game.card_definitions.at(jar_code));
-	game.card_instances.emplace_back(optional_card, domain::Player::FIRST, game.card_definitions.at(optional_code));
+	const auto opponent_jar = game.create_instance(jar_code, domain::Player::SECOND);
+	const auto turn_jar = game.create_instance(jar_code, domain::Player::FIRST);
+	const auto optional_card = game.create_instance(optional_code, domain::Player::FIRST);
 
 	REQUIRE(game.place(opponent_jar, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}));
 	REQUIRE(game.place(turn_jar, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_DOWN_DEFENSE}));
@@ -394,7 +370,6 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 
 	const auto jar = read_card_script("33508719.json");
 	REQUIRE(jar.has_value());
-	g_scripts.add(jar_code, *jar);
 
 	// 合成一个同一事件(FLIP)的任意触发,用于验证"必发优先"
 	dsl::ActivatedEffect optional_activated{};
@@ -423,17 +398,70 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 				.body = dsl::EffectBody{std::move(optional_activated)},
 		}
 	);
-	g_scripts.add(optional_code, std::move(optional_script));
+
+	execution::ScriptRegistry scripts{};
+	scripts.add(jar_code, *jar);
+	scripts.add(optional_code, std::move(optional_script));
 
 	execution::Interpreter interpreter{g_vocabulary};
 	execution::Context context{game, domain::Player::FIRST};
 
 	context.trigger_source = dsl::TriggerSource{domain::EventCode::FLIP};
 
-	const auto triggered = interpreter.collect_triggered(g_scripts, context, domain::Player::FIRST);
+	const auto triggered = interpreter.collect_triggered(scripts, context, domain::Player::FIRST);
 	REQUIRE(triggered.size() == 3);
 
 	CHECK(triggered[0].card == turn_jar);
 	CHECK(triggered[1].card == opponent_jar);
 	CHECK(triggered[2].card == optional_card);
+}
+
+TEST_CASE("execution::Interpreter builds and resolves a chain")
+{
+	constexpr domain::CardCode rat_code{97017120};
+	constexpr domain::CardCode monster_code{90000040};
+
+	state::Game game{};
+	game.register_definition(rat_code, make_definition(rat_code, domain::CardType::MONSTER));
+	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
+
+	// 两只巨大老鼠在墓地(触发条件:在墓地)
+	const auto first_rat = game.create_instance(rat_code, domain::Player::FIRST);
+	const auto second_rat = game.create_instance(rat_code, domain::Player::SECOND);
+
+	REQUIRE(game.place(first_rat, domain::GraveyardPlacement{.index = 0}));
+	REQUIRE(game.place(second_rat, domain::GraveyardPlacement{.index = 0}));
+
+	// 双方卡组各一张可被检索的怪兽
+	const auto first_deck = game.create_instance(monster_code, domain::Player::FIRST);
+	const auto second_deck = game.create_instance(monster_code, domain::Player::SECOND);
+
+	REQUIRE(game.place(first_deck, domain::DeckPlacement{.index = 0}));
+	REQUIRE(game.place(second_deck, domain::DeckPlacement{.index = 0}));
+
+	const auto rat = read_card_script("97017120.json");
+	REQUIRE(rat.has_value());
+
+	execution::ScriptRegistry scripts{};
+	scripts.add(rat_code, *rat);
+
+	execution::Interpreter interpreter{g_vocabulary};
+	execution::Context context{game, domain::Player::FIRST};
+
+	context.trigger_source = dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED};
+
+	const auto triggered = interpreter.collect_triggered(scripts, context, domain::Player::FIRST);
+	REQUIRE(triggered.size() == 2);
+
+	auto chain = interpreter.build_chain(triggered, context);
+	REQUIRE(chain.size() == 2);
+
+	CHECK(interpreter.resolve(chain));
+
+	CHECK(game.is_deck_zones_empty(domain::Player::FIRST));
+	CHECK(game.is_deck_zones_empty(domain::Player::SECOND));
+	CHECK(game.count_monster_zones_card(domain::Player::FIRST) == 1);
+	CHECK(game.count_monster_zones_card(domain::Player::SECOND) == 1);
+	CHECK(game.count_graveyard_zones_card(domain::Player::FIRST) == 1);
+	CHECK(game.count_graveyard_zones_card(domain::Player::SECOND) == 1);
 }

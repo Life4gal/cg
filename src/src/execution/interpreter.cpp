@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <ranges>
-#include <utility>
 
 #include <cg/utility/variant.hpp>
 #include <cg/utility/functional.hpp>
@@ -11,6 +10,7 @@
 #include <cg/dsl/types.hpp>
 #include <cg/dsl/vocabulary.hpp>
 #include <cg/state/game.hpp>
+#include <cg/execution/chain.hpp>
 #include <cg/execution/script_registry.hpp>
 
 namespace cg::execution
@@ -1410,6 +1410,12 @@ namespace cg::execution
 
 			const auto zone = game.zone_of(instance.id());
 
+			// 卡组/额外卡组中的卡不会发动效果
+			if (zone == domain::Zone::DECK || zone == domain::Zone::EXTRA_DECK || zone == domain::Zone::NOT_EXIST)
+			{
+				continue;
+			}
+
 			for (const auto& effect: script->effects)
 			{
 				const auto* activated = std::get_if<dsl::ActivatedEffect>(&effect.body);
@@ -1457,7 +1463,7 @@ namespace cg::execution
 		return result;
 	}
 
-	auto Interpreter::execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool
+	auto Interpreter::activate(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool
 	{
 		if (effect.condition.has_value())
 		{
@@ -1478,11 +1484,56 @@ namespace cg::execution
 		{
 			return false;
 		}
-		if (!execute_statements(effect.target, context))
+
+		return execute_statements(effect.target, context);
+	}
+
+	auto Interpreter::resolve(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool
+	{
+		return execute_statements(effect.effect, context);
+	}
+
+	auto Interpreter::build_chain(const TriggeredEffectList& triggered, const Context& context) noexcept -> Chain
+	{
+		Chain chain{};
+
+		for (const auto& entry: triggered)
+		{
+			Context link_context{context};
+			link_context.source = entry.card;
+			link_context.controller = entry.controller;
+
+			if (!activate(entry.activated.get(), link_context))
+			{
+				continue;
+			}
+
+			chain.emplace_back(entry, std::move(link_context));
+		}
+
+		return chain;
+	}
+
+	auto Interpreter::resolve(Chain& chain) noexcept -> bool
+	{
+		for (auto& [effect, context]: chain | std::views::reverse)
+		{
+			if (!resolve(effect.activated.get(), context))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	auto Interpreter::execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool
+	{
+		if (!activate(effect, context))
 		{
 			return false;
 		}
 
-		return execute_statements(effect.effect, context);
+		return resolve(effect, context);
 	}
 }

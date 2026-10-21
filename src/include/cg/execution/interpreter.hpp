@@ -24,6 +24,7 @@ namespace cg::dsl
 namespace cg::execution
 {
 	class ScriptRegistry;
+	class Chain;
 
 	class Interpreter
 	{
@@ -86,10 +87,22 @@ namespace cg::execution
 		// 触发效果是否匹配当前事件(触发源 + 触发时条件)
 		[[nodiscard]] auto matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool;
 
-		// 收集当前事件触发的全部效果(SEGOC 顺序:必发优先,回合玩家优先)
+		// 收集当前事件触发的全部效果(SEGOC顺序:必发优先,回合玩家优先)
 		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, domain::Player turn_player) noexcept -> TriggeredEffectList;
 
-		// 执行一张发动类效果:条件 → 费用 → 对象 → 结算
+		// 激活(condition → cost → target);不执行效果处理
+		[[nodiscard]] auto activate(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;
+
+		// 结算(仅效果处理段)
+		[[nodiscard]] auto resolve(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;
+
+		// 由触发列表构建连锁(逐条激活)
+		[[nodiscard]] auto build_chain(const TriggeredEffectList& triggered, const Context& context) noexcept -> Chain;
+
+		// 逆序结算整条连锁
+		[[nodiscard]] auto resolve(Chain& chain) noexcept -> bool;
+
+		// 执行一张发动类效果:condition → cost → target → resolve
 		[[nodiscard]] auto execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;
 	};
 }

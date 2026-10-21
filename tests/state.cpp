@@ -19,6 +19,8 @@ namespace
 				.level = 4,
 				.attack = 1000,
 				.defense = 1000,
+				.pendulum_scale = std::nullopt,
+				.link_marker = std::nullopt,
 		};
 
 		return definition;
@@ -30,13 +32,10 @@ TEST_CASE("state::Game moves cards into the requested zones")
 	constexpr domain::CardCode monster_code{90000002};
 
 	state::Game game{};
-	game.card_definitions.emplace(monster_code, make_definition(monster_code));
+	game.register_definition(monster_code, make_definition(monster_code));
 
-	constexpr state::CardInstanceId own{1};
-	constexpr state::CardInstanceId opponent{2};
-
-	game.card_instances.emplace_back(own, domain::Player::FIRST, game.card_definitions.at(monster_code));
-	game.card_instances.emplace_back(opponent, domain::Player::SECOND, game.card_definitions.at(monster_code));
+	const auto own = game.create_instance(monster_code, domain::Player::FIRST);
+	const auto opponent = game.create_instance(monster_code, domain::Player::SECOND);
 
 	REQUIRE(game.place(own, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
 	REQUIRE(game.place(opponent, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));

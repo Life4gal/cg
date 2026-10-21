@@ -12,15 +12,26 @@ namespace cg::state
 	class Game
 	{
 	public:
-		using card_definitions_type = std::map<domain::CardCode, state::CardDefinition>;
+		using card_definitions_type = std::map<domain::CardCode, CardDefinition>;
 		using card_instances_type = std::vector<CardInstance>;
 
+	private:
 		// 游戏中所有卡牌的定义
-		card_definitions_type card_definitions;
+		card_definitions_type card_definitions_;
 		// 游戏中创建的所有卡牌实例
-		card_instances_type card_instances;
+		card_instances_type card_instances_;
 		// 游戏场地
-		Field field;
+		Field field_;
+
+		[[nodiscard]] auto generate_instance_id() const noexcept -> CardInstanceId;
+		[[nodiscard]] auto is_valid_instance_id(CardInstanceId card) const noexcept -> bool;
+
+	public:
+		// 注册定义
+		auto register_definition(domain::CardCode code, const CardDefinition& definition) noexcept -> const CardDefinition&;
+
+		// 创建实例
+		[[nodiscard]] auto create_instance(domain::CardCode code, domain::Player owner) noexcept -> CardInstanceId;
 
 		// 指定卡密所属卡牌是否存在定义
 		[[nodiscard]] auto has_definition(domain::CardCode code) const noexcept -> bool;
@@ -149,14 +160,14 @@ namespace cg::state
 			requires std::is_invocable_v<Interface, Field&, Args...>
 		auto field_invoke(Interface&& interface, Args&&... args) noexcept -> decltype(auto)
 		{
-			return std::invoke(std::forward<Interface>(interface), field, std::forward<Args>(args)...);
+			return std::invoke(std::forward<Interface>(interface), field_, std::forward<Args>(args)...);
 		}
 
 		template<typename Interface, typename... Args>
 			requires std::is_invocable_v<Interface, const Field&, Args...>
 		auto field_invoke(Interface&& interface, Args&&... args) const noexcept -> decltype(auto)
 		{
-			return std::invoke(std::forward<Interface>(interface), field, std::forward<Args>(args)...);
+			return std::invoke(std::forward<Interface>(interface), field_, std::forward<Args>(args)...);
 		}
 
 	public:
@@ -290,10 +301,10 @@ namespace cg::state
 			}
 
 			const auto prev = instance->placement();
-			field.remove(instance->controller(), card, prev);
+			field_.remove(instance->controller(), card, prev);
 
 			instance->set_placement({placement});
-			field.place(instance->controller(), card, placement);
+			field_.place(instance->controller(), card, placement);
 
 			return true;
 		}
