@@ -454,6 +454,98 @@ TEST_CASE("flow::Duel applies static modifiers in battle")
 	CHECK(game.life_points(domain::Player::SECOND) == 8000);
 }
 
+TEST_CASE("flow::Duel keeps battle-protected monsters")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_protection";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	// 全场怪物获得战斗破坏抗性
+	write(
+		"95000001.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["FIELD"]},"effects":[{"type":"static","apply_to":true,"modifiers":[{"call":"add_protection","args":{"protection":"BATTLE"}}]}]})"
+	);
+
+	constexpr domain::CardCode field_code{95000001};
+	constexpr domain::CardCode defender_code{95000002};
+	constexpr domain::CardCode attacker_code{95000003};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(field_code, make_spell(field_code, {domain::CardSubtype::FIELD}));
+	game.register_definition(defender_code, make_monster(defender_code, 800, 800));
+	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto field = game.create_instance(field_code, domain::Player::FIRST);
+	REQUIRE(game.place(field, domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}));
+
+	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(game.place(defender, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(game.place(attacker, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	// 攻击力差仍造成战斗伤害,但被保护的怪物不会被战斗破坏
+	CHECK(duel.declare_attack(attacker, defender));
+
+	CHECK(game.zone_of(defender) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
+	CHECK(game.life_points(domain::Player::FIRST) == 7800);
+}
+
+TEST_CASE("flow::Duel fires battle destruction triggers automatically")
+{
+	constexpr domain::CardCode rat_code{97017120};
+	constexpr domain::CardCode attacker_code{96000001};
+	constexpr domain::CardCode recruit_code{96000002};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(rat_code, make_monster(rat_code, 1400, 1450, 4, domain::Race::BEAST));
+	game.register_definition(attacker_code, make_monster(attacker_code, 1600, 1000));
+	game.register_definition(recruit_code, make_monster(recruit_code, 1000, 1000));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto rat = game.create_instance(rat_code, domain::Player::FIRST);
+	REQUIRE(game.place(rat, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(game.place(attacker, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	const auto recruit = game.create_instance(recruit_code, domain::Player::FIRST);
+	REQUIRE(game.place(recruit, domain::DeckPlacement{.index = 0}));
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	CHECK(duel.declare_attack(attacker, rat));
+
+	// 战破后自动触发 Giant Rat:从卡组特召 EARTH/攻击力 1500 以下
+	CHECK(game.zone_of(rat) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(recruit) == domain::Zone::MONSTER);
+}
+
 TEST_CASE("flow::Duel activates ignition and quick effects")
 {
 	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_activation";

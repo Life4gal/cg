@@ -1444,6 +1444,88 @@ namespace cg::execution
 		return total;
 	}
 
+	auto Interpreter::static_protections(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> utility::EnumMask<domain::Protection>
+	{
+		utility::EnumMask<domain::Protection> result{};
+		const auto& game = context.game.get();
+
+		for (const auto& instance: game.instances())
+		{
+			if (const auto zone = game.zone_of(instance.id());
+				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER && zone != domain::Zone::SPELL_TRAP && zone != domain::Zone::FIELD_SPELL)
+			{
+				continue;
+			}
+
+			const auto* script = scripts.find(instance.code());
+			if (script == nullptr)
+			{
+				continue;
+			}
+
+			for (const auto& effect: script->effects)
+			{
+				const auto* static_effect = std::get_if<dsl::StaticEffect>(&effect.body);
+				if (static_effect == nullptr)
+				{
+					continue;
+				}
+
+				const auto applies = evaluate_scoped(static_effect->apply_to.expression, card, context);
+				if (!applies.has_value())
+				{
+					continue;
+				}
+
+				if (const auto* condition = as<dsl::ValueClass::BOOL>(*applies);
+					condition == nullptr || !static_cast<bool>(*condition))
+				{
+					continue;
+				}
+
+				if (static_effect->condition.has_value())
+				{
+					const auto value = evaluate(*static_effect->condition, context);
+					if (!value.has_value())
+					{
+						continue;
+					}
+
+					if (const auto* condition = as<dsl::ValueClass::BOOL>(*value);
+						condition == nullptr || !static_cast<bool>(*condition))
+					{
+						continue;
+					}
+				}
+
+				for (const auto& modifier: static_effect->modifiers)
+				{
+					const auto* definition = vocabulary_.get().find(modifier.primitive);
+					if (definition == nullptr || definition->name != "add_protection")
+					{
+						continue;
+					}
+
+					const auto args = evaluate_list(modifier.args, context);
+					if (!args.has_value() || args->size() != 1)
+					{
+						continue;
+					}
+
+					const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
+					if (value == nullptr)
+					{
+						continue;
+					}
+
+					result.add(static_cast<domain::Protection>(static_cast<std::underlying_type_t<domain::Protection>>(*value)));
+				}
+			}
+		}
+
+		return result;
+	}
+
 	auto Interpreter::matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool
 	{
 		if (!context.trigger_source.has_value())

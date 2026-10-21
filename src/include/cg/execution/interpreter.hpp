@@ -87,6 +87,9 @@ namespace cg::execution
 		// 静态数值修正(场上卡脚本的 StaticEffect;累加匹配属性的add_numeric_property)
 		[[nodiscard]] auto static_numeric_bonus(const ScriptRegistry& scripts, state::CardInstanceId card, domain::NumericProperty property, Context& context) noexcept -> Integer::value_type;
 
+		// 静态保护(场上卡脚本的 add_protection)
+		[[nodiscard]] auto static_protections(const ScriptRegistry& scripts, state::CardInstanceId card, Context& context) noexcept -> utility::EnumMask<domain::Protection>;
+
 		// 触发效果是否匹配当前事件(触发源 + 触发时条件)
 		[[nodiscard]] auto matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool;
 

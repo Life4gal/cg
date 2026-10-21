@@ -3,6 +3,9 @@
 #include <functional>
 
 #include <cg/domain/card.hpp>
+#include <cg/domain/effect.hpp>
+
+#include <cg/utility/enum.hpp>
 
 namespace cg::state
 {
@@ -18,7 +21,6 @@ namespace cg::execution
 
 namespace cg::flow
 {
-	// 派生数值:印刷值 + 持续效果修正(后续可在此加缓存/分层)
 	class StatResolver
 	{
 	public:
@@ -34,5 +36,6 @@ namespace cg::flow
 
 		[[nodiscard]] auto attack(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>;
 		[[nodiscard]] auto defense(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>;
+		[[nodiscard]] auto protections(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Protection>;
 	};
 }

@@ -102,6 +102,17 @@ namespace cg::flow
 		}
 
 		state_.normal_summoned = true;
+
+		// 祭品召唤/盖放的成功时点
+		if (position == domain::Position::FACE_UP_ATTACK)
+		{
+			trigger_event(dsl::TriggerSource{domain::EventCode::NORMAL_SUMMON_SUCCESS}, card);
+		}
+		else
+		{
+			trigger_event(dsl::TriggerSource{domain::EventCode::MONSTER_SET}, card);
+		}
+
 		return true;
 	}
 
@@ -323,6 +334,9 @@ namespace cg::flow
 		}
 
 		state_.normal_summoned = true;
+
+		// 召唤成功时点
+		trigger_event(dsl::TriggerSource{domain::EventCode::NORMAL_SUMMON_SUCCESS}, card);
 		return true;
 	}
 
@@ -378,6 +392,9 @@ namespace cg::flow
 		}
 
 		state_.normal_summoned = true;
+
+		// 盖放时点
+		trigger_event(dsl::TriggerSource{domain::EventCode::MONSTER_SET}, card);
 		return true;
 	}
 
@@ -713,6 +730,7 @@ namespace cg::flow
 
 		// 伤害步骤开始:里侧守备 → 表侧守备
 		auto target_position = domain::Position::FACE_UP_ATTACK;
+		auto target_flipped{false};
 		if (target.has_value())
 		{
 			const auto placement = game_.placement(*target);
@@ -731,6 +749,7 @@ namespace cg::flow
 			if (target_position == domain::Position::FACE_DOWN_DEFENSE)
 			{
 				target_position = domain::Position::FACE_UP_DEFENSE;
+				target_flipped = true;
 
 				if (std::holds_alternative<domain::ExtraMonsterPlacement>(*placement))
 				{
@@ -811,13 +830,23 @@ namespace cg::flow
 		battle_.advance_damage_step();
 
 		// 应用破坏与战斗伤害
+		auto target_destroyed{false};
+		auto attacker_destroyed{false};
 		if (destroy_target.has_value())
 		{
-			game_.move_to_graveyard(*destroy_target, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
+			if (const auto* target_instance = game_.find_instance(*destroy_target);
+				target_instance == nullptr || !stats_.protections(*target_instance).contains(domain::Protection::BATTLE))
+			{
+				target_destroyed = game_.move_to_graveyard(*destroy_target, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
+			}
 		}
 		if (destroy_attacker.has_value())
 		{
-			game_.move_to_graveyard(*destroy_attacker, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
+			if (const auto* attacker_instance = game_.find_instance(*destroy_attacker);
+				attacker_instance == nullptr || !stats_.protections(*attacker_instance).contains(domain::Protection::BATTLE))
+			{
+				attacker_destroyed = game_.move_to_graveyard(*destroy_attacker, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
+			}
 		}
 		if (damage_to_opponent != 0)
 		{
@@ -830,6 +859,20 @@ namespace cg::flow
 
 		// DAMAGE → END
 		battle_.advance_battle_step();
+
+		// 翻转效果 → 战斗破坏时点
+		if (target_flipped && target.has_value())
+		{
+			trigger_event(dsl::TriggerSource{domain::EventCode::FLIP}, *target);
+		}
+		if (target_destroyed)
+		{
+			trigger_event(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, *destroy_target);
+		}
+		if (attacker_destroyed)
+		{
+			trigger_event(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, attacker);
+		}
 
 		return true;
 	}

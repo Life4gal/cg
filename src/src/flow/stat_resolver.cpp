@@ -34,4 +34,11 @@ namespace cg::flow
 
 		return static_cast<std::underlying_type_t<domain::AttackDefense>>(base + bonus);
 	}
+
+	auto StatResolver::protections(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Protection>
+	{
+		execution::Context context{game_.get(), card.controller()};
+
+		return interpreter_.get().static_protections(scripts_.get(), card.id(), context);
+	}
 }
