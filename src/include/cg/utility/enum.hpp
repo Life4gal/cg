@@ -78,7 +78,7 @@ namespace cg::utility
 		using value_type = enum_detail::select_type_t<enums_count>;
 
 		// 所有枚举值皆有时的值 -- 不支持空位
-		constexpr static auto all_enums_value = static_cast<value_type>((static_cast<value_type>(1) << enums_count) - 1);
+		constexpr static auto all_enums_value = static_cast<value_type>((static_cast<std::uint64_t>(1) << enums_count) - 1);
 
 		// 默认值 - 0
 		constexpr static auto default_value = value_type{0};
@@ -88,7 +88,7 @@ namespace cg::utility
 
 		[[nodiscard]] constexpr static auto bit_of(const enum_type e) noexcept -> value_type
 		{
-			return static_cast<value_type>(value_type{1} << static_cast<value_type>(e));
+			return static_cast<value_type>(value_type{1} << std::to_underlying(e));
 		}
 
 	public:
@@ -98,11 +98,11 @@ namespace cg::utility
 		constexpr explicit EnumMask(const enum_type e) noexcept
 			: EnumMask{}
 		{
-			EnumMask::add(e);
+			EnumMask::add_with(e);
 		}
 
 		constexpr explicit EnumMask(const value_type value) noexcept
-			: bits_{value} {}
+			: bits_{static_cast<value_type>(value & all_enums_value)} {}
 
 		// template<std::same_as<enum_type>... Es>
 		// constexpr explicit(false) EnumMask(Es... es) noexcept
@@ -116,37 +116,17 @@ namespace cg::utility
 		{
 			for (const auto e: list)
 			{
-				EnumMask::add(e);
+				EnumMask::add_with(e);
 			}
 		}
+
+		// ===================================================================
+		// 查询
+		// ===================================================================
 
 		[[nodiscard]] constexpr auto contains(const enum_type e) const noexcept -> bool
 		{
 			return (bits_ & EnumMask::bit_of(e)) != value_type{0};
-		}
-
-		constexpr auto add(const enum_type e) noexcept -> void
-		{
-			bits_ |= EnumMask::bit_of(e);
-		}
-
-		[[nodiscard]] constexpr auto add(const enum_type e) const noexcept -> EnumMask
-		{
-			auto t = *this;
-			t.add(e);
-			return t;
-		}
-
-		constexpr auto remove(const enum_type e) noexcept -> void
-		{
-			bits_ &= ~EnumMask::bit_of(e);
-		}
-
-		[[nodiscard]] constexpr auto remove(const enum_type e) const noexcept -> EnumMask
-		{
-			auto t = *this;
-			t.remove(e);
-			return t;
 		}
 
 		[[nodiscard]] constexpr auto empty() const noexcept -> bool
@@ -164,88 +144,177 @@ namespace cg::utility
 			return bits_;
 		}
 
-		template<typename Function>
-			requires std::is_invocable_v<Function, enum_type>
-		constexpr auto for_each(Function function) const noexcept -> void
+		// ===================================================================
+		// 位修改
+		// ===================================================================
+
+		constexpr auto add_with(const enum_type e) noexcept -> EnumMask&
 		{
-			for (std::size_t i = 0; i < enums_count; ++i)
-			{
-				if (const auto e = static_cast<enum_type>(i);
-					EnumMask::contains(e))
-				{
-					std::invoke(function, e);
-				}
-			}
+			bits_ |= EnumMask::bit_of(e);
+			return *this;
 		}
 
-		template<typename Function>
-			requires std::is_invocable_r_v<bool, Function, enum_type>
-		constexpr auto first_of(Function function, const enum_type fallback) const noexcept -> enum_type
+		[[nodiscard]] constexpr auto add(const enum_type e) const noexcept -> EnumMask
 		{
-			for (std::size_t i = 0; i < enums_count; ++i)
-			{
-				if (const auto e = static_cast<enum_type>(i);
-					EnumMask::contains(e))
-				{
-					if (std::invoke_r<bool>(function, e))
-					{
-						return e;
-					}
-				}
-			}
-
-			return fallback;
+			auto t = *this;
+			t.add_with(e);
+			return t;
 		}
 
-		constexpr auto operator|=(const EnumMask& other) noexcept -> EnumMask&
+		constexpr auto remove_with(const enum_type e) noexcept -> EnumMask&
+		{
+			bits_ &= ~EnumMask::bit_of(e);
+			return *this;
+		}
+
+		[[nodiscard]] constexpr auto remove(const enum_type e) const noexcept -> EnumMask
+		{
+			auto t = *this;
+			t.remove_with(e);
+			return t;
+		}
+
+		constexpr auto toggle_with(const enum_type e) noexcept -> EnumMask&
+		{
+			bits_ ^= EnumMask::bit_of(e);
+			return *this;
+		}
+
+		[[nodiscard]] constexpr auto toggle(const enum_type e) const noexcept -> EnumMask
+		{
+			auto t = *this;
+			t.toggle_with(e);
+			return t;
+		}
+
+		constexpr auto clear() noexcept -> void
+		{
+			bits_ = default_value;
+		}
+
+		// ===================================================================
+		// 修改
+		// ===================================================================
+
+		// |=
+		constexpr auto unite_with(const EnumMask& other) noexcept -> EnumMask&
 		{
 			bits_ |= other.bits_;
 			return *this;
 		}
 
-		[[nodiscard]] constexpr auto operator|(const EnumMask& other) const noexcept -> EnumMask
+		// |
+		[[nodiscard]] constexpr auto unite(const EnumMask& other) const noexcept -> EnumMask
 		{
 			auto t = *this;
-			t |= other;
+			t.unite_with(other);
 			return t;
 		}
 
-		constexpr auto operator&=(const EnumMask& other) noexcept -> EnumMask&
+		// &=
+		constexpr auto intersect_with(const EnumMask& other) noexcept -> EnumMask&
 		{
 			bits_ &= other.bits_;
 			return *this;
 		}
 
-		[[nodiscard]] constexpr auto operator&(const EnumMask& other) const noexcept -> EnumMask
+		// &=
+		[[nodiscard]] constexpr auto intersect(const EnumMask& other) const noexcept -> EnumMask
 		{
 			auto t = *this;
-			t &= other;
+			t.intersect_with(other);
 			return t;
 		}
 
-		constexpr auto operator^=(const EnumMask& other) noexcept -> EnumMask&
+		// 差集(~=)
+		constexpr auto subtract_with(const EnumMask& other) noexcept -> EnumMask&
+		{
+			bits_ &= static_cast<value_type>(~other.bits_);
+			return *this;
+		}
+
+		// 差集(~)
+		[[nodiscard]] constexpr auto subtract(const EnumMask& other) const noexcept -> EnumMask
+		{
+			auto t = *this;
+			t.subtract_with(other);
+			return t;
+		}
+
+		// 对称差(^=)
+		constexpr auto symmetric_difference_with(const EnumMask& other) noexcept -> EnumMask&
 		{
 			bits_ ^= other.bits_;
 			return *this;
 		}
 
-		[[nodiscard]] constexpr auto operator^(const EnumMask& other) const noexcept -> EnumMask
+		// 对称差(^)
+		[[nodiscard]] constexpr auto symmetric_difference(const EnumMask& other) const noexcept -> EnumMask
 		{
 			auto t = *this;
-			t ^= other;
+			t.symmetric_difference_with(other);
 			return t;
 		}
 
-		[[nodiscard]] constexpr auto operator~() const noexcept -> EnumMask
+		// 补集(所有未被置位的枚举)
+		[[nodiscard]] constexpr auto complement() const noexcept -> EnumMask
 		{
-			auto t = *this;
-			t.bits_ = ~bits_ & all_enums_value;
-			return t;
+			return {static_cast<value_type>(~bits_ & all_enums_value)};
 		}
 
-		[[nodiscard]] constexpr auto operator!() const noexcept -> bool
+		// ===================================================================
+		// 迭代器
+		// ===================================================================
+
+		class Iterator
 		{
-			return !empty();
+		public:
+			using iterator_category = std::forward_iterator_tag;
+			using iterator_concept = std::forward_iterator_tag;
+			using value_type = enum_type;
+			using difference_type = std::ptrdiff_t;
+			using pointer = void;
+			using reference = enum_type;
+
+		private:
+			EnumMask::value_type mask_;
+
+		public:
+			constexpr Iterator() noexcept
+				: mask_{default_value} {}
+
+			constexpr explicit Iterator(const EnumMask::value_type mask) noexcept
+				: mask_{mask} {}
+
+			[[nodiscard]] constexpr auto operator*() const noexcept -> enum_type
+			{
+				return static_cast<enum_type>(std::countr_zero(mask_));
+			}
+
+			constexpr auto operator++() noexcept -> Iterator&
+			{
+				mask_ &= static_cast<EnumMask::value_type>(mask_ - 1);
+				return *this;
+			}
+
+			constexpr auto operator++(int) noexcept -> Iterator
+			{
+				auto tmp = *this;
+				++*this;
+				return tmp;
+			}
+
+			[[nodiscard]] constexpr auto operator==(const Iterator&) const noexcept -> bool = default;
+		};
+
+		[[nodiscard]] constexpr auto begin() const noexcept -> Iterator
+		{
+			return Iterator{bits_};
+		}
+
+		[[nodiscard]] constexpr auto end() const noexcept -> Iterator
+		{
+			return Iterator{};
 		}
 
 		[[nodiscard]] constexpr auto operator==(const EnumMask& other) const noexcept -> bool = default;
@@ -269,16 +338,16 @@ namespace cg::utility
 	[[nodiscard]] constexpr auto to_string(const EnumMask<EnumType>& mask) noexcept -> std::string
 	{
 		std::string name;
-		mask.for_each(
-			[&name](const EnumType e) noexcept -> void
+		for (const auto e: mask)
+		{
+			if (!name.empty())
 			{
-				if (!name.empty())
-				{
-					name.append(1, '|');
-				}
-				name.append_range(utility::to_string(e));
+				name.append(1, '|');
 			}
-		);
+
+			name.append_range(utility::to_string(e));
+		}
+
 		return name;
 	}
 
@@ -299,18 +368,20 @@ namespace cg::utility
 	template<typename EnumType>
 	[[nodiscard]] constexpr auto from_mask_string(std::string_view mask) noexcept -> std::optional<EnumMask<EnumType>>
 	{
+		const auto count = magic_enum::enum_count<EnumType>();
+
 		EnumMask<EnumType> result{};
 		while (!mask.empty())
 		{
 			const auto d = mask.find('|');
 			const auto s = (d == std::string_view::npos) ? mask : mask.substr(0, d);
 			bool found = false;
-			for (std::size_t i = 0; i < magic_enum::enum_count<EnumType>(); ++i)
+			for (std::size_t i = 0; i < count; ++i)
 			{
 				if (const auto e = static_cast<EnumType>(i);
 					s == magic_enum::enum_name(e))
 				{
-					result.add(e);
+					result.add_with(e);
 					found = true;
 					break;
 				}
