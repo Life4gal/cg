@@ -639,4 +639,98 @@ namespace cg::domain
 			placement
 		);
 	}
+
+	[[nodiscard]] constexpr auto location_of(const Placement& placement) noexcept -> Location
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[&]([[maybe_unused]] const DeckPlacement& p) noexcept -> Location
+					{
+						return {DeckLocation{.index = p.index}};
+					},
+					[&]([[maybe_unused]] const ExtraDeckPlacement& p) noexcept -> Location
+					{
+						return {ExtraDeckLocation{.index = p.index}};
+					},
+					[&]([[maybe_unused]] const HandPlacement& p) noexcept -> Location
+					{
+						return {HandLocation{.index = p.index}};
+					},
+					[&]([[maybe_unused]] const GraveyardPlacement& p) noexcept -> Location
+					{
+						return {GraveyardLocation{.index = p.index}};
+					},
+					[&]([[maybe_unused]] const BanishedPlacement& p) noexcept -> Location
+					{
+						return {BanishedLocation{.index = p.index}};
+					},
+					[&](const MonsterPlacement& p) noexcept -> Location
+					{
+						return {MonsterLocation{.column = p.column}};
+					},
+					[&](const ExtraMonsterPlacement& p) noexcept -> Location
+					{
+						return {ExtraMonsterLocation{.column = p.column}};
+					},
+					[&](const SpellTrapPlacement& p) noexcept -> Location
+					{
+						return {SpellTrapLocation{.column = p.column}};
+					},
+					[&]([[maybe_unused]] const FieldSpellPlacement& p) noexcept -> Location
+					{
+						return {FieldSpellLocation{}};
+					},
+					[](const NotExistPlacement&) noexcept -> Location
+					{
+						return {NotExistLocation{}};
+					},
+			},
+			placement
+		);
+	}
+
+	[[nodiscard]] constexpr auto location_of(const FieldPlacement& placement) noexcept -> Location
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[&](const MonsterPlacement& p) noexcept -> Location
+					{
+						return {MonsterLocation{.column = p.column}};
+					},
+					[&](const ExtraMonsterPlacement& p) noexcept -> Location
+					{
+						return {ExtraMonsterLocation{.column = p.column}};
+					},
+					[&](const SpellTrapPlacement& p) noexcept -> Location
+					{
+						return {SpellTrapLocation{.column = p.column}};
+					},
+					[&]([[maybe_unused]] const FieldSpellPlacement& p) noexcept -> Location
+					{
+						return {FieldSpellLocation{}};
+					},
+			},
+			placement
+		);
+	}
+
+	[[nodiscard]] constexpr auto location_of(const AnyMonsterPlacement& placement) noexcept -> Location
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[&](const MonsterPlacement& p) noexcept -> Location
+					{
+						return {MonsterLocation{.column = p.column}};
+					},
+					[&](const ExtraMonsterPlacement& p) noexcept -> Location
+					{
+						return {ExtraMonsterLocation{.column = p.column}};
+					},
+			},
+			placement
+		);
+	}
 }
