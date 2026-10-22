@@ -89,13 +89,13 @@ TEST_CASE("flow::Duel performs core actions")
 
 	const auto deck_card = game.create_instance(monster_code, domain::Player::FIRST);
 	const auto hand_card = game.create_instance(monster_code, domain::Player::FIRST);
-	REQUIRE(game.place(deck_card, domain::DeckPlacement{.index = 0}));
-	REQUIRE(game.place(hand_card, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(deck_card, {domain::DeckPlacement{.index = 0}}));
+	REQUIRE(game.place(hand_card,{ domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 
 	// 抽卡阶段
 	CHECK(duel.turn().phase() == domain::Phase::DRAW);
 	CHECK(duel.draw_for_turn());
-	CHECK(game.count_hand_zones_card(domain::Player::FIRST) == 2);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 2);
 	CHECK_FALSE(duel.draw_for_turn());
 
 	// 进入主要阶段
@@ -109,7 +109,7 @@ TEST_CASE("flow::Duel performs core actions")
 
 	// 一回合一次
 	const auto second = game.create_instance(monster_code, domain::Player::FIRST);
-	REQUIRE(game.place(second, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(second, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 	CHECK_FALSE(duel.normal_summon(second, domain::FieldColumn::C2));
 	CHECK_FALSE(duel.set_monster(second, domain::FieldColumn::C2));
 
@@ -121,19 +121,20 @@ TEST_CASE("flow::Duel performs core actions")
 
 	// 对方回合:抽卡 → 主要阶段 → 盖放
 	const auto opponent_deck = game.create_instance(monster_code, domain::Player::SECOND);
-	REQUIRE(game.place(opponent_deck, domain::DeckPlacement{.index = 0}));
+	REQUIRE(game.place(opponent_deck, {domain::DeckPlacement{.index = 0}}));
 	CHECK(duel.draw_for_turn());
 	CHECK(advance_phase(duel));
 	CHECK(advance_phase(duel));
 	CHECK(duel.turn().phase() == domain::Phase::MAIN_1);
 
 	const auto opponent_hand = game.create_instance(monster_code, domain::Player::SECOND);
-	REQUIRE(game.place(opponent_hand, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(opponent_hand, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 	CHECK(duel.set_monster(opponent_hand, domain::FieldColumn::C1));
 
-	const auto placement = game.placement(opponent_hand);
-	REQUIRE(placement.has_value());
-	const auto* monster_placement = std::get_if<domain::MonsterPlacement>(&*placement);
+	const auto* instance = game.find_instance(opponent_hand);
+	REQUIRE(instance != nullptr);
+	const auto placement = instance->placement();
+	const auto* monster_placement = std::get_if<domain::MonsterPlacement>(&placement);
 	REQUIRE(monster_placement != nullptr);
 	CHECK(monster_placement->position == domain::Position::FACE_DOWN_DEFENSE);
 }
@@ -153,10 +154,10 @@ TEST_CASE("flow::Duel resolves an attack-position battle")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
-	REQUIRE(game.place(defender, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(defender, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
-	REQUIRE(game.place(attacker, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(attacker, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	enter_second_player_battle(duel);
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
@@ -192,10 +193,10 @@ TEST_CASE("flow::Duel resolves a defense-position battle")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
-	REQUIRE(game.place(defender, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_DEFENSE}));
+	REQUIRE(game.place(defender, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_DEFENSE}}));
 
 	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
-	REQUIRE(game.place(attacker, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(attacker, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	enter_second_player_battle(duel);
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
@@ -222,7 +223,7 @@ TEST_CASE("flow::Duel direct attack and winner")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
-	REQUIRE(game.place(attacker, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(attacker, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	enter_second_player_battle(duel);
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
@@ -248,10 +249,10 @@ TEST_CASE("flow::Duel flips a face-down defender before damage calculation")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
-	REQUIRE(game.place(defender, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(defender, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 
 	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
-	REQUIRE(game.place(attacker, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(attacker, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	enter_second_player_battle(duel);
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
@@ -280,10 +281,10 @@ TEST_CASE("flow::Duel tribute summons a level 5 monster")
 	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
 
 	const auto high = game.create_instance(high_code, domain::Player::FIRST);
-	REQUIRE(game.place(high, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(high, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 
 	const auto tribute = game.create_instance(low_code, domain::Player::FIRST);
-	REQUIRE(game.place(tribute, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(tribute, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	// 等级 5 不能直接通常召唤
 	CHECK_FALSE(duel.normal_summon(high, domain::FieldColumn::C2));
@@ -310,12 +311,12 @@ TEST_CASE("flow::Duel requires two tributes for a level 7 monster")
 	advance_phase(duel); // MAIN_1
 
 	const auto high = game.create_instance(high_code, domain::Player::FIRST);
-	REQUIRE(game.place(high, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(high, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 
 	const auto first = game.create_instance(low_code, domain::Player::FIRST);
 	const auto second = game.create_instance(low_code, domain::Player::FIRST);
-	REQUIRE(game.place(first, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
-	REQUIRE(game.place(second, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(first,{ domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
+	REQUIRE(game.place(second, {domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const std::array one{first};
 	CHECK_FALSE(duel.tribute_summon(high, domain::FieldColumn::C3, one));
@@ -373,17 +374,17 @@ TEST_CASE("flow::Duel triggers effects from scripts")
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 
 	const auto jar = game.create_instance(jar_code, domain::Player::FIRST);
-	REQUIRE(game.place(jar, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(jar, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 
 	const auto add_to_hand = [&](const domain::Player player) -> void
 	{
 		const auto card = game.create_instance(monster_code, player);
-		REQUIRE(game.place(card, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+		REQUIRE(game.place(card, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 	};
 	const auto add_to_deck = [&](const domain::Player player) -> void
 	{
 		const auto card = game.create_instance(monster_code, player);
-		REQUIRE(game.place(card, domain::DeckPlacement{.index = 0}));
+		REQUIRE(game.place(card, {domain::DeckPlacement{.index = 0}}));
 	};
 
 	for (auto i = 0; i < 2; ++i)
@@ -400,10 +401,10 @@ TEST_CASE("flow::Duel triggers effects from scripts")
 
 	CHECK(duel.trigger_event(dsl::TriggerSource{domain::EventCode::FLIP}, jar));
 
-	CHECK(game.count_hand_zones_card(domain::Player::FIRST) == 5);
-	CHECK(game.count_hand_zones_card(domain::Player::SECOND) == 5);
-	CHECK(game.count_graveyard_zones_card(domain::Player::FIRST) == 2);
-	CHECK(game.count_graveyard_zones_card(domain::Player::SECOND) == 2);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 5);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::HAND) == 5);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::GRAVEYARD) == 2);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::GRAVEYARD) == 2);
 
 	// 不匹配的事件不触发
 	CHECK_FALSE(duel.trigger_event(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, jar));
@@ -434,16 +435,20 @@ TEST_CASE("flow::Duel applies static modifiers in battle")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto mountain_card = game.create_instance(mountain_code, domain::Player::FIRST);
-	REQUIRE(game.place(mountain_card, domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(mountain_card, {domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto defender = game.create_instance(warrior_code, domain::Player::FIRST);
-	REQUIRE(game.place(defender, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(defender, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto attacker = game.create_instance(dragon_code, domain::Player::SECOND);
-	REQUIRE(game.place(attacker, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(attacker, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	enter_second_player_battle(duel);
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	// 印刷值保持 1000,战场计算使用有效值(含 Mountain)
+	CHECK(game.find_instance(attacker)->origin_attack() == 1000);
+	CHECK(game.find_instance(attacker)->origin_defense() == 1000);
 
 	// 龙族 1000 + Mountain 200 = 1200 > 战士 1000
 	CHECK(duel.declare_attack(attacker, defender));
@@ -452,6 +457,69 @@ TEST_CASE("flow::Duel applies static modifiers in battle")
 	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
 	CHECK(game.life_points(domain::Player::FIRST) == 7800);
 	CHECK(game.life_points(domain::Player::SECOND) == 8000);
+}
+
+TEST_CASE("flow::CardStateResolver feeds effective stats to scripts")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_effective_stats";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"99500006.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"WIND","race":"DRAGON","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"condition":{"ge":[{"call":"attack","args":{"card":{"call":"this_card","args":{}}}},1200]},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})"
+	);
+
+	constexpr domain::CardCode mountain_code{50913601};
+	constexpr domain::CardCode monster_code{99500006};
+
+	const auto run = [&](const bool with_mountain) -> std::pair<bool, std::underlying_type_t<domain::AttackDefense>>
+	{
+		flow::Duel duel{};
+		auto& game = duel.game();
+
+		game.register_definition(mountain_code, make_spell(mountain_code, {domain::CardSubtype::FIELD}));
+		game.register_definition(monster_code, make_monster(monster_code, 1000, 1000, 4, domain::Race::DRAGON));
+
+		REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+		REQUIRE(duel.load_scripts(directory));
+
+		game.set_life_points(domain::Player::FIRST, 8000);
+		game.set_life_points(domain::Player::SECOND, 8000);
+
+		if (with_mountain)
+		{
+			const auto mountain = game.create_instance(mountain_code, domain::Player::FIRST);
+			REQUIRE(game.place(mountain, {domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}}));
+		}
+
+		const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+		REQUIRE(game.place(monster, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
+
+		advance_phase(duel); // STANDBY
+		advance_phase(duel); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		// 印刷值仍是 1000;条件里的 attack 应读取有效值
+		const auto activated = duel.activate_effect(monster, 0);
+		return {activated, game.life_points(domain::Player::SECOND)};
+	};
+
+	const auto [with_mountain, lp_with] = run(true);
+	CHECK(with_mountain);
+	CHECK(lp_with == 7500);
+
+	const auto [without_mountain, lp_without] = run(false);
+	CHECK_FALSE(without_mountain);
+	CHECK(lp_without == 8000);
+
+	std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("flow::Duel keeps battle-protected monsters")
@@ -489,13 +557,13 @@ TEST_CASE("flow::Duel keeps battle-protected monsters")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto field = game.create_instance(field_code, domain::Player::FIRST);
-	REQUIRE(game.place(field, domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(field, {domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
-	REQUIRE(game.place(defender, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(defender, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
-	REQUIRE(game.place(attacker, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(attacker, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	enter_second_player_battle(duel);
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
@@ -527,13 +595,13 @@ TEST_CASE("flow::Duel fires battle destruction triggers automatically")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto rat = game.create_instance(rat_code, domain::Player::FIRST);
-	REQUIRE(game.place(rat, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(rat, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
-	REQUIRE(game.place(attacker, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(attacker, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto recruit = game.create_instance(recruit_code, domain::Player::FIRST);
-	REQUIRE(game.place(recruit, domain::DeckPlacement{.index = 0}));
+	REQUIRE(game.place(recruit, {domain::DeckPlacement{.index = 0}}));
 
 	enter_second_player_battle(duel);
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
@@ -581,13 +649,13 @@ TEST_CASE("flow::Duel processes destruction events from effects")
 	REQUIRE(duel.load_scripts(directory));
 
 	const auto igniter = game.create_instance(igniter_code, domain::Player::FIRST);
-	REQUIRE(game.place(igniter, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(igniter, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto victim = game.create_instance(victim_code, domain::Player::SECOND);
-	REQUIRE(game.place(victim, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(victim,{ domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto draw_card = game.create_instance(draw_code, domain::Player::SECOND);
-	REQUIRE(game.place(draw_card, domain::DeckPlacement{.index = 0}));
+	REQUIRE(game.place(draw_card, {domain::DeckPlacement{.index = 0}}));
 
 	advance_phase(duel); // STANDBY
 	advance_phase(duel); // MAIN_1
@@ -598,8 +666,8 @@ TEST_CASE("flow::Duel processes destruction events from effects")
 
 	CHECK(game.zone_of(victim) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(igniter) == domain::Zone::MONSTER);
-	CHECK(game.count_hand_zones_card(domain::Player::SECOND) == 1);
-	CHECK(game.count_deck_zones_card(domain::Player::SECOND) == 0);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::HAND) == 1);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::DECK) == 0);
 }
 
 TEST_CASE("flow::Duel shares usage counters within a group")
@@ -631,7 +699,7 @@ TEST_CASE("flow::Duel shares usage counters within a group")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto card = game.create_instance(card_code, domain::Player::FIRST);
-	REQUIRE(game.place(card, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(card, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	advance_phase(duel); // STANDBY
 	advance_phase(duel); // MAIN_1
@@ -677,7 +745,7 @@ TEST_CASE("flow::Duel applies mutex independently of usage counts")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto card = game.create_instance(card_code, domain::Player::FIRST);
-	REQUIRE(game.place(card, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(card, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	advance_phase(duel); // STANDBY
 	advance_phase(duel); // MAIN_1
@@ -775,18 +843,18 @@ TEST_CASE("flow::Duel enforces triggered effect usage limits")
 	REQUIRE(duel.load_scripts(directory));
 
 	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
-	REQUIRE(game.place(destroyer, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(destroyer, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto victim_a = game.create_instance(victim_code, domain::Player::SECOND);
-	REQUIRE(game.place(victim_a, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(victim_a, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto victim_b = game.create_instance(victim_code, domain::Player::SECOND);
-	REQUIRE(game.place(victim_b, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(victim_b, {domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	for (auto i = 0; i < 2; ++i)
 	{
 		const auto card = game.create_instance(draw_code, domain::Player::SECOND);
-		REQUIRE(game.place(card, domain::DeckPlacement{.index = 0}));
+		REQUIRE(game.place(card, {domain::DeckPlacement{.index = 0}}));
 	}
 
 	advance_phase(duel); // STANDBY
@@ -798,8 +866,8 @@ TEST_CASE("flow::Duel enforces triggered effect usage limits")
 
 	CHECK(game.zone_of(victim_a) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(victim_b) == domain::Zone::GRAVEYARD);
-	CHECK(game.count_hand_zones_card(domain::Player::SECOND) == 1);
-	CHECK(game.count_deck_zones_card(domain::Player::SECOND) == 1);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::HAND) == 1);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::DECK) == 1);
 }
 
 TEST_CASE("flow::Duel activates traps with an event timing")
@@ -819,10 +887,10 @@ TEST_CASE("flow::Duel activates traps with an event timing")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto torrential = game.create_instance(torrential_code, domain::Player::SECOND);
-	REQUIRE(game.place(torrential, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(torrential,{ domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 
 	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
-	REQUIRE(game.place(monster, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(monster, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 
 	// 先攻空过
 	advance_phase(duel); // STANDBY
@@ -886,8 +954,8 @@ TEST_CASE("flow::Duel activates ignition and quick effects")
 
 	const auto ignition_card = game.create_instance(domain::CardCode{94000001}, domain::Player::FIRST);
 	const auto quick_card = game.create_instance(domain::CardCode{94000002}, domain::Player::SECOND);
-	REQUIRE(game.place(ignition_card, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
-	REQUIRE(game.place(quick_card, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(ignition_card, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
+	REQUIRE(game.place(quick_card, {domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	// DRAW → STANDBY → MAIN_1
 	CHECK(advance_phase(duel));
@@ -932,7 +1000,7 @@ TEST_CASE("flow::Duel enforces per-turn usage restrictions")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto card = game.create_instance(domain::CardCode{95000001}, domain::Player::FIRST);
-	REQUIRE(game.place(card, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(card, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	CHECK(advance_phase(duel)); // STANDBY
 	CHECK(advance_phase(duel)); // MAIN_1
@@ -983,9 +1051,9 @@ TEST_CASE("flow::Duel activates spell cards")
 	const auto mountain = game.create_instance(mountain_code, domain::Player::FIRST);
 	const auto monster = game.create_instance(monster_code, domain::Player::SECOND);
 
-	REQUIRE(game.place(raigeki, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
-	REQUIRE(game.place(mountain, domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE}));
-	REQUIRE(game.place(monster, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(raigeki, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
+	REQUIRE(game.place(mountain, {domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE}}));
+	REQUIRE(game.place(monster, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	// 抽卡阶段不能发动魔法
 	CHECK_FALSE(duel.activate_card(raigeki));
@@ -1028,7 +1096,7 @@ TEST_CASE("flow::Duel sets and activates a trap")
 	game.set_life_points(domain::Player::SECOND, 8000);
 
 	const auto trap = game.create_instance(domain::CardCode{97000001}, domain::Player::FIRST);
-	REQUIRE(game.place(trap, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(trap, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 
 	CHECK(advance_phase(duel)); // STANDBY
 	CHECK(advance_phase(duel)); // MAIN_1

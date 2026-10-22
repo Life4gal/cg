@@ -10,6 +10,7 @@
 #include <cg/dsl/types.hpp>
 #include <cg/dsl/vocabulary.hpp>
 #include <cg/state/game.hpp>
+#include <cg/execution/card_state_resolver.hpp>
 #include <cg/execution/chain.hpp>
 #include <cg/execution/script_registry.hpp>
 
@@ -731,10 +732,8 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		utility::EnumMask<domain::Reason> reasons{};
-		reasons.add(static_cast<domain::Reason>(static_cast<std::underlying_type_t<domain::Reason>>(*reason)));
-
-		for (const auto card: *cards)
+		for (const utility::EnumMask reasons{static_cast<domain::Reason>(static_cast<std::underlying_type_t<domain::Reason>>(*reason))};
+		     const auto card: *cards)
 		{
 			if (!context.game.get().move_to_graveyard(card, reasons))
 			{
@@ -788,15 +787,19 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto value = static_cast<domain::CardType>(static_cast<std::underlying_type_t<domain::CardType>>(*kind));
-		const auto r = context.game.get().is_card_type(*card, value);
-
-		if (!r.has_value())
+		const auto* instance = context.game.get().find_instance(*card);
+		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		return Value{Boolean{*r}};
+		const auto value = static_cast<domain::CardType>(static_cast<std::underlying_type_t<domain::CardType>>(*kind));
+		if (context.card_state)
+		{
+			return Value{Boolean{context.card_state->is_card_type(*instance, value)}};
+		}
+
+		return Value{Boolean{instance->origin_is_card_type(value)}};
 	}
 
 	auto Interpreter::is_card_subtype(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -814,15 +817,19 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto value = static_cast<domain::CardSubtype>(static_cast<std::underlying_type_t<domain::CardSubtype>>(*subtype));
-		const auto r = context.game.get().is_card_subtype(*card, value);
-
-		if (!r.has_value())
+		const auto* instance = context.game.get().find_instance(*card);
+		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		return Value{Boolean{*r}};
+		const auto value = static_cast<domain::CardSubtype>(static_cast<std::underlying_type_t<domain::CardSubtype>>(*subtype));
+		if (context.card_state)
+		{
+			return Value{Boolean{context.card_state->is_card_subtype(*instance, value)}};
+		}
+
+		return Value{Boolean{instance->origin_is_card_subtype(value)}};
 	}
 
 	auto Interpreter::is_attribute(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -840,15 +847,34 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto value = static_cast<domain::Attribute>(static_cast<std::underlying_type_t<domain::Attribute>>(*attribute));
-		const auto r = context.game.get().is_attribute(*card, value);
-
-		if (!r.has_value())
+		const auto* instance = context.game.get().find_instance(*card);
+		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		return Value{Boolean{*r}};
+		if (context.card_state)
+		{
+			if (!context.card_state->is_card_type(*instance, domain::CardType::MONSTER))
+			{
+				return std::nullopt;
+			}
+		}
+		else
+		{
+			if (!instance->origin_is_monster_card())
+			{
+				return std::nullopt;
+			}
+		}
+
+		const auto value = static_cast<domain::Attribute>(static_cast<std::underlying_type_t<domain::Attribute>>(*attribute));
+		if (context.card_state)
+		{
+			return Value{Boolean{context.card_state->attributes(*instance).contains(value)}};
+		}
+
+		return Value{Boolean{instance->origin_is_attribute(value)}};
 	}
 
 	auto Interpreter::is_race(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -866,15 +892,34 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto value = static_cast<domain::Race>(static_cast<std::underlying_type_t<domain::Race>>(*race));
-		const auto r = context.game.get().is_race(*card, value);
-
-		if (!r.has_value())
+		const auto* instance = context.game.get().find_instance(*card);
+		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		return Value{Boolean{*r}};
+		if (context.card_state)
+		{
+			if (!context.card_state->is_card_type(*instance, domain::CardType::MONSTER))
+			{
+				return std::nullopt;
+			}
+		}
+		else
+		{
+			if (!instance->origin_is_monster_card())
+			{
+				return std::nullopt;
+			}
+		}
+
+		const auto value = static_cast<domain::Race>(static_cast<std::underlying_type_t<domain::Race>>(*race));
+		if (context.card_state)
+		{
+			return Value{Boolean{context.card_state->race(*instance) == value}};
+		}
+
+		return Value{Boolean{instance->origin_is_race(value)}};
 	}
 
 	auto Interpreter::is_in_zone(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -912,65 +957,22 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto placement = context.game.get().placement(*card);
-		if (!placement.has_value())
+		const auto* instance = context.game.get().find_instance(*card);
+		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		const auto position_is_face_up = [](const domain::Position position) noexcept -> bool
+		const auto placement = instance->placement();
+
+		if (const auto position = domain::position_of(placement);
+			position.has_value())
 		{
-			return position == domain::Position::FACE_UP_ATTACK || position == domain::Position::FACE_UP_DEFENSE;
-		};
+			return Value{Boolean{*position == domain::Position::FACE_UP_ATTACK || *position == domain::Position::FACE_UP_DEFENSE}};
+		}
 
-		const auto face_up = std::visit(
-			utility::Overloaded
-			{
-					[&](const domain::MonsterPlacement p) noexcept -> bool
-					{
-						return position_is_face_up(p.position);
-					},
-					[&](const domain::ExtraMonsterPlacement p) noexcept -> bool
-					{
-						return position_is_face_up(p.position);
-					},
-					[&](const domain::SpellTrapPlacement p) noexcept -> bool
-					{
-						return position_is_face_up(p.position);
-					},
-					[&](const domain::FieldSpellPlacement p) noexcept -> bool
-					{
-						return position_is_face_up(p.position);
-					},
-					[&](const domain::ExtraDeckPlacement p) noexcept -> bool
-					{
-						return position_is_face_up(p.position);
-					},
-					[&](const domain::BanishedPlacement p) noexcept -> bool
-					{
-						return position_is_face_up(p.position);
-					},
-					[]([[maybe_unused]] const domain::GraveyardPlacement& p) noexcept -> bool
-					{
-						return true;
-					},
-					[]([[maybe_unused]] const domain::DeckPlacement& p) noexcept -> bool
-					{
-						return false;
-					},
-					[]([[maybe_unused]] const domain::HandPlacement& p) noexcept -> bool
-					{
-						return false;
-					},
-					[]([[maybe_unused]] const domain::NotExistPlacement& p) noexcept -> bool
-					{
-						return false;
-					},
-			},
-			*placement
-		);
-
-		return Value{Boolean{face_up}};
+		// 墓地是表侧表示
+		return Value{Boolean{std::holds_alternative<domain::GraveyardPlacement>(placement)}};
 	}
 
 	auto Interpreter::level(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -987,13 +989,33 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto level = context.game.get().level(*card);
-		if (!level.has_value())
+		const auto* instance = context.game.get().find_instance(*card);
+		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		return Value{Integer{static_cast<Integer::value_type>(*level)}};
+		if (context.card_state)
+		{
+			if (!context.card_state->is_card_type(*instance, domain::CardType::MONSTER))
+			{
+				return std::nullopt;
+			}
+		}
+		else
+		{
+			if (!instance->origin_is_monster_card())
+			{
+				return std::nullopt;
+			}
+		}
+
+		if (context.card_state)
+		{
+			return Value{Integer{context.card_state->level(*instance)}};
+		}
+
+		return Value{Integer{instance->origin_level()}};
 	}
 
 	auto Interpreter::attack(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1010,13 +1032,33 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto attack = context.game.get().attack(*card);
-		if (!attack.has_value())
+		const auto* instance = context.game.get().find_instance(*card);
+		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		return Value{Integer{static_cast<Integer::value_type>(*attack)}};
+		if (context.card_state)
+		{
+			if (!context.card_state->is_card_type(*instance, domain::CardType::MONSTER))
+			{
+				return std::nullopt;
+			}
+		}
+		else
+		{
+			if (!instance->origin_is_monster_card())
+			{
+				return std::nullopt;
+			}
+		}
+
+		if (context.card_state)
+		{
+			return Value{Integer{context.card_state->attack(*instance)}};
+		}
+
+		return Value{Integer{instance->origin_attack()}};
 	}
 
 	auto Interpreter::defense(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1033,13 +1075,33 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto defense = context.game.get().defense(*card);
-		if (!defense.has_value())
+		const auto* instance = context.game.get().find_instance(*card);
+		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		return Value{Integer{static_cast<Integer::value_type>(*defense)}};
+		if (context.card_state)
+		{
+			if (!context.card_state->is_card_type(*instance, domain::CardType::MONSTER))
+			{
+				return std::nullopt;
+			}
+		}
+		else
+		{
+			if (!instance->origin_is_monster_card())
+			{
+				return std::nullopt;
+			}
+		}
+
+		if (context.card_state)
+		{
+			return Value{Integer{context.card_state->defense(*instance)}};
+		}
+
+		return Value{Integer{instance->origin_defense()}};
 	}
 
 	auto Interpreter::this_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1101,17 +1163,18 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		for (const auto player: players_of(*players, context))
+		for (auto& game = context.game.get();
+		     const auto player: players_of(*players, context))
 		{
 			for (Integer::value_type i = 0; i < *count; ++i)
 			{
-				const auto deck = context.game.get().collect_deck_zones_card(player);
+				const auto deck = game.collect_zone_card(player, domain::Zone::DECK);
 				if (deck.empty())
 				{
 					break;
 				}
 
-				if (!context.game.get().move_to_hand(deck.front(), {domain::Reason::DRAW}, domain::Position::FACE_DOWN_DEFENSE))
+				if (!game.move_to_hand(deck.front(), {domain::Reason::DRAW}, domain::Position::FACE_DOWN_DEFENSE))
 				{
 					return std::nullopt;
 				}
@@ -1135,9 +1198,10 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		for (const auto card: *cards)
+		for (auto& game = context.game.get();
+		     const auto card: *cards)
 		{
-			if (!context.game.get().move_to_hand(card, {domain::Reason::EFFECT}, domain::Position::FACE_DOWN_DEFENSE))
+			if (!game.move_to_hand(card, {domain::Reason::EFFECT}, domain::Position::FACE_DOWN_DEFENSE))
 			{
 				return std::nullopt;
 			}
@@ -1239,12 +1303,13 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto placement = context.game.get().placement(*card);
-		if (!placement.has_value())
+		const auto* instance = context.game.get().find_instance(*card);
+		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
+		const auto placement = instance->placement();
 		const auto value = static_cast<domain::Position>(static_cast<std::underlying_type_t<domain::Position>>(*position));
 
 		const auto updated = std::visit(
@@ -1266,12 +1331,12 @@ namespace cg::execution
 					{
 						return domain::Placement{domain::FieldSpellPlacement{.position = value}};
 					},
-					[](const auto&) noexcept -> std::optional<domain::Placement>
+					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<domain::Placement>
 					{
 						return std::nullopt;
 					},
 			},
-			*placement
+			placement
 		);
 
 		if (!updated.has_value())
@@ -1309,16 +1374,17 @@ namespace cg::execution
 		const auto value = static_cast<domain::Position>(static_cast<std::underlying_type_t<domain::Position>>(*position));
 
 		// TODO: 指定召唤位置
-		for (const auto column: domain::field_columns)
+		for (auto& game = context.game.get();
+		     const auto column: domain::field_columns)
 		{
 			if (const auto location = domain::MonsterLocation{.column = column};
-				!context.game.get().is_location_empty(context.controller, location))
+				!game.is_location_empty(context.controller, domain::Location{location}))
 			{
 				continue;
 			}
 
 			if (const auto placement = domain::MonsterPlacement{.column = column, .position = value};
-				!context.game.get().move_to_monster(*card, {domain::Reason::EFFECT}, placement))
+				!game.move_to_monster(*card, {domain::Reason::EFFECT}, placement))
 			{
 				return std::nullopt;
 			}
@@ -1379,7 +1445,7 @@ namespace cg::execution
 				continue;
 			}
 
-			const auto* script = scripts.find(instance.code());
+			const auto* script = scripts.find(instance.origin_code());
 			if (script == nullptr)
 			{
 				continue;
@@ -1466,7 +1532,7 @@ namespace cg::execution
 				continue;
 			}
 
-			const auto* script = scripts.find(instance.code());
+			const auto* script = scripts.find(instance.origin_code());
 			if (script == nullptr)
 			{
 				continue;
@@ -1527,7 +1593,7 @@ namespace cg::execution
 						continue;
 					}
 
-					result.add(static_cast<domain::Protection>(static_cast<std::underlying_type_t<domain::Protection>>(*value)));
+					result.add_with(static_cast<domain::Protection>(static_cast<std::underlying_type_t<domain::Protection>>(*value)));
 				}
 			}
 		}
@@ -1580,7 +1646,7 @@ namespace cg::execution
 		for (const auto& game = context.game.get();
 		     const auto& instance: game.instances())
 		{
-			const auto* script = scripts.find(instance.code());
+			const auto* script = scripts.find(instance.origin_code());
 			if (script == nullptr)
 			{
 				continue;

@@ -19,6 +19,8 @@ namespace cg::state
 
 namespace cg::execution
 {
+	class CardStateResolver;
+
 	class Context
 	{
 	public:
@@ -39,6 +41,9 @@ namespace cg::execution
 		scopes_type element_scopes;
 		// 选择回调(测试/UI 注入)
 		selector_type selector;
+
+		// 有效值查询(为空时回退CardInstance::origin_*)
+		CardStateResolver* card_state;
 
 		// ================================================================
 		// 触发上下文
@@ -65,6 +70,7 @@ namespace cg::execution
 			  bindings{std::move(bindings)},
 			  element_scopes{std::move(element_scopes)},
 			  selector{std::move(selector)},
+			  card_state{nullptr},
 			  trigger_source{std::nullopt},
 			  event_card{std::nullopt},
 			  event_player{std::nullopt} {}

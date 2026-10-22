@@ -97,8 +97,8 @@ TEST_CASE("execution::Interpreter resolves Raigeki")
 
 	CHECK(game.zone_of(opponent_monster) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(own_monster) == domain::Zone::MONSTER);
-	CHECK(game.count_graveyard_zones_card(domain::Player::SECOND) == 1);
-	CHECK(game.count_graveyard_zones_card(domain::Player::FIRST) == 0);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::GRAVEYARD) == 1);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::GRAVEYARD) == 0);
 }
 
 TEST_CASE("execution::Interpreter resolves Tribute to the Doomed")
@@ -114,8 +114,8 @@ TEST_CASE("execution::Interpreter resolves Tribute to the Doomed")
 	const auto hand_card = game.create_instance(monster_code, domain::Player::FIRST);
 	const auto opponent_monster = game.create_instance(monster_code, domain::Player::SECOND);
 
-	REQUIRE(game.place(hand_card, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
-	REQUIRE(game.place(opponent_monster, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(hand_card, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
+	REQUIRE(game.place(opponent_monster, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto script = read_card_script("79759861.json");
 	REQUIRE(script.has_value());
@@ -131,12 +131,12 @@ TEST_CASE("execution::Interpreter resolves Tribute to the Doomed")
 
 	// 费用:舍弃手牌
 	CHECK(game.zone_of(hand_card) == domain::Zone::GRAVEYARD);
-	CHECK(game.count_hand_zones_card(domain::Player::FIRST) == 0);
-	CHECK(game.count_graveyard_zones_card(domain::Player::FIRST) == 1);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 0);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::GRAVEYARD) == 1);
 
 	// 对象与处理:破坏对方怪兽
 	CHECK(game.zone_of(opponent_monster) == domain::Zone::GRAVEYARD);
-	CHECK(game.count_graveyard_zones_card(domain::Player::SECOND) == 1);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::GRAVEYARD) == 1);
 }
 
 TEST_CASE("execution::Interpreter evaluates boolean operators")
@@ -192,8 +192,8 @@ TEST_CASE("execution::Interpreter searches a subtype from the deck")
 	const auto monster_in_deck = game.create_instance(monster_code, domain::Player::FIRST);
 	const auto field_spell_in_deck = game.create_instance(field_spell_code, domain::Player::FIRST);
 
-	REQUIRE(game.place(monster_in_deck, domain::DeckPlacement{.index = 0}));
-	REQUIRE(game.place(field_spell_in_deck, domain::DeckPlacement{.index = 1}));
+	REQUIRE(game.place(monster_in_deck, {domain::DeckPlacement{.index = 0}}));
+	REQUIRE(game.place(field_spell_in_deck, {domain::DeckPlacement{.index = 1}}));
 
 	const auto script = read_card_script("73628505.json");
 	REQUIRE(script.has_value());
@@ -209,7 +209,7 @@ TEST_CASE("execution::Interpreter searches a subtype from the deck")
 
 	CHECK(game.zone_of(field_spell_in_deck) == domain::Zone::HAND);
 	CHECK(game.zone_of(monster_in_deck) == domain::Zone::DECK);
-	CHECK(game.count_hand_zones_card(domain::Player::FIRST) == 1);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 1);
 }
 
 TEST_CASE("execution::Interpreter draws cards")
@@ -225,8 +225,8 @@ TEST_CASE("execution::Interpreter draws cards")
 	const auto deck_a = game.create_instance(monster_code, domain::Player::FIRST);
 	const auto deck_b = game.create_instance(monster_code, domain::Player::FIRST);
 
-	REQUIRE(game.place(deck_a, domain::DeckPlacement{.index = 0}));
-	REQUIRE(game.place(deck_b, domain::DeckPlacement{.index = 1}));
+	REQUIRE(game.place(deck_a, {domain::DeckPlacement{.index = 0}}));
+	REQUIRE(game.place(deck_b, {domain::DeckPlacement{.index = 1}}));
 
 	const auto script = read_card_script("55144522.json");
 	REQUIRE(script.has_value());
@@ -240,8 +240,8 @@ TEST_CASE("execution::Interpreter draws cards")
 
 	CHECK(interpreter.execute(*activated, context));
 
-	CHECK(game.count_hand_zones_card(domain::Player::FIRST) == 2);
-	CHECK(game.is_deck_zones_empty(domain::Player::FIRST));
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 2);
+	CHECK(game.is_zone_empty(domain::Player::FIRST, domain::Zone::DECK));
 }
 
 TEST_CASE("execution::Interpreter changes life points")
@@ -300,17 +300,17 @@ TEST_CASE("execution::Interpreter matches a FLIP trigger and resolves")
 	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
 
 	const auto jar = game.create_instance(jar_code, domain::Player::FIRST);
-	REQUIRE(game.place(jar, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}));
+	REQUIRE(game.place(jar,{ domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 
 	const auto add_to_hand = [&](const domain::Player player) -> void
 	{
 		const auto id = game.create_instance(monster_code, player);
-		REQUIRE(game.place(id, domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}));
+		REQUIRE(game.place(id, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
 	};
 	const auto add_to_deck = [&](const domain::Player player) -> void
 	{
 		const auto id = game.create_instance(monster_code, player);
-		REQUIRE(game.place(id, domain::DeckPlacement{.index = 0}));
+		REQUIRE(game.place(id, {domain::DeckPlacement{.index = 0}}));
 	};
 
 	add_to_hand(domain::Player::FIRST);
@@ -342,12 +342,12 @@ TEST_CASE("execution::Interpreter matches a FLIP trigger and resolves")
 	CHECK(interpreter.matches(*trigger, context));
 	CHECK(interpreter.execute(*activated, context));
 
-	CHECK(game.count_hand_zones_card(domain::Player::FIRST) == 5);
-	CHECK(game.count_hand_zones_card(domain::Player::SECOND) == 5);
-	CHECK(game.count_graveyard_zones_card(domain::Player::FIRST) == 2);
-	CHECK(game.count_graveyard_zones_card(domain::Player::SECOND) == 2);
-	CHECK(game.is_deck_zones_empty(domain::Player::FIRST));
-	CHECK(game.is_deck_zones_empty(domain::Player::SECOND));
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 5);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::HAND) == 5);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::GRAVEYARD) == 2);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::GRAVEYARD) == 2);
+	CHECK(game.is_zone_empty(domain::Player::FIRST, domain::Zone::DECK));
+	CHECK(game.is_zone_empty(domain::Player::SECOND, domain::Zone::DECK));
 }
 
 TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
@@ -364,9 +364,9 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 	const auto turn_jar = game.create_instance(jar_code, domain::Player::FIRST);
 	const auto optional_card = game.create_instance(optional_code, domain::Player::FIRST);
 
-	REQUIRE(game.place(opponent_jar, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}));
-	REQUIRE(game.place(turn_jar, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_DOWN_DEFENSE}));
-	REQUIRE(game.place(optional_card, domain::MonsterPlacement{.column = domain::FieldColumn::C3, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(opponent_jar, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}}));
+	REQUIRE(game.place(turn_jar, {domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_DOWN_DEFENSE}}));
+	REQUIRE(game.place(optional_card, {domain::MonsterPlacement{.column = domain::FieldColumn::C3, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto jar = read_card_script("33508719.json");
 	REQUIRE(jar.has_value());
@@ -396,6 +396,8 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 		{
 				.id = dsl::EffectId{1},
 				.body = dsl::EffectBody{std::move(optional_activated)},
+				.usage = std::nullopt,
+				.mutex = std::nullopt,
 		}
 	);
 
@@ -429,15 +431,15 @@ TEST_CASE("execution::Interpreter builds and resolves a chain")
 	const auto first_rat = game.create_instance(rat_code, domain::Player::FIRST);
 	const auto second_rat = game.create_instance(rat_code, domain::Player::SECOND);
 
-	REQUIRE(game.place(first_rat, domain::GraveyardPlacement{.index = 0}));
-	REQUIRE(game.place(second_rat, domain::GraveyardPlacement{.index = 0}));
+	REQUIRE(game.place(first_rat, {domain::GraveyardPlacement{.index = 0}}));
+	REQUIRE(game.place(second_rat, {domain::GraveyardPlacement{.index = 0}}));
 
 	// 双方卡组各一张可被检索的怪兽
 	const auto first_deck = game.create_instance(monster_code, domain::Player::FIRST);
 	const auto second_deck = game.create_instance(monster_code, domain::Player::SECOND);
 
-	REQUIRE(game.place(first_deck, domain::DeckPlacement{.index = 0}));
-	REQUIRE(game.place(second_deck, domain::DeckPlacement{.index = 0}));
+	REQUIRE(game.place(first_deck, {domain::DeckPlacement{.index = 0}}));
+	REQUIRE(game.place(second_deck, {domain::DeckPlacement{.index = 0}}));
 
 	const auto rat = read_card_script("97017120.json");
 	REQUIRE(rat.has_value());
@@ -458,12 +460,12 @@ TEST_CASE("execution::Interpreter builds and resolves a chain")
 
 	CHECK(interpreter.resolve(chain));
 
-	CHECK(game.is_deck_zones_empty(domain::Player::FIRST));
-	CHECK(game.is_deck_zones_empty(domain::Player::SECOND));
-	CHECK(game.count_monster_zones_card(domain::Player::FIRST) == 1);
-	CHECK(game.count_monster_zones_card(domain::Player::SECOND) == 1);
-	CHECK(game.count_graveyard_zones_card(domain::Player::FIRST) == 1);
-	CHECK(game.count_graveyard_zones_card(domain::Player::SECOND) == 1);
+	CHECK(game.is_zone_empty(domain::Player::FIRST, domain::Zone::DECK));
+	CHECK(game.is_zone_empty(domain::Player::SECOND, domain::Zone::DECK));
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::MONSTER) == 1);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::MONSTER) == 1);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::GRAVEYARD) == 1);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::GRAVEYARD) == 1);
 }
 
 TEST_CASE("execution::Interpreter applies static numeric modifiers")
@@ -489,9 +491,9 @@ TEST_CASE("execution::Interpreter applies static numeric modifiers")
 	const auto dragon = game.create_instance(dragon_code, domain::Player::FIRST);
 	const auto warrior = game.create_instance(warrior_code, domain::Player::FIRST);
 
-	REQUIRE(game.place(mountain, domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}));
-	REQUIRE(game.place(dragon, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
-	REQUIRE(game.place(warrior, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+	REQUIRE(game.place(mountain, {domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}}));
+	REQUIRE(game.place(dragon, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
+	REQUIRE(game.place(warrior, {domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}}));
 
 	const auto mountain_script = read_card_script("50913601.json");
 	REQUIRE(mountain_script.has_value());

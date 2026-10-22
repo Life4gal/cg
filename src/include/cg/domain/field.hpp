@@ -583,6 +583,43 @@ namespace cg::domain
 		);
 	}
 
+	[[nodiscard]] constexpr auto position_of(const Placement& placement) noexcept -> std::optional<Position>
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[]<typename P>(const P& p) noexcept -> std::optional<Position> //
+						requires(
+							std::is_same_v<P, ExtraDeckPlacement> ||
+							std::is_same_v<P, HandPlacement> ||
+							std::is_same_v<P, BanishedPlacement> ||
+							std::is_same_v<P, MonsterPlacement> ||
+							std::is_same_v<P, ExtraMonsterPlacement> ||
+							std::is_same_v<P, SpellTrapPlacement> ||
+							std::is_same_v<P, FieldSpellPlacement>
+						)
+					{
+						return p.position;
+					},
+					[]([[maybe_unused]] const DeckPlacement& p) noexcept -> std::optional<Position>
+					{
+						// return {Position::FACE_DOWN_DEFENSE};
+						return std::nullopt;
+					},
+					[]([[maybe_unused]] const GraveyardPlacement& p) noexcept -> std::optional<Position>
+					{
+						// return {Position::FACE_UP_ATTACK};
+						return std::nullopt;
+					},
+					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<Position>
+					{
+						return std::nullopt;
+					}
+			},
+			placement
+		);
+	}
+
 	[[nodiscard]] constexpr auto field_info_of(const Placement& placement) noexcept -> std::optional<FieldInfo>
 	{
 		return std::visit(

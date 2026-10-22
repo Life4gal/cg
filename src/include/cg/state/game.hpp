@@ -173,8 +173,26 @@ namespace cg::state
 
 		// 将卡放入其持有者的指定位置(自动从原位置移除) -- 指定实例不存在返回false
 		auto place(CardInstanceId card, domain::Placement placement) noexcept -> bool;
+		// 将卡放入其持有者的指定位置(自动从原位置移除)
+		auto place(CardInstance& card, domain::Placement placement) noexcept -> void;
 
 	private:
+		template<typename PlacementGetter>
+			requires std::is_invocable_r_v<domain::Placement, PlacementGetter, domain::Player>
+		auto do_move_to(CardInstance& card, const utility::EnumMask<domain::Reason> reason, PlacementGetter getter) noexcept -> void
+		{
+			card.set_move_provenance(
+				{
+						.controller = card.controller(),
+						.reason = reason,
+						.placement = card.placement(),
+						.effect = dsl::EffectId{dsl::EffectId::invalid_id}
+				}
+			);
+
+			this->place(card, getter(card.owner()));
+		}
+
 		template<typename PlacementGetter>
 			requires std::is_invocable_r_v<domain::Placement, PlacementGetter, domain::Player>
 		auto do_move_to(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, PlacementGetter getter) noexcept -> bool
@@ -185,16 +203,8 @@ namespace cg::state
 				return false;
 			}
 
-			instance->set_move_provenance(
-				{
-						.controller = instance->controller(),
-						.reason = reason,
-						.placement = instance->placement(),
-						.effect = dsl::EffectId{dsl::EffectId::invalid_id}
-				}
-			);
-
-			return this->place(card, getter(instance->owner()));
+			this->do_move_to(*instance, reason, getter);
+			return true;
 		}
 
 	public:

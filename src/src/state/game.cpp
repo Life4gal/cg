@@ -331,13 +331,17 @@ namespace cg::state
 			return false;
 		}
 
-		const auto prev = instance->placement();
-		field_.remove(instance->controller(), card, prev);
-
-		instance->set_placement(placement);
-		field_.place(instance->controller(), card, placement);
-
+		place(*instance, placement);
 		return true;
+	}
+
+	auto Game::place(CardInstance& card, const domain::Placement placement) noexcept -> void
+	{
+		const auto prev = card.placement();
+		field_.remove(card.controller(), card.id(), prev);
+
+		card.set_placement(placement);
+		field_.place(card.controller(), card.id(), placement);
 	}
 
 	auto Game::move_to_deck(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason) noexcept -> bool

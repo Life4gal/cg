@@ -1124,7 +1124,7 @@ namespace cg::dsl::json
 				return std::nullopt;
 			}
 
-			result.add(*subtype);
+			result.add_with(*subtype);
 		}
 
 		return result;
@@ -1317,7 +1317,7 @@ namespace cg::dsl::json
 				return std::nullopt;
 			}
 
-			markers.add(*marker);
+			markers.add_with(*marker);
 		}
 
 		return LinkMarkerIdentity{.markers = markers};
@@ -1884,7 +1884,7 @@ namespace cg::dsl::json
 					return std::nullopt;
 				}
 
-				source_zones.add(*zone);
+				source_zones.add_with(*zone);
 			}
 		}
 
@@ -2089,7 +2089,7 @@ namespace cg::dsl::json
 					return std::nullopt;
 				}
 
-				activation_zones.add(*zone);
+				activation_zones.add_with(*zone);
 			}
 		}
 

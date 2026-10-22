@@ -8,6 +8,7 @@
 #include <cg/dsl/types.hpp>
 #include <cg/dsl/vocabulary.hpp>
 
+#include <cg/execution/card_state_resolver.hpp>
 #include <cg/execution/interpreter.hpp>
 #include <cg/execution/script_registry.hpp>
 
@@ -16,7 +17,6 @@
 #include <cg/flow/event.hpp>
 #include <cg/flow/battle.hpp>
 #include <cg/flow/priority.hpp>
-#include <cg/flow/stat_resolver.hpp>
 #include <cg/flow/turn.hpp>
 
 namespace cg::flow
@@ -139,10 +139,10 @@ namespace cg::flow
 
 		dsl::TypeRegistry types_;
 		dsl::Vocabulary vocabulary_;
+
 		execution::ScriptRegistry scripts_;
 		execution::Interpreter interpreter_;
-
-		StatResolver stats_;
+		execution::CardStateResolver card_state_;
 
 		// 事件队列处理中(防重入)
 		bool processing_events_;
@@ -160,9 +160,9 @@ namespace cg::flow
 		auto process_pending_events() noexcept -> void;
 
 		// 使用次数
-		[[nodiscard]] static auto usage_owner(dsl::UsageKind kind, const state::CardInstance& card) noexcept -> UsageKey::owner_type;
-		[[nodiscard]] static auto make_usage_key(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> UsageKey;
-		[[nodiscard]] static auto make_mutex_key(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> MutexKey;
+		[[nodiscard]] auto usage_owner(dsl::UsageKind kind, const state::CardInstance& card) const noexcept -> UsageKey::owner_type;
+		[[nodiscard]] auto make_usage_key(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> UsageKey;
+		[[nodiscard]] auto make_mutex_key(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> MutexKey;
 		[[nodiscard]] auto can_use(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> bool;
 		auto mark_used(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> void;
 

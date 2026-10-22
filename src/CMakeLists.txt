@@ -39,13 +39,13 @@ add_library(
 	src/flow/turn.cpp
 	src/flow/battle.cpp
 	src/flow/priority.cpp
-	src/flow/stat_resolver.cpp
 	src/flow/duel.cpp
 	
 	# ===================================
 	# EXECUTION
 	# ===================================
 
+	src/execution/card_state_resolver.cpp
 	src/execution/interpreter.cpp
 	src/execution/script_registry.cpp
 )
@@ -156,7 +156,6 @@ target_sources(
 	include/cg/flow/turn.hpp
 	include/cg/flow/battle.hpp
 	include/cg/flow/priority.hpp
-	include/cg/flow/stat_resolver.hpp
 	include/cg/flow/duel.hpp
 	
 	# ===================================
@@ -168,6 +167,7 @@ target_sources(
 	include/cg/execution/event.hpp
 	include/cg/execution/context.hpp
 	include/cg/execution/chain.hpp
+	include/cg/execution/card_state_resolver.hpp
 	include/cg/execution/interpreter.hpp
 	include/cg/execution/script_registry.hpp
 )
