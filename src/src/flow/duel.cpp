@@ -234,7 +234,7 @@ namespace cg::flow
 		vocabulary_{types_},
 		// scripts_{},
 		interpreter_{vocabulary_},
-		card_state_{game_, scripts_, interpreter_},
+		card_state_{game_, scripts_, vocabulary_, interpreter_},
 		processing_events_{false},
 		window_{std::nullopt} {}
 

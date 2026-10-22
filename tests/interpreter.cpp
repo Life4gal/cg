@@ -10,6 +10,7 @@
 #include <cg/state/game.hpp>
 #include <cg/execution/chain.hpp>
 #include <cg/execution/interpreter.hpp>
+#include <cg/execution/card_state_resolver.hpp>
 #include <cg/execution/script_registry.hpp>
 
 #include <nlohmann/json.hpp>
@@ -500,13 +501,17 @@ TEST_CASE("execution::Interpreter applies static numeric modifiers")
 
 	execution::ScriptRegistry scripts{};
 	scripts.add(mountain_code, *mountain_script);
-
 	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, domain::Player::FIRST};
+	execution::CardStateResolver resolver{game, scripts, g_vocabulary, interpreter};
 
-	CHECK(interpreter.static_numeric_bonus(scripts, dragon, domain::NumericProperty::ATTACK, context) == 200);
-	CHECK(interpreter.static_numeric_bonus(scripts, dragon, domain::NumericProperty::DEFENSE, context) == 200);
-	CHECK(interpreter.static_numeric_bonus(scripts, warrior, domain::NumericProperty::ATTACK, context) == 0);
+	const auto* dragon_instance = game.find_instance(dragon);
+	const auto* warrior_instance = game.find_instance(warrior);
+	REQUIRE(dragon_instance != nullptr);
+	REQUIRE(warrior_instance != nullptr);
+
+	CHECK(resolver.attack(*dragon_instance) == dragon_instance->origin_attack() + 200);
+	CHECK(resolver.defense(*dragon_instance) == dragon_instance->origin_defense() + 200);
+	CHECK(resolver.attack(*warrior_instance) == warrior_instance->origin_attack());
 }
 
 TEST_CASE("execution::ScriptRegistry loads the card corpus")

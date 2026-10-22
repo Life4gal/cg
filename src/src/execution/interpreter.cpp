@@ -1424,74 +1424,6 @@ namespace cg::execution
 		return result;
 	}
 
-	auto Interpreter::collect_static_modifiers(
-		const ScriptRegistry& scripts,
-		const state::CardInstanceId card,
-		Context& context
-	) noexcept -> std::vector<std::reference_wrapper<const dsl::StaticModifier>>
-	{
-		std::vector<std::reference_wrapper<const dsl::StaticModifier>> result{};
-
-		for (const auto& game = context.game.get();
-		     const auto& instance: game.instances())
-		{
-			if (const auto zone = game.zone_of(instance.id());
-				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER && zone != domain::Zone::SPELL_TRAP && zone != domain::Zone::FIELD_SPELL)
-			{
-				continue;
-			}
-
-			const auto* script = scripts.find(instance.origin_code());
-			if (script == nullptr)
-			{
-				continue;
-			}
-
-			for (const auto& effect: script->effects)
-			{
-				const auto* static_effect = std::get_if<dsl::StaticEffect>(&effect.body);
-				if (static_effect == nullptr)
-				{
-					continue;
-				}
-
-				const auto applies = evaluate_scoped(static_effect->apply_to.expression, card, context);
-				if (!applies.has_value())
-				{
-					continue;
-				}
-
-				if (const auto* condition = as<dsl::ValueClass::BOOL>(*applies);
-					condition == nullptr || !static_cast<bool>(*condition))
-				{
-					continue;
-				}
-
-				if (static_effect->condition.has_value())
-				{
-					const auto value = evaluate(*static_effect->condition, context);
-					if (!value.has_value())
-					{
-						continue;
-					}
-
-					if (const auto* condition = as<dsl::ValueClass::BOOL>(*value);
-						condition == nullptr || !static_cast<bool>(*condition))
-					{
-						continue;
-					}
-				}
-
-				for (const auto& modifier: static_effect->modifiers)
-				{
-					result.push_back(std::ref(modifier));
-				}
-			}
-		}
-
-		return result;
-	}
-
 	Interpreter::Interpreter(const dsl::Vocabulary& vocabulary) noexcept
 		: vocabulary_{vocabulary} {}
 
@@ -1500,222 +1432,22 @@ namespace cg::execution
 		return std::exchange(pending_events_, {});
 	}
 
-	auto Interpreter::static_code(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> std::optional<domain::CardCode>
+	Interpreter::Evaluator::Evaluator(Interpreter& interpreter) noexcept
+		: interpreter_{interpreter} {}
+
+	auto Interpreter::Evaluator::evaluate_list(const dsl::ExpressionList& expressions, Context& context) const noexcept -> std::optional<std::vector<Value>>
 	{
-		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
-		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
-			if (definition == nullptr || definition->name != "change_name")
-			{
-				continue;
-			}
-
-			const auto args = evaluate_list(modifier.args, context);
-			if (!args.has_value() || args->size() != 1)
-			{
-				continue;
-			}
-
-			const auto* value = as<dsl::ValueClass::CARD>((*args)[0]);
-			if (value == nullptr)
-			{
-				continue;
-			}
-
-			const auto* instance = context.game.get().find_instance(*value);
-			if (instance == nullptr)
-			{
-				continue;
-			}
-
-			return instance->origin_code();
-		}
-
-		return std::nullopt;
+		return interpreter_.get().evaluate_list(expressions, context);
 	}
 
-	auto Interpreter::static_card_types(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> utility::EnumMask<domain::CardType>
+	auto Interpreter::Evaluator::evaluate_scoped(const dsl::Expression& expression, const state::CardInstanceId element, Context& context) const noexcept -> std::optional<Value>
 	{
-		utility::EnumMask<domain::CardType> result{};
-
-		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
-		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
-			if (definition == nullptr || definition->name != "add_card_type")
-			{
-				continue;
-			}
-
-			const auto args = evaluate_list(modifier.args, context);
-			if (!args.has_value() || args->size() != 1)
-			{
-				continue;
-			}
-
-			const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
-			if (value == nullptr)
-			{
-				continue;
-			}
-
-			result.add_with(static_cast<domain::CardType>(static_cast<std::underlying_type_t<domain::CardType>>(*value)));
-		}
-
-		return result;
+		return interpreter_.get().evaluate_scoped(expression, element, context);
 	}
 
-	auto Interpreter::static_card_subtypes(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> utility::EnumMask<domain::CardSubtype>
+	auto Interpreter::Evaluator::evaluate(const dsl::Expression& expression, Context& context) const noexcept -> std::optional<Value>
 	{
-		utility::EnumMask<domain::CardSubtype> result{};
-
-		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
-		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
-			if (definition == nullptr || definition->name != "add_card_subtype")
-			{
-				continue;
-			}
-
-			const auto args = evaluate_list(modifier.args, context);
-			if (!args.has_value() || args->size() != 1)
-			{
-				continue;
-			}
-
-			const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
-			if (value == nullptr)
-			{
-				continue;
-			}
-
-			result.add_with(static_cast<domain::CardSubtype>(static_cast<std::underlying_type_t<domain::CardSubtype>>(*value)));
-		}
-
-		return result;
-	}
-
-	auto Interpreter::static_attributes(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> utility::EnumMask<domain::Attribute>
-	{
-		utility::EnumMask<domain::Attribute> result{};
-
-		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
-		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
-			if (definition == nullptr || definition->name != "add_attribute")
-			{
-				continue;
-			}
-
-			const auto args = evaluate_list(modifier.args, context);
-			if (!args.has_value() || args->size() != 1)
-			{
-				continue;
-			}
-
-			const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
-			if (value == nullptr)
-			{
-				continue;
-			}
-
-			result.add_with(static_cast<domain::Attribute>(static_cast<std::underlying_type_t<domain::Attribute>>(*value)));
-		}
-
-		return result;
-	}
-
-	auto Interpreter::static_level_bonus(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> Integer::value_type
-	{
-		Integer::value_type total = 0;
-
-		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
-		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
-			if (definition == nullptr || definition->name != "change_level")
-			{
-				continue;
-			}
-
-			const auto args = evaluate_list(modifier.args, context);
-			if (!args.has_value() || args->size() != 1)
-			{
-				continue;
-			}
-
-			const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
-			if (value == nullptr)
-			{
-				continue;
-			}
-
-			total += static_cast<Integer::value_type>(*value);
-		}
-
-		return total;
-	}
-
-	auto Interpreter::static_numeric_bonus(const ScriptRegistry& scripts, const state::CardInstanceId card, const domain::NumericProperty property, Context& context) noexcept -> Integer::value_type
-	{
-		Integer::value_type total = 0;
-
-		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
-		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
-			if (definition == nullptr || definition->name != "add_numeric_property")
-			{
-				continue;
-			}
-
-			const auto args = evaluate_list(modifier.args, context);
-			if (!args.has_value() || args->size() != 2)
-			{
-				continue;
-			}
-
-			const auto* property_value = as<dsl::ValueClass::INT>((*args)[0]);
-			const auto* amount = as<dsl::ValueClass::INT>((*args)[1]);
-			if (property_value == nullptr || amount == nullptr)
-			{
-				continue;
-			}
-
-			if (static_cast<domain::NumericProperty>(static_cast<std::underlying_type_t<domain::NumericProperty>>(*property_value)) == property)
-			{
-				total += static_cast<Integer::value_type>(*amount);
-			}
-		}
-
-		return total;
-	}
-
-	auto Interpreter::static_protections(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> utility::EnumMask<domain::Protection>
-	{
-		utility::EnumMask<domain::Protection> result{};
-
-		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
-		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
-			if (definition == nullptr || definition->name != "add_protection")
-			{
-				continue;
-			}
-
-			const auto args = evaluate_list(modifier.args, context);
-			if (!args.has_value() || args->size() != 1)
-			{
-				continue;
-			}
-
-			const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
-			if (value == nullptr)
-			{
-				continue;
-			}
-
-			result.add_with(static_cast<domain::Protection>(static_cast<std::underlying_type_t<domain::Protection>>(*value)));
-		}
-
-		return result;
+		return interpreter_.get().evaluate(expression, context);
 	}
 
 	auto Interpreter::matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool
@@ -1796,11 +1528,8 @@ namespace cg::execution
 					continue;
 				}
 
-				auto card_context = context;
-				card_context.source = instance.id();
-				card_context.controller = instance.controller();
-
-				if (!matches(*trigger, card_context))
+				if (auto card_context = context.make_child(instance.controller(), instance.id());
+					!matches(*trigger, card_context))
 				{
 					continue;
 				}
@@ -1860,9 +1589,7 @@ namespace cg::execution
 
 		for (const auto& entry: triggered)
 		{
-			Context link_context{context};
-			link_context.source = entry.instance.get().id();
-			link_context.controller = entry.controller;
+			auto link_context = context.make_child(entry.controller, entry.instance.get().id());
 
 			if (!activate(entry.activated.get(), link_context))
 			{
