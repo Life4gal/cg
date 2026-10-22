@@ -247,6 +247,11 @@ namespace cg::state
 		}
 	}
 
+	auto Field::is_zone_empty(const domain::Zone zone) const noexcept -> bool
+	{
+		return is_zone_empty(domain::Player::FIRST, zone) && is_zone_empty(domain::Player::SECOND, zone);
+	}
+
 	auto Field::is_zones_empty(const domain::Player player, const utility::EnumMask<domain::Zone> zones) const noexcept -> bool
 	{
 		return std::ranges::all_of(
@@ -355,9 +360,16 @@ namespace cg::state
 						return false;
 					}
 
+					// 实例必须存在
+					const auto* instance = game.find_instance(id);
+					if (instance == nullptr)
+					{
+						return false;
+					}
+
 					// 实例控制者必须是指定玩家
-					const auto controller = game.controller(id);
-					return controller.has_value() && *controller == player;
+					const auto controller = instance->controller();
+					return controller == player;
 				}
 			);
 			LIBASSERT_DEBUG_ASSERT(size <= domain::total_extra_columns);
@@ -509,9 +521,16 @@ namespace cg::state
 				if (const auto card = extra_monster_zones_[std::to_underlying(column)];
 					card.valid())
 				{
+					// 实例必须存在
+					const auto* instance = game.find_instance(card);
+					if (instance == nullptr)
+					{
+						continue;
+					}
+
 					// 实例控制者必须是指定玩家
-					if (const auto controller = game.controller(card);
-						controller.has_value() && *controller == player)
+					if (const auto controller = instance->controller();
+						controller == player)
 					{
 						out.push_back(card);
 					}

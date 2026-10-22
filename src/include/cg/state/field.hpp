@@ -88,9 +88,12 @@ namespace cg::state
 
 		// 检查某个区域是否不存在卡牌实例
 		[[nodiscard]] auto is_zone_empty(domain::Player player, domain::Zone zone) const noexcept -> bool;
-		[[nodiscard]] auto is_zones_empty(domain::Player player, utility::EnumMask<domain::Zone> zones) const noexcept -> bool;
+		// 检查双方某个区域是否不存在卡牌实例
+		[[nodiscard]] auto is_zone_empty(domain::Zone zone) const noexcept -> bool;
 
-		// 检查某个区域是否不存在卡牌实例
+		// 检查某些区域是否不存在卡牌实例
+		[[nodiscard]] auto is_zones_empty(domain::Player player, utility::EnumMask<domain::Zone> zones) const noexcept -> bool;
+		// 检查双方某些区域是否不存在卡牌实例
 		[[nodiscard]] auto is_zones_empty(utility::EnumMask<domain::Zone> zone) const noexcept -> bool;
 
 		// 获取某个区域所有卡牌实例的数量
@@ -100,14 +103,14 @@ namespace cg::state
 		// 如果是额外怪兽区,则不仅要在额外怪兽区,还要求控制者为指定玩家
 		[[nodiscard]] auto count_zone_card(const Game& game, domain::Player player, domain::Zone zone) const noexcept -> size_type;
 
-		// 获取某个区域所有卡牌实例的数量
+		// 获取某些区域所有卡牌实例的数量
 		// 如果包含额外怪兽区,则只要在额外怪兽区就算,不论控制者
 		[[nodiscard]] auto count_zones_card(domain::Player player, utility::EnumMask<domain::Zone> zones) const noexcept -> size_type;
-		// 获取某个区域所有卡牌实例的数量
+		// 获取双方某些区域所有卡牌实例的数量
 		// 如果包含额外怪兽区,则不仅要在额外怪兽区,还要求控制者为指定玩家
 		[[nodiscard]] auto count_zones_card(const Game& game, domain::Player player, utility::EnumMask<domain::Zone> zones) const noexcept -> size_type;
 
-		// 获取某个区域所有卡牌实例的数量
+		// 获取双方某些区域所有卡牌实例的数量
 		[[nodiscard]] auto count_zones_card(utility::EnumMask<domain::Zone> zones) const noexcept -> size_type;
 
 	private:
@@ -124,14 +127,14 @@ namespace cg::state
 		// 如果是额外怪兽区,则不仅要在额外怪兽区,还要求控制者为指定玩家
 		[[nodiscard]] auto collect_zone_card(const Game& game, domain::Player player, domain::Zone zone) const noexcept -> std::vector<CardInstanceId>;
 
-		// 获取某个区域所有卡牌实例
+		// 获取某些区域所有卡牌实例
 		// 如果包含额外怪兽区,则只要在额外怪兽区就算,不论控制者
 		[[nodiscard]] auto collect_zones_card(domain::Player player, utility::EnumMask<domain::Zone> zones) const noexcept -> std::vector<CardInstanceId>;
-		// 获取某个区域所有卡牌实例
+		// 获取某些区域所有卡牌实例
 		// 如果包含额外怪兽区,则不仅要在额外怪兽区,还要求控制者为指定玩家
 		[[nodiscard]] auto collect_zones_card(const Game& game, domain::Player player, utility::EnumMask<domain::Zone> zones) const noexcept -> std::vector<CardInstanceId>;
 
-		// 获取某个区域所有卡牌实例
+		// 获取双方某些区域所有卡牌实例
 		[[nodiscard]] auto collect_zones_card(utility::EnumMask<domain::Zone> zones) const noexcept -> std::vector<CardInstanceId>;
 
 		// ==================================================================================
