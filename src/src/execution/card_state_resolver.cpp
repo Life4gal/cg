@@ -16,30 +16,44 @@ namespace cg::execution
 
 	auto CardStateResolver::effective_code(const state::CardInstance& card) const noexcept -> domain::CardCode
 	{
-		std::ignore = this;
+		Context context{game_.get(), card.controller()};
 
-		return card.origin_code();
+		return interpreter_.get().static_code(scripts_.get(), card.id(), context).value_or(card.origin_code());
 	}
 
 	auto CardStateResolver::is_card_type(const state::CardInstance& card, const domain::CardType type) const noexcept -> bool
 	{
-		std::ignore = this;
+		if (card.origin_is_card_type(type))
+		{
+			return true;
+		}
 
-		return card.origin_is_card_type(type);
+		Context context{game_.get(), card.controller()};
+		return interpreter_.get().static_card_types(scripts_.get(), card.id(), context).contains(type);
 	}
 
 	auto CardStateResolver::is_card_subtype(const state::CardInstance& card, const domain::CardSubtype subtype) const noexcept -> bool
 	{
-		std::ignore = this;
+		if (card.origin_is_card_subtype(subtype))
+		{
+			return true;
+		}
 
-		return card.origin_is_card_subtype(subtype);
+		Context context{game_.get(), card.controller()};
+		return interpreter_.get().static_card_subtypes(scripts_.get(), card.id(), context).contains(subtype);
 	}
 
 	auto CardStateResolver::is_card_subtype(const state::CardInstance& card, const utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool
 	{
-		std::ignore = this;
+		if (card.origin_is_card_subtype(subtypes))
+		{
+			return true;
+		}
 
-		return card.origin_is_card_subtype(subtypes);
+		Context context{game_.get(), card.controller()};
+		const auto extra = interpreter_.get().static_card_subtypes(scripts_.get(), card.id(), context);
+
+		return (extra.value() & subtypes.value()) != 0;
 	}
 
 	auto CardStateResolver::attack(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>
@@ -60,9 +74,11 @@ namespace cg::execution
 
 	auto CardStateResolver::attributes(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Attribute>
 	{
-		std::ignore = this;
+		Context context{game_.get(), card.controller()};
+		auto result = interpreter_.get().static_attributes(scripts_.get(), card.id(), context);
+		result.add_with(card.origin_attribute());
 
-		return {card.origin_attribute()};
+		return result;
 	}
 
 	auto CardStateResolver::race(const state::CardInstance& card) const noexcept -> domain::Race
@@ -74,9 +90,10 @@ namespace cg::execution
 
 	auto CardStateResolver::level(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::LevelRank>
 	{
-		std::ignore = this;
+		Context context{game_.get(), card.controller()};
+		const auto bonus = interpreter_.get().static_level_bonus(scripts_.get(), card.id(), context);
 
-		return card.origin_level();
+		return static_cast<std::underlying_type_t<domain::LevelRank>>(card.origin_level() + bonus);
 	}
 
 	auto CardStateResolver::protections(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Protection>

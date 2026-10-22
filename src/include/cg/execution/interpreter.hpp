@@ -22,6 +22,9 @@ namespace cg::dsl
 	class Expression;
 	class ExpressionList;
 
+	// effect
+	class StaticModifier;
+
 	// vocabulary
 	class PrimitiveDef;
 	class Vocabulary;
@@ -39,6 +42,7 @@ namespace cg::execution
 
 	private:
 		std::reference_wrapper<const dsl::Vocabulary> vocabulary_;
+
 		PendingEventList pending_events_;
 
 		[[nodiscard]] auto evaluate_arguments(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<std::vector<std::optional<Value>>>;
@@ -88,17 +92,72 @@ namespace cg::execution
 
 		[[nodiscard]] auto filter(Context& context, const dsl::Expression& predicate, const Group& candidates) noexcept -> std::optional<Group>;
 
+		// ===========================================================
+		// 静态数值修正
+		// ===========================================================
+
+		// 收集作用于目标卡的静态修饰(已通过 apply_to/condition 筛选)
+		[[nodiscard]] auto collect_static_modifiers(
+			const ScriptRegistry& scripts,
+			state::CardInstanceId card,
+			Context& context
+		) noexcept -> std::vector<std::reference_wrapper<const dsl::StaticModifier>>;
+
 	public:
 		explicit Interpreter(const dsl::Vocabulary& vocabulary) noexcept;
 
 		// 取出并清空结算过程中产生的事件
 		[[nodiscard]] auto take_events() noexcept -> PendingEventList;
 
-		// 静态数值修正(场上卡脚本的 StaticEffect;累加匹配属性的add_numeric_property)
-		[[nodiscard]] auto static_numeric_bonus(const ScriptRegistry& scripts, state::CardInstanceId card, domain::NumericProperty property, Context& context) noexcept -> Integer::value_type;
+		// 静态卡名
+		[[nodiscard]] auto static_code(
+			const ScriptRegistry& scripts,
+			state::CardInstanceId card,
+			Context& context
+		) noexcept -> std::optional<domain::CardCode>;
 
-		// 静态保护(场上卡脚本的 add_protection)
-		[[nodiscard]] auto static_protections(const ScriptRegistry& scripts, state::CardInstanceId card, Context& context) noexcept -> utility::EnumMask<domain::Protection>;
+		// 静态类型
+		[[nodiscard]] auto static_card_types(
+			const ScriptRegistry& scripts,
+			state::CardInstanceId card,
+			Context& context
+		) noexcept -> utility::EnumMask<domain::CardType>;
+
+		// 静态子类型
+		[[nodiscard]] auto static_card_subtypes(
+			const ScriptRegistry& scripts,
+			state::CardInstanceId card,
+			Context& context
+		) noexcept -> utility::EnumMask<domain::CardSubtype>;
+
+		// 静态属性
+		[[nodiscard]] auto static_attributes(
+			const ScriptRegistry& scripts,
+			state::CardInstanceId card,
+			Context& context
+		) noexcept -> utility::EnumMask<domain::Attribute>;
+
+		// 静态等级
+		[[nodiscard]] auto static_level_bonus(
+			const ScriptRegistry& scripts,
+			state::CardInstanceId card,
+			Context& context
+		) noexcept -> Integer::value_type;
+
+		// 静态数值修正(场上卡脚本的 StaticEffect;累加匹配属性的add_numeric_property)
+		[[nodiscard]] auto static_numeric_bonus(
+			const ScriptRegistry& scripts,
+			state::CardInstanceId card,
+			domain::NumericProperty property,
+			Context& context
+		) noexcept -> Integer::value_type;
+
+		// 静态保护(场上卡脚本的add_protection)
+		[[nodiscard]] auto static_protections(
+			const ScriptRegistry& scripts,
+			state::CardInstanceId card,
+			Context& context
+		) noexcept -> utility::EnumMask<domain::Protection>;
 
 		// 触发效果是否匹配当前事件(触发源 + 触发时条件)
 		[[nodiscard]] auto matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool;

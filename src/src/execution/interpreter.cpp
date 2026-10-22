@@ -1424,17 +1424,13 @@ namespace cg::execution
 		return result;
 	}
 
-	Interpreter::Interpreter(const dsl::Vocabulary& vocabulary) noexcept
-		: vocabulary_{vocabulary} {}
-
-	auto Interpreter::take_events() noexcept -> PendingEventList
+	auto Interpreter::collect_static_modifiers(
+		const ScriptRegistry& scripts,
+		const state::CardInstanceId card,
+		Context& context
+	) noexcept -> std::vector<std::reference_wrapper<const dsl::StaticModifier>>
 	{
-		return std::exchange(pending_events_, {});
-	}
-
-	auto Interpreter::static_numeric_bonus(const ScriptRegistry& scripts, const state::CardInstanceId card, const domain::NumericProperty property, Context& context) noexcept -> Integer::value_type
-	{
-		Integer::value_type total = 0;
+		std::vector<std::reference_wrapper<const dsl::StaticModifier>> result{};
 
 		for (const auto& game = context.game.get();
 		     const auto& instance: game.instances())
@@ -1459,7 +1455,6 @@ namespace cg::execution
 					continue;
 				}
 
-				// apply_to:以目标卡为`$`求值
 				const auto applies = evaluate_scoped(static_effect->apply_to.expression, card, context);
 				if (!applies.has_value())
 				{
@@ -1489,30 +1484,204 @@ namespace cg::execution
 
 				for (const auto& modifier: static_effect->modifiers)
 				{
-					if (const auto* definition = vocabulary_.get().find(modifier.primitive);
-						definition == nullptr || definition->name != "add_numeric_property")
-					{
-						continue;
-					}
-
-					const auto args = evaluate_list(modifier.args, context);
-					if (!args.has_value() || args->size() != 2)
-					{
-						continue;
-					}
-
-					const auto* property_value = as<dsl::ValueClass::INT>((*args)[0]);
-					const auto* amount = as<dsl::ValueClass::INT>((*args)[1]);
-					if (property_value == nullptr || amount == nullptr)
-					{
-						continue;
-					}
-
-					if (static_cast<domain::NumericProperty>(static_cast<std::underlying_type_t<domain::NumericProperty>>(*property_value)) == property)
-					{
-						total += static_cast<Integer::value_type>(*amount);
-					}
+					result.push_back(std::ref(modifier));
 				}
+			}
+		}
+
+		return result;
+	}
+
+	Interpreter::Interpreter(const dsl::Vocabulary& vocabulary) noexcept
+		: vocabulary_{vocabulary} {}
+
+	auto Interpreter::take_events() noexcept -> PendingEventList
+	{
+		return std::exchange(pending_events_, {});
+	}
+
+	auto Interpreter::static_code(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> std::optional<domain::CardCode>
+	{
+		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		{
+			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			if (definition == nullptr || definition->name != "change_name")
+			{
+				continue;
+			}
+
+			const auto args = evaluate_list(modifier.args, context);
+			if (!args.has_value() || args->size() != 1)
+			{
+				continue;
+			}
+
+			const auto* value = as<dsl::ValueClass::CARD>((*args)[0]);
+			if (value == nullptr)
+			{
+				continue;
+			}
+
+			const auto* instance = context.game.get().find_instance(*value);
+			if (instance == nullptr)
+			{
+				continue;
+			}
+
+			return instance->origin_code();
+		}
+
+		return std::nullopt;
+	}
+
+	auto Interpreter::static_card_types(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> utility::EnumMask<domain::CardType>
+	{
+		utility::EnumMask<domain::CardType> result{};
+
+		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		{
+			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			if (definition == nullptr || definition->name != "add_card_type")
+			{
+				continue;
+			}
+
+			const auto args = evaluate_list(modifier.args, context);
+			if (!args.has_value() || args->size() != 1)
+			{
+				continue;
+			}
+
+			const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
+			if (value == nullptr)
+			{
+				continue;
+			}
+
+			result.add_with(static_cast<domain::CardType>(static_cast<std::underlying_type_t<domain::CardType>>(*value)));
+		}
+
+		return result;
+	}
+
+	auto Interpreter::static_card_subtypes(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> utility::EnumMask<domain::CardSubtype>
+	{
+		utility::EnumMask<domain::CardSubtype> result{};
+
+		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		{
+			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			if (definition == nullptr || definition->name != "add_card_subtype")
+			{
+				continue;
+			}
+
+			const auto args = evaluate_list(modifier.args, context);
+			if (!args.has_value() || args->size() != 1)
+			{
+				continue;
+			}
+
+			const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
+			if (value == nullptr)
+			{
+				continue;
+			}
+
+			result.add_with(static_cast<domain::CardSubtype>(static_cast<std::underlying_type_t<domain::CardSubtype>>(*value)));
+		}
+
+		return result;
+	}
+
+	auto Interpreter::static_attributes(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> utility::EnumMask<domain::Attribute>
+	{
+		utility::EnumMask<domain::Attribute> result{};
+
+		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		{
+			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			if (definition == nullptr || definition->name != "add_attribute")
+			{
+				continue;
+			}
+
+			const auto args = evaluate_list(modifier.args, context);
+			if (!args.has_value() || args->size() != 1)
+			{
+				continue;
+			}
+
+			const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
+			if (value == nullptr)
+			{
+				continue;
+			}
+
+			result.add_with(static_cast<domain::Attribute>(static_cast<std::underlying_type_t<domain::Attribute>>(*value)));
+		}
+
+		return result;
+	}
+
+	auto Interpreter::static_level_bonus(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> Integer::value_type
+	{
+		Integer::value_type total = 0;
+
+		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		{
+			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			if (definition == nullptr || definition->name != "change_level")
+			{
+				continue;
+			}
+
+			const auto args = evaluate_list(modifier.args, context);
+			if (!args.has_value() || args->size() != 1)
+			{
+				continue;
+			}
+
+			const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
+			if (value == nullptr)
+			{
+				continue;
+			}
+
+			total += static_cast<Integer::value_type>(*value);
+		}
+
+		return total;
+	}
+
+	auto Interpreter::static_numeric_bonus(const ScriptRegistry& scripts, const state::CardInstanceId card, const domain::NumericProperty property, Context& context) noexcept -> Integer::value_type
+	{
+		Integer::value_type total = 0;
+
+		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		{
+			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			if (definition == nullptr || definition->name != "add_numeric_property")
+			{
+				continue;
+			}
+
+			const auto args = evaluate_list(modifier.args, context);
+			if (!args.has_value() || args->size() != 2)
+			{
+				continue;
+			}
+
+			const auto* property_value = as<dsl::ValueClass::INT>((*args)[0]);
+			const auto* amount = as<dsl::ValueClass::INT>((*args)[1]);
+			if (property_value == nullptr || amount == nullptr)
+			{
+				continue;
+			}
+
+			if (static_cast<domain::NumericProperty>(static_cast<std::underlying_type_t<domain::NumericProperty>>(*property_value)) == property)
+			{
+				total += static_cast<Integer::value_type>(*amount);
 			}
 		}
 
@@ -1522,80 +1691,28 @@ namespace cg::execution
 	auto Interpreter::static_protections(const ScriptRegistry& scripts, const state::CardInstanceId card, Context& context) noexcept -> utility::EnumMask<domain::Protection>
 	{
 		utility::EnumMask<domain::Protection> result{};
-		const auto& game = context.game.get();
 
-		for (const auto& instance: game.instances())
+		for (const auto& modifier: collect_static_modifiers(scripts, card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
-			if (const auto zone = game.zone_of(instance.id());
-				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER && zone != domain::Zone::SPELL_TRAP && zone != domain::Zone::FIELD_SPELL)
+			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			if (definition == nullptr || definition->name != "add_protection")
 			{
 				continue;
 			}
 
-			const auto* script = scripts.find(instance.origin_code());
-			if (script == nullptr)
+			const auto args = evaluate_list(modifier.args, context);
+			if (!args.has_value() || args->size() != 1)
 			{
 				continue;
 			}
 
-			for (const auto& effect: script->effects)
+			const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
+			if (value == nullptr)
 			{
-				const auto* static_effect = std::get_if<dsl::StaticEffect>(&effect.body);
-				if (static_effect == nullptr)
-				{
-					continue;
-				}
-
-				const auto applies = evaluate_scoped(static_effect->apply_to.expression, card, context);
-				if (!applies.has_value())
-				{
-					continue;
-				}
-
-				if (const auto* condition = as<dsl::ValueClass::BOOL>(*applies);
-					condition == nullptr || !static_cast<bool>(*condition))
-				{
-					continue;
-				}
-
-				if (static_effect->condition.has_value())
-				{
-					const auto value = evaluate(*static_effect->condition, context);
-					if (!value.has_value())
-					{
-						continue;
-					}
-
-					if (const auto* condition = as<dsl::ValueClass::BOOL>(*value);
-						condition == nullptr || !static_cast<bool>(*condition))
-					{
-						continue;
-					}
-				}
-
-				for (const auto& modifier: static_effect->modifiers)
-				{
-					const auto* definition = vocabulary_.get().find(modifier.primitive);
-					if (definition == nullptr || definition->name != "add_protection")
-					{
-						continue;
-					}
-
-					const auto args = evaluate_list(modifier.args, context);
-					if (!args.has_value() || args->size() != 1)
-					{
-						continue;
-					}
-
-					const auto* value = as<dsl::ValueClass::INT>((*args)[0]);
-					if (value == nullptr)
-					{
-						continue;
-					}
-
-					result.add_with(static_cast<domain::Protection>(static_cast<std::underlying_type_t<domain::Protection>>(*value)));
-				}
+				continue;
 			}
+
+			result.add_with(static_cast<domain::Protection>(static_cast<std::underlying_type_t<domain::Protection>>(*value)));
 		}
 
 		return result;

@@ -522,6 +522,92 @@ TEST_CASE("flow::CardStateResolver feeds effective stats to scripts")
 	std::filesystem::remove_all(directory);
 }
 
+TEST_CASE("flow::CardStateResolver applies static discrete properties")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_static_properties";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"99500007.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["FIELD"]},"effects":[{"type":"static","apply_to":{"call":"is_card_type","args":{"card":"$","card_type":"MONSTER"}},"modifiers":[{"call":"add_attribute","args":{"attribute":"DARK"}},{"call":"change_level","args":{"delta":1}},{"call":"add_card_subtype","args":{"subtype":"TUNER"}}]}]})"
+	);
+	write(
+		"99500008.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"WIND","race":"DRAGON","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"condition":{"and":[{"call":"is_attribute","args":{"card":{"call":"this_card","args":{}},"attribute":"WIND"}},{"call":"is_attribute","args":{"card":{"call":"this_card","args":{}},"attribute":"DARK"}},{"ge":[{"call":"level","args":{"card":{"call":"this_card","args":{}}}},5]},{"call":"is_card_subtype","args":{"card":{"call":"this_card","args":{}},"subtype":"TUNER"}}]},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})"
+	);
+
+	constexpr domain::CardCode field_code{99500007};
+	constexpr domain::CardCode monster_code{99500008};
+
+	const auto run = [&](const bool with_field) -> std::pair<bool, std::underlying_type_t<domain::AttackDefense>>
+	{
+		flow::Duel duel{};
+		auto& game = duel.game();
+
+		game.register_definition(field_code, make_spell(field_code, {domain::CardSubtype::FIELD}));
+
+		state::CardDefinition monster{};
+		monster.code = monster_code;
+		monster.kind = {domain::CardType::MONSTER};
+		monster.subtypes = {domain::CardSubtype::EFFECT};
+		monster.monster = state::CardDefinition::Monster
+		{
+				.attribute = domain::Attribute::WIND,
+				.race = domain::Race::DRAGON,
+				.level = 4,
+				.attack = 1000,
+				.defense = 1000,
+				.pendulum_scale = std::nullopt,
+				.link_marker = std::nullopt,
+		};
+		game.register_definition(monster_code, monster);
+
+		REQUIRE(duel.load_scripts(directory));
+
+		game.set_life_points(domain::Player::FIRST, 8000);
+		game.set_life_points(domain::Player::SECOND, 8000);
+
+		if (with_field)
+		{
+			const auto field = game.create_instance(field_code, domain::Player::FIRST);
+			REQUIRE(game.place(field, {domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}}));
+		}
+
+		const auto card = game.create_instance(monster_code, domain::Player::FIRST);
+		REQUIRE(game.place(card, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
+
+		const auto* instance = game.find_instance(card);
+		REQUIRE(instance != nullptr);
+		CHECK(instance->origin_attribute() == domain::Attribute::WIND);
+		CHECK(instance->origin_level() == 4);
+		CHECK_FALSE(instance->origin_is_card_subtype(domain::CardSubtype::TUNER));
+
+		advance_phase(duel); // STANDBY
+		advance_phase(duel); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		const auto activated = duel.activate_effect(card, 0);
+		return {activated, game.life_points(domain::Player::SECOND)};
+	};
+
+	const auto [with_field, lp_with] = run(true);
+	CHECK(with_field);
+	CHECK(lp_with == 7500);
+
+	const auto [without_field, lp_without] = run(false);
+	CHECK_FALSE(without_field);
+	CHECK(lp_without == 8000);
+
+	std::filesystem::remove_all(directory);
+}
+
 TEST_CASE("flow::Duel keeps battle-protected monsters")
 {
 	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_protection";

@@ -405,6 +405,56 @@ namespace cg::dsl
 		// ---------------- 静态修饰符 ----------------
 
 		do_register(
+			"change_name",
+			PrimitiveKind::STATIC,
+			{Phase::STATIC},
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+			},
+			type_id("void"),
+			"视为指定卡的卡名"
+		);
+		do_register(
+			"add_card_type",
+			PrimitiveKind::STATIC,
+			{Phase::STATIC},
+			{
+					{.name = "card_type", .kind = ParamDef::Value{.type = type_id("card_type")}, .required = true},
+			},
+			type_id("void"),
+			"增加卡牌类型(如:也视为怪兽)"
+		);
+		do_register(
+			"add_card_subtype",
+			PrimitiveKind::STATIC,
+			{Phase::STATIC},
+			{
+					{.name = "subtype", .kind = ParamDef::Value{.type = type_id("card_subtype")}, .required = true},
+			},
+			type_id("void"),
+			"增加卡牌子类型(如:也视为调整)"
+		);
+		do_register(
+			"add_attribute",
+			PrimitiveKind::STATIC,
+			{Phase::STATIC},
+			{
+					{.name = "attribute", .kind = ParamDef::Value{.type = type_id("attribute")}, .required = true},
+			},
+			type_id("void"),
+			"增加属性(如:也视为暗属性)"
+		);
+		do_register(
+			"change_level",
+			PrimitiveKind::STATIC,
+			{Phase::STATIC},
+			{
+					{.name = "delta", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+			},
+			type_id("void"),
+			"改变等级/阶级(增量)"
+		);
+		do_register(
 			"add_numeric_property",
 			PrimitiveKind::STATIC,
 			{Phase::STATIC},
