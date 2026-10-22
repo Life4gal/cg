@@ -44,33 +44,6 @@ namespace cg::state
 			std::vector<CardInstanceId> materials;
 		};
 
-		class Form
-		{
-		public:
-			class Monster
-			{
-			public:
-				// 属性
-				domain::Attribute attribute;
-				// 种族
-				domain::Race race;
-				// 等级/阶级
-				std::underlying_type_t<domain::LevelRank> level;
-				// 攻击力
-				std::underlying_type_t<domain::AttackDefense> attack;
-				// 守备力
-				std::underlying_type_t<domain::AttackDefense> defense;
-			};
-
-			// 视为怪兽 -- 如魔陷被视为怪兽
-			std::optional<Monster> monster;
-			// 视为永续魔法 -- 如怪兽被视为永续魔法
-			bool continuous_spell;
-			// 是否为衍生物
-			bool is_token;
-			//
-		};
-
 	private:
 		// 卡牌定义的引用
 		std::reference_wrapper<const CardDefinition> definition_;
@@ -91,16 +64,12 @@ namespace cg::state
 		MoveProvenance move_;
 		// 最近一次召唤的记录
 		SummonRecord summon_;
-		// 当前形态
-		Form form_;
+
+		// 是否为衍生物
+		bool token_;
 
 	public:
 		CardInstance(CardInstanceId id, domain::Player owner, const CardDefinition& definition) noexcept;
-
-		// 卡牌定义
-		[[nodiscard]] auto definition() const noexcept -> const CardDefinition&;
-
-		// TODO: `原本`属性/种族/等级/阶级/攻击力/守备力...
 
 		// ================================================================
 		// 实例信息
@@ -114,69 +83,82 @@ namespace cg::state
 		// 卡牌控制者
 		[[nodiscard]] auto controller() const noexcept -> domain::Player;
 
+		// 设置卡牌控制者
+		auto set_controller(domain::Player controller) noexcept -> void;
+
 		// 卡牌当前位置
 		[[nodiscard]] auto placement() const noexcept -> domain::Placement;
 
+		// 设置卡牌当前位置
+		auto set_placement(const domain::Placement& placement) noexcept -> void;
+
+		// 是否为衍生物
+		[[nodiscard]] auto is_token() const noexcept -> bool;
+
 		// ================================================================
-		// 定义查询
+		// 原本数据(印刷值)
 		// ================================================================
 
 		// 卡牌卡密
-		[[nodiscard]] auto code() const noexcept -> domain::CardCode;
+		[[nodiscard]] auto origin_code() const noexcept -> domain::CardCode;
 
-		// 是指定卡类型
-		[[nodiscard]] auto is_card_type(domain::CardType type) const noexcept -> bool;
+		// 卡牌类型
+		[[nodiscard]] auto origin_kind() const noexcept -> utility::EnumMask<domain::CardType>;
 
-		// 是否是怪兽卡
-		[[nodiscard]] auto is_monster_card() const noexcept -> bool;
+		// 卡牌子类型
+		[[nodiscard]] auto origin_subtypes() const noexcept -> utility::EnumMask<domain::CardSubtype>;
 
-		// 是否是魔法卡
-		[[nodiscard]] auto is_spell_card() const noexcept -> bool;
+		// 是否是指定卡类型
+		[[nodiscard]] auto origin_is_card_type(domain::CardType type) const noexcept -> bool;
+		[[nodiscard]] auto origin_is_monster_card() const noexcept -> bool;
+		[[nodiscard]] auto origin_is_spell_card() const noexcept -> bool;
+		[[nodiscard]] auto origin_is_trap_card() const noexcept -> bool;
 
-		// 是否是陷阱卡
-		[[nodiscard]] auto is_trap_card() const noexcept -> bool;
+		// 是否是指定卡子类型
+		[[nodiscard]] auto origin_is_card_subtype(domain::CardSubtype subtype) const noexcept -> bool;
+		[[nodiscard]] auto origin_is_card_subtype(utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool;
 
-		// 是指定卡子类型
-		[[nodiscard]] auto is_card_subtype(domain::CardSubtype subtype) const noexcept -> bool;
+		// 属性 -- 假定是怪兽卡
+		[[nodiscard]] auto origin_attribute() const noexcept -> domain::Attribute;
+		[[nodiscard]] auto origin_is_attribute(domain::Attribute attribute) const noexcept -> bool;
 
-		// 是指定卡子类型之一
-		[[nodiscard]] auto is_card_subtype(utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool;
+		// 种族 -- 假定是怪兽卡
+		[[nodiscard]] auto origin_race() const noexcept -> domain::Race;
+		[[nodiscard]] auto origin_is_race(domain::Race race) const noexcept -> bool;
 
-		// 获取属性 -- 假定是怪兽卡
-		[[nodiscard]] auto attribute() const noexcept -> domain::Attribute;
+		// 等级/阶级 -- 假定是怪兽卡
+		[[nodiscard]] auto origin_level() const noexcept -> std::underlying_type_t<domain::LevelRank>;
+		[[nodiscard]] auto origin_is_level(std::underlying_type_t<domain::LevelRank> level) const noexcept -> bool;
 
-		// 是指定属性 -- 假定是怪兽卡
-		[[nodiscard]] auto is_attribute(domain::Attribute attribute) const noexcept -> bool;
+		// 攻击力 -- 假定是怪兽卡
+		[[nodiscard]] auto origin_attack() const noexcept -> std::underlying_type_t<domain::AttackDefense>;
+		[[nodiscard]] auto origin_is_attack(std::underlying_type_t<domain::AttackDefense> attack) const noexcept -> bool;
 
-		// 获取种族 -- 假定是怪兽卡
-		[[nodiscard]] auto race() const noexcept -> domain::Race;
+		// 守备力 -- 假定是怪兽卡
+		[[nodiscard]] auto origin_defense() const noexcept -> std::underlying_type_t<domain::AttackDefense>;
+		[[nodiscard]] auto origin_is_defense(std::underlying_type_t<domain::AttackDefense> defense) const noexcept -> bool;
 
-		// 是指定种族 -- 假定是怪兽卡
-		[[nodiscard]] auto is_race(domain::Race race) const noexcept -> bool;
+		// 灵摆刻度 -- 假定是灵摆怪兽
+		[[nodiscard]] auto origin_pendulum_scale() const noexcept -> CardDefinition::Monster::PendulumScale;
+		[[nodiscard]] auto origin_is_pendulum_scale(domain::PendulumSide side, std::underlying_type_t<domain::PendulumScale> scale) const noexcept -> bool;
 
-		// 获取等级/阶级 -- 假定是怪兽卡
-		[[nodiscard]] auto level() const noexcept -> std::underlying_type_t<domain::LevelRank>;
-
-		// 是指定等级/阶级 -- 假定是怪兽卡
-		[[nodiscard]] auto is_level(std::underlying_type_t<domain::LevelRank> level) const noexcept -> bool;
-
-		// 获取攻击力 -- 假定是怪兽卡
-		[[nodiscard]] auto attack() const noexcept -> std::underlying_type_t<domain::AttackDefense>;
-
-		// 是指定攻击力 -- 假定是怪兽卡
-		[[nodiscard]] auto is_attack(std::underlying_type_t<domain::AttackDefense> attack) const noexcept -> bool;
-
-		// 获取守备力 -- 假定是怪兽卡
-		[[nodiscard]] auto defense() const noexcept -> std::underlying_type_t<domain::AttackDefense>;
-
-		// 是指定守备力 -- 假定是怪兽卡
-		[[nodiscard]] auto is_defense(std::underlying_type_t<domain::AttackDefense> defense) const noexcept -> bool;
+		// 连接标记 -- 假定是连接怪兽
+		[[nodiscard]] auto origin_link_marker() const noexcept -> utility::EnumMask<domain::LinkMarker>;
+		[[nodiscard]] auto origin_has_link_marker(domain::LinkMarker mark) const noexcept -> bool;
+		[[nodiscard]] auto origin_has_link_marker(utility::EnumMask<domain::LinkMarker> marks) const noexcept -> bool;
 
 		// ================================================================
-		// 变更(引擎内部使用)
+		// 历史/素材
 		// ================================================================
 
-		auto set_placement(const domain::Placement& placement) noexcept -> void;
+		[[nodiscard]] auto move_provenance() const noexcept -> const MoveProvenance&;
 		auto set_move_provenance(const MoveProvenance& provenance) noexcept -> void;
+
+		[[nodiscard]] auto summon_record() const noexcept -> const SummonRecord&;
+		auto set_summon_record(const SummonRecord& record) noexcept -> void;
+
+		[[nodiscard]] auto overlays() const noexcept -> const std::vector<CardInstanceId>&;
+		auto add_overlay(const CardInstance& card) noexcept -> void;
+		auto remove_overlay(const CardInstance& card) noexcept -> bool;
 	};
 }

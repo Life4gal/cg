@@ -35,7 +35,7 @@ namespace cg::state
 			// 灵摆刻度 -- 如果是怪兽卡且是灵摆怪兽
 			std::optional<PendulumScale> pendulum_scale;
 			// 连接箭头 -- 如果是怪兽卡且是连接怪兽
-			std::optional<domain::LinkMarker> link_marker;
+			std::optional<utility::EnumMask<domain::LinkMarker>> link_marker;
 		};
 
 		// 魔法卡数据
