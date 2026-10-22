@@ -586,12 +586,14 @@ namespace cg::dsl::json
 	{
 		LIBASSERT_DEBUG_ASSERT(json.is_number_integer());
 
+		std::ignore = this;
+
 		const auto raw = json.get<nlohmann::json::number_integer_t>();
-		if (raw < std::numeric_limits<Literal::number_type>::min() || raw > std::numeric_limits<Literal::number_type>::max())
-		{
-			fail(path, "Literal.integer out of int32 range");
-			return std::nullopt;
-		}
+		// if (raw < std::numeric_limits<Literal::number_type>::min() || raw > std::numeric_limits<Literal::number_type>::max())
+		// {
+		// 	fail(path, "Literal.integer out of int32 range");
+		// 	return std::nullopt;
+		// }
 
 		return Expression{Literal{.value = static_cast<Literal::number_type>(raw)}};
 	}
@@ -1913,9 +1915,76 @@ namespace cg::dsl::json
 				return std::nullopt;
 			}
 
+			// usage和mutex属于EffectBody,但是不在EffectBody中解析
+
+			std::optional<UsageRestriction> usage;
+			if (const auto it = item.find("usage");
+				it != item.end())
+			{
+				auto usage_path = std::format("{}.usage", item_path);
+
+				if (!it.value().is_object())
+				{
+					fail(std::move(usage_path), "must be an object");
+					return std::nullopt;
+				}
+
+				const auto parsed = read_effect_usage_restriction(it, usage_path);
+				if (!parsed.has_value())
+				{
+					return std::nullopt;
+				}
+
+				usage = *parsed;
+			}
+
+			std::optional<std::size_t> mutex_index;
+			if (const auto it = item.find("mutex");
+				it != item.end())
+			{
+				auto mutex_path = std::format("{}.mutex", item_path);
+
+				if (!it.value().is_number_unsigned())
+				{
+					fail(std::move(mutex_path), "must be a unsigned integer");
+					return std::nullopt;
+				}
+
+				const auto v = it.value().get<nlohmann::json::number_unsigned_t>();
+				if (v > std::numeric_limits<EffectId::value_type>::max())
+				{
+					fail(std::move(mutex_path), "effect index out of range");
+				}
+
+				if (std::cmp_greater_equal(v, index))
+				{
+					fail(std::format("{}.effects", path), std::format("mutex target {} must be an earlier effect", v));
+					return std::nullopt;
+				}
+
+				mutex_index = v;
+			}
+
 			// TODO: EffectId如何设计?是全局ID,还是卡牌内效果ID?
-			EffectId id{static_cast<EffectId::value_type>(index + 1)};
-			list.emplace_back(id, *std::move(body));
+			EffectId id{static_cast<EffectId::value_type>(index)};
+
+			if (mutex_index.has_value())
+			{
+				auto& target_effect = list[*mutex_index];
+
+				// 目标已有组则沿用,否则目标自身
+				if (!target_effect.mutex.has_value())
+				{
+					target_effect.mutex = target_effect.id;
+				}
+
+				const auto mutex = *target_effect.mutex;
+				list.emplace_back(id, *std::move(body), usage, mutex);
+			}
+			else
+			{
+				list.emplace_back(id, *std::move(body), usage);
+			}
 		}
 
 		return list;
@@ -1971,9 +2040,9 @@ namespace cg::dsl::json
 		LIBASSERT_DEBUG_ASSERT(json.contains("type") && json.at("type").is_string() && json.at("type").get_ref<const nlohmann::json::string_t&>() == "activated");
 		LIBASSERT_DEBUG_ASSERT(types_.get().contains("bool"));
 
-		if (!only_specified_keys(json, {"type", "activation", "zones", "condition", "cost", "target", "effect"}))
+		if (!only_specified_keys(json, {"type", "activation", "zones", "condition", "cost", "target", "effect", "usage", "mutex"}))
 		{
-			fail(path, "activated effect allows only `type` / `activation` / `zones` / `condition` / `cost` / `target` / `effect`");
+			fail(path, "activated effect allows only `type` / `activation` / `zones` / `condition` / `cost` / `target` / `effect` / `usage` / `mutex`");
 			return std::nullopt;
 		}
 
@@ -2517,113 +2586,43 @@ namespace cg::dsl::json
 		return StaticModifier{.primitive = def->id, .args = std::move(args)};
 	}
 
-	auto Reader::read_usage_restriction_list(
-		const nlohmann::json::const_iterator& usage_restrictions,
+	auto Reader::read_effect_usage_restriction(
+		const nlohmann::json::const_iterator& usage,
 		const std::string_view path
-	) noexcept -> std::optional<UsageRestrictionList>
+	) noexcept -> std::optional<UsageRestriction>
 	{
-		if (!usage_restrictions.value().is_array())
-		{
-			fail(path, "must be an array");
-			return std::nullopt;
-		}
-
-		UsageRestrictionList list{};
-		list.reserve(usage_restrictions.value().size());
-
-		for (const auto [index, item]: usage_restrictions.value() | std::views::enumerate)
-		{
-			const auto item_path = std::format("{}[{}]", path, index);
-
-			auto usage_restriction = read_usage_restriction(item, item_path);
-			if (!usage_restriction.has_value())
-			{
-				return std::nullopt;
-			}
-
-			list.push_back(*std::move(usage_restriction));
-		}
-
-		return list;
-	}
-
-	auto Reader::read_usage_restriction(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<UsageRestriction>
-	{
-		if (!json.is_object())
+		if (!usage.value().is_object())
 		{
 			fail(path, "must be an object");
 			return std::nullopt;
 		}
 
-		if (!only_specified_keys(json, {"scope", "basis", "verb", "count", "refs"}))
+		if (!only_specified_keys(usage.value(), {"kind", "count", "verb"}))
 		{
-			fail(path, "allows only `scope` / `basis` / `verb` / `count` / `refs`");
+			fail(path, "allows only `kind` / `count` / `verb`");
 			return std::nullopt;
 		}
 
-		const auto do_parse = [&]<typename EnumType>(const std::string_view name, const nlohmann::json::const_iterator& it) noexcept -> std::optional<EnumType>
+		auto kind_path = std::format("{}.kind", path);
+
+		const auto kind_it = usage.value().find("kind");
+		if (kind_it == usage.value().end() || !kind_it.value().is_string())
 		{
-			auto name_path = std::format("{}.{}", path, name);
-
-			if (!it.value().is_string())
-			{
-				fail(std::move(name_path), "must be a string");
-				return std::nullopt;
-			}
-
-			const auto& text = it.value().get_ref<const nlohmann::json::string_t&>();
-			const auto e = utility::from_string<EnumType>(text);
-			if (!e.has_value())
-			{
-				fail(std::move(name_path), std::format("unknown {} `{}`", name, text));
-				return std::nullopt;
-			}
-
-			return e;
-		};
-
-		auto scope = UsageScope::TURN;
-		if (const auto it = json.find("scope");
-			it != json.end())
-		{
-			const auto e = do_parse.operator()<UsageScope>("scope", it);
-			if (!e.has_value())
-			{
-				return std::nullopt;
-			}
-
-			scope = *e;
+			fail(std::move(kind_path), "missing or not a string");
+			return std::nullopt;
 		}
 
-		auto basis = UsageBasis::THIS_CARD;
-		if (const auto it = json.find("basis");
-			it != json.end())
+		const auto& kind_text = kind_it.value().get_ref<const nlohmann::json::string_t&>();
+		const auto kind = utility::from_string<UsageKind>(kind_text);
+		if (!kind.has_value())
 		{
-			const auto e = do_parse.operator()<UsageBasis>("basis", it);
-			if (!e.has_value())
-			{
-				return std::nullopt;
-			}
-
-			basis = *e;
+			fail(std::move(kind_path), std::format("unknown kind `{}`", kind_text));
+			return std::nullopt;
 		}
 
-		auto verb = RestrictionVerb::USE;
-		if (const auto it = json.find("verb");
-			it != json.end())
-		{
-			const auto e = do_parse.operator()<RestrictionVerb>("verb", it);
-			if (!e.has_value())
-			{
-				return std::nullopt;
-			}
-
-			verb = *e;
-		}
-
-		auto count = UsageRestriction::size_type{1};
-		if (const auto it = json.find("count");
-			it != json.end())
+		UsageRestriction::size_type count = 1;
+		if (const auto it = usage.value().find("count");
+			it != usage.value().end())
 		{
 			auto count_path = std::format("{}.count", path);
 
@@ -2643,39 +2642,30 @@ namespace cg::dsl::json
 			count = static_cast<UsageRestriction::size_type>(v);
 		}
 
-		auto refs_path = std::format("{}.refs", path);
-
-		auto refs_it = json.find("refs");
-		if (refs_it == json.end() || !refs_it.value().is_array())
+		auto verb = RestrictionVerb::USE;
+		if (const auto it = usage.value().find("verb");
+			it != usage.value().end())
 		{
-			fail(std::move(refs_path), "missing or not an array");
-			return std::nullopt;
-		}
+			auto verb_path = std::format("{}.verb", path);
 
-		std::vector<UsageRestriction::index_type> refs;
-		refs.reserve(refs_it.value().size());
-
-		for (const auto [index, item]: refs_it.value() | std::views::enumerate)
-		{
-			auto item_path = std::format("{}[{}]", refs_path, index);
-
-			if (!item.is_number_unsigned())
+			if (!it.value().is_string())
 			{
-				fail(std::move(item_path), "ref index must be a unsigned integer");
+				fail(std::move(verb_path), "must be a string");
 				return std::nullopt;
 			}
 
-			const auto v = item.get<nlohmann::json::number_unsigned_t>();
-			if (v > std::numeric_limits<UsageRestriction::index_type>::max())
+			const auto& text = it.value().get_ref<const nlohmann::json::string_t&>();
+			const auto e = utility::from_string<RestrictionVerb>(text);
+			if (!e.has_value())
 			{
-				fail(std::move(item_path), "ref index out of range");
+				fail(std::move(verb_path), std::format("unknown verb `{}`", text));
 				return std::nullopt;
 			}
 
-			refs.push_back(static_cast<UsageRestriction::index_type>(v));
+			verb = *e;
 		}
 
-		return UsageRestriction{.scope = scope, .basis = basis, .verb = verb, .count = count, .refs = std::move(refs)};
+		return UsageRestriction{.kind = *kind, .count = count, .verb = verb};
 	}
 
 	Reader::Reader(const TypeRegistry& types, const Vocabulary& vocabulary) noexcept
@@ -2705,9 +2695,9 @@ namespace cg::dsl::json
 			return std::nullopt;
 		}
 
-		if (!only_specified_keys(json, {"identity", "summons", "effects", "usage_restrictions"}))
+		if (!only_specified_keys(json, {"identity", "summons", "effects"}))
 		{
-			fail(path, "card script allows only `identity` / `summons` / `effects` / `usage_restrictions`");
+			fail(path, "card script allows only `identity` / `summons` / `effects`");
 			return std::nullopt;
 		}
 
@@ -2761,41 +2751,6 @@ namespace cg::dsl::json
 			effects = *std::move(list);
 		}
 
-		UsageRestrictionList usage_restrictions;
-		if (const auto it = json.find("usage_restrictions");
-			it != json.end())
-		{
-			const auto item_path = std::format("{}.usage_restrictions", path);
-
-			auto list = read_usage_restriction_list(it, item_path);
-			if (!list.has_value())
-			{
-				return std::nullopt;
-			}
-
-			// 检查引用的效果是否存在
-			bool error = false;
-			for (const auto [usage_restriction_index,usage_restriction]: *list | std::views::enumerate)
-			{
-				for (const auto [ref_index, ref]: usage_restriction.refs | std::views::enumerate)
-				{
-					if (ref >= effects.size())
-					{
-						auto ref_path = std::format("{}[{}].refs[{}]", item_path, usage_restriction_index, ref_index);
-
-						fail(std::move(ref_path), std::format("ref out of index, max is {}", effects.size()));
-						error = true;
-					}
-				}
-			}
-			if (error)
-			{
-				return std::nullopt;
-			}
-
-			usage_restrictions = *std::move(list);
-		}
-
-		return CardScript{.identity = std::move(identity), .summons = std::move(summons), .effects = std::move(effects), .usage_restrictions = std::move(usage_restrictions)};
+		return CardScript{.identity = std::move(identity), .summons = std::move(summons), .effects = std::move(effects)};
 	}
 }

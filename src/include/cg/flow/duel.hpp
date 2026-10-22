@@ -75,39 +75,56 @@ namespace cg::flow
 		{
 		public:
 			using owner_type = state::CardInstanceId::value_type;
-			using size_type = dsl::UsageRestriction::size_type;
-			using index_type = dsl::UsageRestriction::index_type;
 
 			// state::CardInstanceId / domain::CardCode
 			owner_type owner;
 
-			dsl::UsageScope scope;
-			dsl::UsageBasis basis;
-			// dsl::CardScript::usage_restrictions[index]
-			size_type index;
+			dsl::UsageKind kind;
+			// 计数器身份: 效果ID或互斥组代表
+			dsl::EffectId counter;
 
 			[[nodiscard]] constexpr auto operator<(const UsageKey& other) const noexcept -> bool
 			{
-				// 严格弱序:依次比较全部字段
 				if (owner != other.owner)
 				{
 					return owner < other.owner;
 				}
-				if (scope != other.scope)
+				if (kind != other.kind)
 				{
-					return scope < other.scope;
-				}
-				if (basis != other.basis)
-				{
-					return basis < other.basis;
+					return kind < other.kind;
 				}
 
-				return index < other.index;
+				return counter < other.counter;
 			}
 		};
 
-		// 键 = (范围,依据,拥有者ID,限制下标);值 = 已使用次数
-		std::map<UsageKey, UsageKey::size_type> usage_;
+		// 互斥选择(按卡名、按回合)
+		class MutexKey
+		{
+		public:
+			using owner_type = state::CardInstanceId::value_type;
+
+			// 卡号
+			domain::CardCode owner;
+			// 组代表
+			dsl::EffectId group;
+
+			[[nodiscard]] constexpr auto operator<(const MutexKey& other) const noexcept -> bool
+			{
+				if (owner != other.owner)
+				{
+					return owner < other.owner;
+				}
+
+				return group < other.group;
+			}
+		};
+
+		// 键 = (拥有者ID, kind, 计数器);值 = 已使用次数
+		std::map<UsageKey, dsl::UsageRestriction::size_type> usage_;
+
+		// 键 = (卡号, 组代表);值 = 当前选中的效果ID
+		std::map<MutexKey, dsl::EffectId> mutex_choices_;
 
 		// ================================================================
 		// 盖放记录
@@ -143,9 +160,11 @@ namespace cg::flow
 		auto process_pending_events() noexcept -> void;
 
 		// 使用次数
-		[[nodiscard]] auto usage_owner(dsl::UsageBasis basis, state::CardInstanceId card) const noexcept -> UsageKey::owner_type;
-		[[nodiscard]] auto can_use(const dsl::CardScript& script, state::CardInstanceId card, UsageKey::index_type effect_index) const noexcept -> bool;
-		auto mark_used(const dsl::CardScript& script, state::CardInstanceId card, UsageKey::index_type effect_index) noexcept -> void;
+		[[nodiscard]] static auto usage_owner(dsl::UsageKind kind, const state::CardInstance& card) noexcept -> UsageKey::owner_type;
+		[[nodiscard]] static auto make_usage_key(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> UsageKey;
+		[[nodiscard]] static auto make_mutex_key(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> MutexKey;
+		[[nodiscard]] auto can_use(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> bool;
+		auto mark_used(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> void;
 
 	public:
 		Duel() noexcept;
@@ -237,7 +256,7 @@ namespace cg::flow
 		// ================================================================
 
 		// 主动发动(Ignition/Quick):需当前优先权持有者控制该卡
-		auto activate_effect(state::CardInstanceId card, UsageKey::index_type effect_index) noexcept -> bool;
+		auto activate_effect(state::CardInstanceId card, std::size_t effect_index) noexcept -> bool;
 
 		// 事件发生后:收集触发 → 构建连锁 → 逆序结算
 		auto trigger_event(dsl::TriggerSource source, std::optional<state::CardInstanceId> event_card = std::nullopt) noexcept -> bool;

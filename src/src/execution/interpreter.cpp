@@ -1622,7 +1622,7 @@ namespace cg::execution
 					continue;
 				}
 
-				result.emplace_back(instance.id(), instance.controller(), effect.id, *activated, *trigger);
+				result.emplace_back(instance.controller(), std::ref(instance), std::ref(effect), std::ref(*activated), std::ref(*trigger));
 			}
 		}
 
@@ -1678,7 +1678,7 @@ namespace cg::execution
 		for (const auto& entry: triggered)
 		{
 			Context link_context{context};
-			link_context.source = entry.card;
+			link_context.source = entry.instance.get().id();
 			link_context.controller = entry.controller;
 
 			if (!activate(entry.activated.get(), link_context))

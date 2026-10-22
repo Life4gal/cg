@@ -70,20 +70,14 @@ namespace cg::dsl
 	// 使用次数限制
 	// ===========================================
 
-	enum class UsageScope : std::uint8_t
+	enum class UsageKind : std::uint8_t
 	{
-		// 按回合计算
-		TURN,
-		// 按决斗计算
-		DUEL,
-	};
-
-	enum class UsageBasis : std::uint8_t
-	{
-		// 按卡本身(如该卡一回合一次)
-		THIS_CARD,
-		// 按卡名(如该卡名一回合一次)
-		CARD_NAME,
+		// 一回合一次(每张卡)
+		TURN_PER_CARD,
+		// 卡名一回合一次
+		TURN_PER_NAME,
+		// 决斗一次
+		DUEL_PER_NAME,
 	};
 
 	enum class RestrictionVerb : std::uint8_t
@@ -99,24 +93,16 @@ namespace cg::dsl
 	class UsageRestriction
 	{
 	public:
-		// 要么没有限制,有限制也不会超过255次 (同时可以减少填充)
+		// 要么没有限制,有限制也不会超过255次(同时可以减少填充)
 		using size_type = std::uint8_t;
-		// 效果索引
-		// FIXME(OPT): 将它定义在合适的位置
-		using index_type = size_type;
 
-		UsageScope scope;
-		UsageBasis basis;
-		RestrictionVerb verb;
-		// 次数上限(按卡名共享时为卡名合计上限)
+		// 次数上限
+		UsageKind kind;
 		size_type count;
-		// 受限效果下标(CardScript::effects[index])
-		std::vector<index_type> refs;
+		RestrictionVerb verb;
 
 		[[nodiscard]] auto operator==(const UsageRestriction&) const -> bool = default;
 	};
-
-	class UsageRestrictionList : public std::vector<UsageRestriction> {};
 
 	// ===========================================
 	// 发动类效果
@@ -184,6 +170,10 @@ namespace cg::dsl
 		EffectId id;
 		// 效果定义体
 		EffectBody body;
+		// 使用次数限制(可选;没有 = 无限制)
+		std::optional<UsageRestriction> usage;
+		// 互斥组代表(按卡名、按回合)
+		std::optional<EffectId> mutex;
 
 		[[nodiscard]] auto operator==(const Effect&) const -> bool = default;
 	};

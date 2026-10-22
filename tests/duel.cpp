@@ -602,6 +602,144 @@ TEST_CASE("flow::Duel processes destruction events from effects")
 	CHECK(game.count_deck_zones_card(domain::Player::SECOND) == 0);
 }
 
+TEST_CASE("flow::Duel shares usage counters within a group")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_usage_group";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"99500001.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]},{"type":"activated","usage":{"kind":"TURN_PER_NAME"},"mutex":0,"activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":300}}]},{"type":"activated","usage":{"kind":"TURN_PER_NAME"},"mutex":0,"activation":{"mode":"ignition"},"effect":[{"call":"recover_life","args":{"players":["SELF"],"amount":500}}]}]})"
+	);
+
+	constexpr domain::CardCode card_code{99500001};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(card_code, make_monster(card_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto card = game.create_instance(card_code, domain::Player::FIRST);
+	REQUIRE(game.place(card, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	// 三个效果互斥:发动其一后,其余两个也被次数限制拒绝
+	CHECK(duel.activate_effect(card, 0));
+	CHECK(duel.activate_effect(card, 1) == false);
+	CHECK(duel.activate_effect(card, 2) == false);
+
+	CHECK(game.life_points(domain::Player::SECOND) == 7500);
+	CHECK(game.life_points(domain::Player::FIRST) == 8000);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel applies mutex independently of usage counts")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_usage_combined";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"99500002.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]},{"type":"activated","usage":{"kind":"TURN_PER_CARD","count":2},"mutex":0,"activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":100}}]}]})"
+	);
+
+	constexpr domain::CardCode card_code{99500002};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(card_code, make_monster(card_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto card = game.create_instance(card_code, domain::Player::FIRST);
+	REQUIRE(game.place(card, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	// 效果0:无usage限制;先选它后,效果1被互斥锁住
+	CHECK(duel.activate_effect(card, 0));
+	CHECK(duel.activate_effect(card, 0));
+	CHECK(duel.activate_effect(card, 1) == false);
+	CHECK(game.life_points(domain::Player::SECOND) == 7000);
+
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	// 对方回合空过
+	for (auto i = 0; i < 5; ++i)
+	{
+		CHECK(advance_phase(duel));
+	}
+	REQUIRE(duel.turn().phase() == domain::Phase::END);
+	CHECK(duel.end_turn());
+
+	// 回到先攻:互斥选择重置,这次选效果1;它自己的次数上限是2
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.activate_effect(card, 1));
+	CHECK(duel.activate_effect(card, 1));
+	CHECK(duel.activate_effect(card, 1) == false);
+	CHECK(duel.activate_effect(card, 0) == false);
+	CHECK(game.life_points(domain::Player::SECOND) == 6800);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel rejects invalid mutex links")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_usage_duplicate";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"99500003.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","usage":{"kind":"TURN_PER_NAME"},"mutex":1,"activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]},{"type":"activated","usage":{"kind":"TURN_PER_CARD"},"activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":100}}]}]})"
+	);
+
+	constexpr domain::CardCode card_code{99500003};
+
+	flow::Duel duel{};
+	duel.game().register_definition(card_code, make_monster(card_code));
+
+	// mutex 只能指向更早效果 → 加载失败
+	CHECK_FALSE(duel.load_scripts(directory));
+
+	std::filesystem::remove_all(directory);
+}
+
 TEST_CASE("flow::Duel enforces triggered effect usage limits")
 {
 	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_usage";
@@ -620,7 +758,7 @@ TEST_CASE("flow::Duel enforces triggered effect usage limits")
 	);
 	write(
 		"99000022.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"usage_restrictions":[{"scope":"TURN","basis":"CARD_NAME","count":1,"refs":[0]}],"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":false,"condition":{"call":"is_in_zone","args":{"card":{"call":"this_card","args":{}},"zones":["GRAVEYARD"]}}},"effect":[{"call":"draw","args":{"players":["SELF"],"count":1}}]}]})"
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","usage":{"kind":"TURN_PER_NAME"},"activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":false,"condition":{"call":"is_in_zone","args":{"card":{"call":"this_card","args":{}},"zones":["GRAVEYARD"]}}},"effect":[{"call":"draw","args":{"players":["SELF"],"count":1}}]}]})"
 	);
 
 	constexpr domain::CardCode destroyer_code{99000021};
@@ -781,7 +919,7 @@ TEST_CASE("flow::Duel enforces per-turn usage restrictions")
 	{
 		std::ofstream stream{directory / "95000001.json", std::ios::binary};
 		stream <<
-				R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}],"usage_restrictions":[{"scope":"TURN","basis":"CARD_NAME","verb":"USE","count":1,"refs":[0]}]})";
+				R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","usage":{"kind":"TURN_PER_NAME","verb":"USE"},"activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})";
 	}
 
 	flow::Duel duel{};

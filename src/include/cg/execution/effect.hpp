@@ -3,9 +3,22 @@
 #include <functional>
 #include <vector>
 
-#include <cg/dsl/effect.hpp>
+#include <cg/domain/player.hpp>
 
-#include <cg/state/id.hpp>
+namespace cg
+{
+	namespace state
+	{
+		class CardInstance;
+	}
+
+	namespace dsl
+	{
+		class Effect;
+		class ActivatedEffect;
+		class Trigger;
+	}
+}
 
 namespace cg::execution
 {
@@ -13,9 +26,12 @@ namespace cg::execution
 	class TriggeredEffect
 	{
 	public:
-		state::CardInstanceId card;
 		domain::Player controller;
-		dsl::EffectId effect;
+		std::reference_wrapper<const state::CardInstance> instance;
+
+		// dsl::ActivatedEffect + dsl::Trigger
+		std::reference_wrapper<const dsl::Effect> effect;
+		// 可以从effect读取,不过保存也无妨
 		std::reference_wrapper<const dsl::ActivatedEffect> activated;
 		std::reference_wrapper<const dsl::Trigger> trigger;
 	};

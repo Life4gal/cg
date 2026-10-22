@@ -1,16 +1,21 @@
 #pragma once
 
-#include <functional>
-#include <optional>
+#include <cg/utility/enum.hpp>
 
-#include <cg/execution/effect.hpp>
+#include <cg/domain/card.hpp>
+#include <cg/domain/effect.hpp>
+
+#include <cg/execution/value.hpp>
 #include <cg/execution/event.hpp>
+#include <cg/execution/effect.hpp>
 #include <cg/execution/context.hpp>
 
 namespace cg::dsl
 {
 	// statement
 	class ActionCall;
+	class Statement;
+	class StatementList;
 
 	// expression
 	class PrimitiveCall;

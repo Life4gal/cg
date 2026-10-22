@@ -48,6 +48,7 @@ namespace cg::dsl::json
 
 		[[nodiscard]] auto read_statement_list(const nlohmann::json& json, Phase phase, std::string_view path) noexcept -> std::optional<StatementList>;
 		[[nodiscard]] auto read_statement(const nlohmann::json& json, Phase phase, std::string_view path) noexcept -> std::optional<Statement>;
+
 		[[nodiscard]] auto read_statement_conjunction(const nlohmann::json::const_iterator& conjunction, std::string_view path) noexcept -> std::optional<Conjunction>;
 		[[nodiscard]] auto read_call_statement_body(const nlohmann::json& json, Phase phase, std::string_view path) noexcept -> std::optional<ActionCall>;
 		[[nodiscard]] auto read_guard_statement_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<Guard>;
@@ -59,6 +60,7 @@ namespace cg::dsl::json
 		// =====================================================================================
 
 		[[nodiscard]] auto read_expression(const nlohmann::json& json, TypeId expected, std::string_view path) noexcept -> std::optional<Expression>;
+
 		[[nodiscard]] auto read_literal_number_expression(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<Expression>;
 		[[nodiscard]] auto read_literal_boolean_expression(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<Expression>;
 		[[nodiscard]] auto read_literal_symbol_expression(const nlohmann::json& json, TypeId expected, std::string_view path) noexcept -> std::optional<Expression>;
@@ -76,6 +78,7 @@ namespace cg::dsl::json
 		// =====================================================================================
 
 		[[nodiscard]] auto read_identity(const nlohmann::json::const_iterator& identity, std::string_view path) noexcept -> std::optional<CardIdentity>;
+
 		[[nodiscard]] auto read_identity_kind(const nlohmann::json::const_iterator& kind, std::string_view path) noexcept -> std::optional<domain::CardType>;
 		[[nodiscard]] auto read_identity_subtypes(const nlohmann::json::const_iterator& subtypes, std::string_view path) noexcept -> std::optional<utility::EnumMask<domain::CardSubtype>>;
 		[[nodiscard]] auto read_identity_monster(const nlohmann::json::const_iterator& monster, std::string_view path) noexcept -> std::optional<MonsterIdentity>;
@@ -90,6 +93,7 @@ namespace cg::dsl::json
 
 		[[nodiscard]] auto read_summon_list(const nlohmann::json::const_iterator& summons, std::string_view path) noexcept -> std::optional<SummonProcedureList>;
 		[[nodiscard]] auto read_summon(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<SummonProcedure>;
+
 		[[nodiscard]] auto read_summon_fusion_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<FusionProcedure>;
 		[[nodiscard]] auto read_summon_fusion_procedure_material(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<MaterialSpec>;
 		[[nodiscard]] auto read_summon_synchro_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<SynchroProcedure>;
@@ -104,20 +108,18 @@ namespace cg::dsl::json
 
 		[[nodiscard]] auto read_effect_list(const nlohmann::json::const_iterator& effects, std::string_view path) noexcept -> std::optional<EffectList>;
 		[[nodiscard]] auto read_effect_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<EffectBody>;
+
+
 		[[nodiscard]] auto read_activated_effect_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<ActivatedEffect>;
 		[[nodiscard]] auto read_activated_effect_activation(const nlohmann::json::const_iterator& activation, std::string_view path) noexcept -> std::optional<ActivationKind>;
 		[[nodiscard]] auto read_activated_effect_activation_trigger_source_list(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<TriggerSourceList>;
 		[[nodiscard]] auto read_activated_effect_activation_trigger_source(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<TriggerSource>;
 		[[nodiscard]] auto read_activated_effect_activation_trigger_spec(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<TriggerSpec>;
+
 		[[nodiscard]] auto read_static_effect_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<StaticEffect>;
 		[[nodiscard]] auto read_static_effect_modifier(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<StaticModifier>;
 
-		// =====================================================================================
-		// dsl::CardScript::usage_restrictions
-		// =====================================================================================
-
-		[[nodiscard]] auto read_usage_restriction_list(const nlohmann::json::const_iterator& usage_restrictions, std::string_view path) noexcept -> std::optional<UsageRestrictionList>;
-		[[nodiscard]] auto read_usage_restriction(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<UsageRestriction>;
+		[[nodiscard]] auto read_effect_usage_restriction(const nlohmann::json::const_iterator& usage, std::string_view path) noexcept -> std::optional<UsageRestriction>;
 
 	public:
 		Reader(const TypeRegistry& types, const Vocabulary& vocabulary) noexcept;

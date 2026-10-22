@@ -411,9 +411,9 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 	const auto triggered = interpreter.collect_triggered(scripts, context, domain::Player::FIRST);
 	REQUIRE(triggered.size() == 3);
 
-	CHECK(triggered[0].card == turn_jar);
-	CHECK(triggered[1].card == opponent_jar);
-	CHECK(triggered[2].card == optional_card);
+	CHECK(triggered[0].instance.get().id() == turn_jar);
+	CHECK(triggered[1].instance.get().id() == opponent_jar);
+	CHECK(triggered[2].instance.get().id() == optional_card);
 }
 
 TEST_CASE("execution::Interpreter builds and resolves a chain")

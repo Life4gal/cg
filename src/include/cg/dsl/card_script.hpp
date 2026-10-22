@@ -7,7 +7,7 @@
 namespace cg::dsl
 {
 	// ================================================================
-	// 卡脚本: 卡的身份 + 召唤手续 + 效果 + 使用次数限制
+	// 卡脚本: 卡的身份 + 召唤手续 + 效果
 	// ================================================================
 
 	class CardScript
@@ -16,7 +16,6 @@ namespace cg::dsl
 		CardIdentity identity;
 		SummonProcedureList summons;
 		EffectList effects;
-		UsageRestrictionList usage_restrictions;
 
 		[[nodiscard]] constexpr auto operator==(const CardScript&) const -> bool = default;
 	};

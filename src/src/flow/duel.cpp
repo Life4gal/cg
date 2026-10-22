@@ -5,6 +5,8 @@
 
 #include <cg/execution/chain.hpp>
 
+#include <libassert/assert.hpp>
+
 namespace cg::flow
 {
 	auto Duel::perform_tribute_summon(
@@ -114,6 +116,110 @@ namespace cg::flow
 		}
 
 		return true;
+	}
+
+	auto Duel::process_pending_events() noexcept -> void
+	{
+		if (processing_events_)
+		{
+			return;
+		}
+
+		// TODO: 一次最多处理多少轮事件?
+		constexpr std::size_t max_pass_per_turn = 64;
+
+		processing_events_ = true;
+
+		auto events = interpreter_.take_events();
+		for (std::size_t pass = 0; pass < max_pass_per_turn && !events.empty(); ++pass)
+		{
+			for (const auto& [code, card]: events)
+			{
+				trigger_event(dsl::TriggerSource{code}, card);
+			}
+
+			events = interpreter_.take_events();
+		}
+
+		processing_events_ = false;
+	}
+
+	auto Duel::usage_owner(const dsl::UsageKind kind, const state::CardInstance& card) noexcept -> UsageKey::owner_type
+	{
+		if (kind == dsl::UsageKind::TURN_PER_CARD)
+		{
+			return card.id().raw();
+		}
+
+		return std::to_underlying(card.code());
+	}
+
+	auto Duel::make_usage_key(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> UsageKey
+	{
+		LIBASSERT_DEBUG_ASSERT(effect.usage.has_value());
+
+		return
+		{
+				.owner = usage_owner(effect.usage->kind, card),
+				.kind = effect.usage->kind,
+				.counter = effect.id,
+		};
+	}
+
+	auto Duel::make_mutex_key(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> MutexKey
+	{
+		LIBASSERT_DEBUG_ASSERT(effect.mutex.has_value());
+
+		return
+		{
+				.owner = card.code(),
+				.group = *effect.mutex,
+		};
+	}
+
+	auto Duel::can_use(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> bool
+	{
+		if (effect.usage.has_value())
+		{
+			const auto key = make_usage_key(effect, card);
+			const auto it = usage_.find(key);
+
+			if (const auto used = it == usage_.end() ? dsl::UsageRestriction::size_type{0} : it->second;
+				used >= effect.usage->count)
+			{
+				return false;
+			}
+		}
+
+		if (effect.mutex.has_value())
+		{
+			const auto key = make_mutex_key(effect, card);
+
+			if (const auto it = mutex_choices_.find(key);
+				it != mutex_choices_.end() && it->second != effect.id)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	auto Duel::mark_used(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> void
+	{
+		if (effect.usage.has_value())
+		{
+			const auto key = make_usage_key(effect, card);
+
+			usage_[key] += 1;
+		}
+
+		if (effect.mutex.has_value())
+		{
+			const auto key = make_mutex_key(effect, card);
+
+			mutex_choices_.try_emplace(key, effect.id);
+		}
 	}
 
 	Duel::Duel() noexcept
@@ -285,11 +391,13 @@ namespace cg::flow
 		// 清除本回合的使用记录(DUEL范围保留)
 		std::erase_if(
 			usage_,
-			[](const std::pair<const UsageKey&, const UsageKey::size_type>& p) noexcept -> bool
+			[](const std::pair<const UsageKey&, const dsl::UsageRestriction::size_type>& p) noexcept -> bool
 			{
-				return p.first.scope == dsl::UsageScope::TURN;
+				return p.first.kind == dsl::UsageKind::TURN_PER_CARD || p.first.kind == dsl::UsageKind::TURN_PER_NAME;
 			}
 		);
+
+		mutex_choices_.clear();
 
 		return true;
 	}
@@ -578,7 +686,7 @@ namespace cg::flow
 		}
 
 		// 纯静态卡(如场地魔法)可以没有卡自身发动效果
-		if (activated != nullptr && !can_use(*script, card, static_cast<UsageKey::index_type>(effect_index)))
+		if (activated != nullptr && !can_use(script->effects[effect_index], *instance))
 		{
 			return false;
 		}
@@ -652,7 +760,7 @@ namespace cg::flow
 				return false;
 			}
 
-			mark_used(*script, card, static_cast<UsageKey::index_type>(effect_index));
+			mark_used(script->effects[effect_index], *instance);
 		}
 
 		process_pending_events();
@@ -906,100 +1014,7 @@ namespace cg::flow
 		return true;
 	}
 
-	auto Duel::process_pending_events() noexcept -> void
-	{
-		if (processing_events_)
-		{
-			return;
-		}
-
-		// TODO: 一次最多处理多少轮事件?
-		constexpr std::size_t max_pass_per_turn = 64;
-
-		processing_events_ = true;
-
-		auto events = interpreter_.take_events();
-		for (std::size_t pass = 0; pass < max_pass_per_turn && !events.empty(); ++pass)
-		{
-			for (const auto& [code, card]: events)
-			{
-				trigger_event(dsl::TriggerSource{code}, card);
-			}
-
-			events = interpreter_.take_events();
-		}
-
-		processing_events_ = false;
-	}
-
-	auto Duel::usage_owner(const dsl::UsageBasis basis, const state::CardInstanceId card) const noexcept -> UsageKey::owner_type
-	{
-		if (basis == dsl::UsageBasis::THIS_CARD)
-		{
-			return card.raw();
-		}
-
-		const auto* instance = game_.find_instance(card);
-		if (instance == nullptr)
-		{
-			return 0;
-		}
-
-		const auto code = instance->code();
-		return std::to_underlying(code);
-	}
-
-	auto Duel::can_use(const dsl::CardScript& script, const state::CardInstanceId card, const UsageKey::index_type effect_index) const noexcept -> bool
-	{
-		for (const auto [index, restriction]: script.usage_restrictions | std::views::enumerate)
-		{
-			if (!std::ranges::contains(restriction.refs, effect_index))
-			{
-				continue;
-			}
-
-			const UsageKey key
-			{
-					.owner = usage_owner(restriction.basis, card),
-					.scope = restriction.scope,
-					.basis = restriction.basis,
-					.index = static_cast<UsageKey::size_type>(index),
-			};
-
-			const auto it = usage_.find(key);
-			if (const auto used = it == usage_.end() ? 0u : it->second;
-				used >= restriction.count)
-			{
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	auto Duel::mark_used(const dsl::CardScript& script, const state::CardInstanceId card, const UsageKey::index_type effect_index) noexcept -> void
-	{
-		for (const auto [index, restriction]: script.usage_restrictions | std::views::enumerate)
-		{
-			if (!std::ranges::contains(restriction.refs, effect_index))
-			{
-				continue;
-			}
-
-			const UsageKey key
-			{
-					.owner = usage_owner(restriction.basis, card),
-					.scope = restriction.scope,
-					.basis = restriction.basis,
-					.index = static_cast<UsageKey::size_type>(index),
-			};
-			auto& count = usage_[key];
-
-			count += 1;
-		}
-	}
-
-	auto Duel::activate_effect(const state::CardInstanceId card, const UsageKey::index_type effect_index) noexcept -> bool
+	auto Duel::activate_effect(const state::CardInstanceId card, const std::size_t effect_index) noexcept -> bool
 	{
 		const auto* instance = game_.find_instance(card);
 		if (instance == nullptr)
@@ -1018,19 +1033,30 @@ namespace cg::flow
 		const auto code = instance->code();
 
 		const auto* script = scripts_.find(code);
-		if (script == nullptr || effect_index >= script->effects.size())
+		if (script == nullptr)
 		{
+			// 指定实例不存在卡牌脚本
 			return false;
 		}
 
-		const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[effect_index].body);
+		if (effect_index >= script->effects.size())
+		{
+			// 指定实例的卡牌脚本没有这么多效果
+			return false;
+		}
+
+		const auto& effect = script->effects[effect_index];
+
+		const auto* activated = std::get_if<dsl::ActivatedEffect>(&effect.body);
 		if (activated == nullptr)
 		{
+			// 指定实例的卡牌效果不是发动效果
 			return false;
 		}
 
-		if (!can_use(*script, card, effect_index))
+		if (!can_use(effect, *instance))
 		{
+			// 指定实例的卡牌效果无法发动
 			return false;
 		}
 
@@ -1064,7 +1090,7 @@ namespace cg::flow
 			return false;
 		}
 
-		mark_used(*script, card, effect_index);
+		mark_used(effect, *instance);
 
 		process_pending_events();
 
@@ -1095,32 +1121,12 @@ namespace cg::flow
 
 		for (const auto& entry: triggered)
 		{
-			const auto* instance = game_.find_instance(entry.card);
-			if (instance == nullptr)
+			if (!can_use(entry.effect, entry.instance))
 			{
 				continue;
 			}
 
-			const auto* script = scripts_.find(instance->code());
-			if (script == nullptr)
-			{
-				continue;
-			}
-
-			// EffectId 为 1-based,转换为效果下标
-			const auto effect = entry.effect.raw();
-			if (effect == 0)
-			{
-				continue;
-			}
-
-			const auto index = static_cast<UsageKey::index_type>(effect - 1);
-			if (!can_use(*script, entry.card, index))
-			{
-				continue;
-			}
-
-			mark_used(*script, entry.card, index);
+			mark_used(entry.effect.get(), entry.instance);
 			usable.push_back(entry);
 		}
 
