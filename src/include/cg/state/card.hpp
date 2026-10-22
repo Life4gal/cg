@@ -14,6 +14,8 @@
 
 namespace cg::state
 {
+	class Game;
+
 	// 卡牌实例
 	class CardInstance
 	{
@@ -42,6 +44,31 @@ namespace cg::state
 			domain::Placement from;
 			// 召唤使用的素材
 			std::vector<CardInstanceId> materials;
+		};
+
+		class Modifier
+		{
+			friend Game;
+
+			std::reference_wrapper<CardInstance> instance_;
+
+			explicit Modifier(CardInstance& instance) noexcept;
+
+			[[nodiscard]] auto ref() noexcept -> CardInstance&;
+
+			// 设置卡牌控制者
+			auto set_controller(domain::Player controller) noexcept -> void;
+
+			// 设置卡牌当前位置
+			auto set_placement(const domain::Placement& placement) noexcept -> void;
+
+			auto set_move_provenance(const MoveProvenance& provenance) noexcept -> void;
+
+			auto set_summon_record(SummonRecord record) noexcept -> void;
+
+			auto add_overlay(const CardInstance& material) noexcept -> void;
+
+			auto remove_overlay(const CardInstance& material) noexcept -> bool;
 		};
 
 	private:
@@ -83,14 +110,8 @@ namespace cg::state
 		// 卡牌控制者
 		[[nodiscard]] auto controller() const noexcept -> domain::Player;
 
-		// 设置卡牌控制者
-		auto set_controller(domain::Player controller) noexcept -> void;
-
 		// 卡牌当前位置
 		[[nodiscard]] auto placement() const noexcept -> domain::Placement;
-
-		// 设置卡牌当前位置
-		auto set_placement(const domain::Placement& placement) noexcept -> void;
 
 		// 是否为衍生物
 		[[nodiscard]] auto is_token() const noexcept -> bool;
@@ -152,13 +173,9 @@ namespace cg::state
 		// ================================================================
 
 		[[nodiscard]] auto move_provenance() const noexcept -> const MoveProvenance&;
-		auto set_move_provenance(const MoveProvenance& provenance) noexcept -> void;
 
 		[[nodiscard]] auto summon_record() const noexcept -> const SummonRecord&;
-		auto set_summon_record(const SummonRecord& record) noexcept -> void;
 
 		[[nodiscard]] auto overlays() const noexcept -> const std::vector<CardInstanceId>&;
-		auto add_overlay(const CardInstance& card) noexcept -> void;
-		auto remove_overlay(const CardInstance& card) noexcept -> bool;
 	};
 }

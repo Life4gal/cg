@@ -7,6 +7,46 @@
 
 namespace cg::state
 {
+	CardInstance::Modifier::Modifier(CardInstance& instance) noexcept
+		: instance_{instance} {}
+
+	auto CardInstance::Modifier::ref() noexcept -> CardInstance&
+	{
+		std::ignore = this;
+
+		return instance_.get();
+	}
+
+	auto CardInstance::Modifier::set_controller(const domain::Player controller) noexcept -> void
+	{
+		ref().controller_ = controller;
+	}
+
+	auto CardInstance::Modifier::set_placement(const domain::Placement& placement) noexcept -> void
+	{
+		ref().placement_ = placement;
+	}
+
+	auto CardInstance::Modifier::set_move_provenance(const MoveProvenance& provenance) noexcept -> void
+	{
+		ref().move_ = provenance;
+	}
+
+	auto CardInstance::Modifier::set_summon_record(SummonRecord record) noexcept -> void
+	{
+		ref().summon_ = std::move(record);
+	}
+
+	auto CardInstance::Modifier::add_overlay(const CardInstance& material) noexcept -> void
+	{
+		ref().overlays_.push_back(material.id());
+	}
+
+	auto CardInstance::Modifier::remove_overlay(const CardInstance& material) noexcept -> bool
+	{
+		return std::erase(ref().overlays_, material.id()) != 0;
+	}
+
 	CardInstance::CardInstance(const CardInstanceId id, const domain::Player owner, const CardDefinition& definition) noexcept
 		: definition_{definition},
 		  id_{id},
@@ -39,19 +79,9 @@ namespace cg::state
 		return controller_;
 	}
 
-	auto CardInstance::set_controller(const domain::Player controller) noexcept -> void
-	{
-		controller_ = controller;
-	}
-
 	auto CardInstance::placement() const noexcept -> domain::Placement
 	{
 		return placement_;
-	}
-
-	auto CardInstance::set_placement(const domain::Placement& placement) noexcept -> void
-	{
-		placement_ = placement;
 	}
 
 	auto CardInstance::is_token() const noexcept -> bool
@@ -218,33 +248,13 @@ namespace cg::state
 		return move_;
 	}
 
-	auto CardInstance::set_move_provenance(const MoveProvenance& provenance) noexcept -> void
-	{
-		move_ = provenance;
-	}
-
 	auto CardInstance::summon_record() const noexcept -> const SummonRecord&
 	{
 		return summon_;
 	}
 
-	auto CardInstance::set_summon_record(const SummonRecord& record) noexcept -> void
-	{
-		summon_ = record;
-	}
-
 	auto CardInstance::overlays() const noexcept -> const std::vector<CardInstanceId>&
 	{
 		return overlays_;
-	}
-
-	auto CardInstance::add_overlay(const CardInstance& card) noexcept -> void
-	{
-		overlays_.push_back(card.id());
-	}
-
-	auto CardInstance::remove_overlay(const CardInstance& card) noexcept -> bool
-	{
-		return std::erase(overlays_, card.id()) != 0;
 	}
 }

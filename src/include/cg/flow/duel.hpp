@@ -154,7 +154,22 @@ namespace cg::flow
 		// 内部动作
 		// ================================================================
 
-		auto perform_tribute_summon(state::CardInstanceId card, domain::FieldColumn column, std::span<const state::CardInstanceId> tributes, domain::Position position) noexcept -> bool;
+		// 如果当前可以召唤且指定位置为空,返回对应实例,否则返回空指针
+		// - 检查是否是合适阶段(主要阶段1或者主要阶段2)
+		// - 检查卡牌控制者是当前回合玩家
+		// - 检查卡牌是怪兽类型
+		// - 检查目标位置为空
+		//
+		// 不检查是否已通招         -- 通招点需检查是否已通招
+		// 不检查来源               -- 通招点需检查是否在手牌
+		// 不检查来源               -- 额外特招点需检查是否在额外卡组
+		// 不检查子类型             -- 额外特招点需检查是否是对应特招类型
+		// 不检查是否满足召唤条件   -- 通招点需要检查是否满足祭品要求
+		// 不检查是否满足召唤条件   -- 额外特招点需要检查是否满足素材要求
+		[[nodiscard]] auto summonable_instance_of(state::CardInstanceId card, domain::AnyMonsterPlacement placement) noexcept -> state::CardInstance*;
+
+		auto perform_normal_summon(state::CardInstanceId card, domain::MonsterPlacement placement) noexcept -> bool;
+		auto perform_tribute_summon(state::CardInstanceId card, domain::MonsterPlacement placement, std::span<const state::CardInstanceId> tributes) noexcept -> bool;
 
 		// 结算后统一处理 Interpreter 产生的事件(破坏/特召等)
 		auto process_pending_events() noexcept -> void;
@@ -233,6 +248,28 @@ namespace cg::flow
 
 		// 上级盖放(里侧守备表示)
 		auto tribute_set(state::CardInstanceId card, domain::FieldColumn column, std::span<const state::CardInstanceId> tributes) noexcept -> bool;
+
+		// 同调召唤(1 Tuner + 1+ non-Tuner;等级合计等于目标)
+		template<typename P>
+			requires(utility::variant_index_v<P, domain::AnyMonsterPlacement> != utility::invalid_variant_index)
+		auto synchro_summon(const state::CardInstanceId card, const P placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
+		{
+			return this->synchro_summon(card, {placement}, materials);
+		}
+
+		// 同调召唤(1 Tuner + 1+ non-Tuner;等级合计等于目标)
+		auto synchro_summon(state::CardInstanceId card, domain::AnyMonsterPlacement placement, std::span<const state::CardInstanceId> materials) noexcept -> bool;
+
+		// 超量召唤(2+ 同等级怪兽;作为超量素材)
+		template<typename P>
+			requires(utility::variant_index_v<P, domain::AnyMonsterPlacement> != utility::invalid_variant_index)
+		auto xyz_summon(const state::CardInstanceId card, const P placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
+		{
+			return this->xyz_summon(card, {placement}, materials);
+		}
+
+		// 超量召唤(2+ 同等级怪兽;作为超量素材)
+		auto xyz_summon(state::CardInstanceId card, domain::AnyMonsterPlacement placement, std::span<const state::CardInstanceId> materials) noexcept -> bool;
 
 		// ================================================================
 		// 卡牌发动(魔法/陷阱)

@@ -4,7 +4,7 @@
 #include <variant>
 #include <optional>
 
-#include <cg/utility/functional.hpp>
+#include <cg/utility/variant.hpp>
 
 namespace cg::domain
 {
@@ -28,7 +28,6 @@ namespace cg::domain
 		// 灵摆区-右 = 列5
 		PENDULUM_RIGHT = C5,
 	};
-
 
 	constexpr std::array field_columns
 	{
@@ -239,7 +238,7 @@ namespace cg::domain
 				//
 			> {};
 
-	class FieldLocation : public std::variant<
+	class AnyFieldLocation : public std::variant<
 				// 怪兽区
 				MonsterLocation,
 				// 额外怪兽区
@@ -259,83 +258,68 @@ namespace cg::domain
 				//
 			> {};
 
-	[[nodiscard]] constexpr auto index_of(const Location& location) noexcept -> std::optional<DeckLocation::size_type>
+	// ===========================================================================
+	// LOCATION ==> INDEX
+	// ===========================================================================
+
+	template<typename L>
+		requires(std::is_same_v<L, Location> || std::is_same_v<L, AnyFieldLocation> || std::is_same_v<L, AnyMonsterLocation>)
+	[[nodiscard]] constexpr auto index_of(const L& location) noexcept -> std::optional<DeckLocation::size_type>
 	{
 		return std::visit(
-			utility::Overloaded
+			[]<typename T>(const T& l) noexcept -> std::optional<DeckLocation::size_type>
 			{
-					[]<typename L>(const L& l) noexcept -> std::optional<DeckLocation::size_type> //
-						requires(
-							std::is_same_v<L, DeckLocation> ||
-							std::is_same_v<L, ExtraDeckLocation> ||
-							std::is_same_v<L, HandLocation> ||
-							std::is_same_v<L, GraveyardLocation> ||
-							std::is_same_v<L, BanishedLocation>
-						)
-					{
-						return l.index;
-					},
-					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<DeckLocation::size_type>
-					{
-						return std::nullopt;
-					}
+				// DeckLocation/ExtraDeckLocation/HandLocation/GraveyardLocation/BanishedLocation
+				if constexpr (requires { l.index; })
+				{
+					return l.index;
+				}
+				else
+				{
+					return std::nullopt;
+				}
 			},
 			location
 		);
 	}
 
-	[[nodiscard]] constexpr auto column_of(const Location& location) noexcept -> std::optional<FieldColumn>
+	// ===========================================================================
+	// LOCATION ==> COLUMN
+	// ===========================================================================
+
+	template<typename L>
+		requires(std::is_same_v<L, Location> || std::is_same_v<L, AnyFieldLocation> || std::is_same_v<L, AnyMonsterLocation>)
+	[[nodiscard]] constexpr auto column_of(const L& location) noexcept -> std::conditional_t<std::is_same_v<L, Location>, std::optional<FieldColumn>, FieldColumn>
 	{
 		return std::visit(
-			utility::Overloaded
+			[]<typename T>(const T& l) noexcept -> std::optional<FieldColumn>
 			{
-					[]<typename L>(const L& l) noexcept -> std::optional<FieldColumn> //
-						requires(
-							std::is_same_v<L, MonsterLocation> ||
-							std::is_same_v<L, ExtraMonsterLocation> ||
-							std::is_same_v<L, SpellTrapLocation>
-						)
-					{
-						return l.column;
-					},
-					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldColumn>
-					{
-						return std::nullopt;
-					}
+				// MonsterLocation/ExtraMonsterLocation/SpellTrapLocation
+				if constexpr (requires { l.column; })
+				{
+					return l.column;
+				}
+				else
+				{
+					return std::nullopt;
+				}
 			},
 			location
 		);
 	}
 
-	[[nodiscard]] constexpr auto column_of(const FieldLocation& location) noexcept -> std::optional<FieldColumn>
-	{
-		return std::visit(
-			utility::Overloaded
-			{
-					[]<typename L>(const L& l) noexcept -> std::optional<FieldColumn> //
-						requires(
-							std::is_same_v<L, MonsterLocation> ||
-							std::is_same_v<L, ExtraMonsterLocation> ||
-							std::is_same_v<L, SpellTrapLocation>
-						)
-					{
-						return l.column;
-					},
-					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldColumn>
-					{
-						return std::nullopt;
-					}
-			},
-			location
-		);
-	}
+	// ===========================================================================
+	// LOCATION ==> LOCATION
+	// ===========================================================================
 
-	[[nodiscard]] constexpr auto column_of(const AnyMonsterLocation& location) noexcept -> FieldColumn
+	template<typename L>
+		requires(std::is_same_v<L, AnyFieldLocation> || std::is_same_v<L, AnyMonsterLocation>)
+	[[nodiscard]] constexpr auto location_of(const L& location) noexcept -> Location
 	{
 		return std::visit(
-			[](const auto& l) noexcept -> FieldColumn
+			[]<typename T>(const T& l) noexcept -> Location
 			{
-				return l.column;
+				return {l};
 			},
 			location
 		);
@@ -481,12 +465,12 @@ namespace cg::domain
 				//
 			> {};
 
-	class FieldPlacement : public std::variant<
-				// 怪兽区
+	class AnyFieldPlacement : public std::variant<
+				// 怪兽区域
 				MonsterPlacement,
 				// 额外怪兽区
 				ExtraMonsterPlacement,
-				// 魔陷区
+				// 魔陷区域
 				SpellTrapPlacement,
 				// 场地魔法区
 				FieldSpellPlacement
@@ -501,271 +485,166 @@ namespace cg::domain
 				//
 			> {};
 
-	[[nodiscard]] constexpr auto index_of(const Placement& placement) noexcept -> std::optional<DeckPlacement::size_type>
+	// ===========================================================================
+	// PLACEMENT ==> INDEX
+	// ===========================================================================
+
+	template<typename P>
+		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+	[[nodiscard]] constexpr auto index_of(const P& placement) noexcept -> std::optional<DeckPlacement::size_type>
 	{
 		return std::visit(
-			utility::Overloaded
+			[]<typename T>(const T& p) noexcept -> std::optional<DeckPlacement::size_type>
 			{
-					[]<typename P>(const P& p) noexcept -> std::optional<DeckPlacement::size_type> //
-						requires(
-							std::is_same_v<P, DeckPlacement> ||
-							std::is_same_v<P, ExtraDeckPlacement> ||
-							std::is_same_v<P, HandPlacement> ||
-							std::is_same_v<P, GraveyardPlacement> ||
-							std::is_same_v<P, BanishedPlacement>
-						)
-					{
-						return p.index;
-					},
-					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<DeckPlacement::size_type>
-					{
-						return std::nullopt;
-					}
+				// DeckPlacement/ExtraDeckPlacement/HandPlacement/GraveyardPlacement/BanishedPlacement
+				if constexpr (requires { p.index; })
+				{
+					return p.index;
+				}
+				else
+				{
+					return std::nullopt;
+				}
 			},
 			placement
 		);
 	}
 
-	[[nodiscard]] constexpr auto column_of(const Placement& placement) noexcept -> std::optional<FieldColumn>
+	// ===========================================================================
+	// PLACEMENT ==> COLUMN
+	// ===========================================================================
+
+	template<typename P>
+		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+	[[nodiscard]] constexpr auto column_of(const P& placement) noexcept -> std::optional<FieldColumn>
 	{
 		return std::visit(
-			utility::Overloaded
+			[]<typename T>(const T& p) noexcept -> std::optional<FieldColumn>
 			{
-					[]<typename P>(const P& p) noexcept -> std::optional<FieldColumn> //
-						requires(
-							std::is_same_v<P, MonsterPlacement> ||
-							std::is_same_v<P, ExtraMonsterPlacement> ||
-							std::is_same_v<P, SpellTrapPlacement>
-						)
-					{
-						return p.column;
-					},
-					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldColumn>
-					{
-						return std::nullopt;
-					}
+				// MonsterPlacement/ExtraMonsterPlacement/SpellTrapPlacement
+				if constexpr (requires { p.column; })
+				{
+					return p.column;
+				}
+				else
+				{
+					return std::nullopt;
+				}
 			},
 			placement
 		);
 	}
 
-	[[nodiscard]] constexpr auto column_of(const FieldPlacement& placement) noexcept -> std::optional<FieldColumn>
+	// ===========================================================================
+	// PLACEMENT ==> POSITION
+	// ===========================================================================
+
+	template<typename P>
+		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+	[[nodiscard]] constexpr auto position_of(const P& placement) noexcept -> std::optional<Position>
 	{
 		return std::visit(
-			utility::Overloaded
+			[]<typename T>(const T& p) noexcept -> std::optional<Position>
 			{
-					[]<typename P>(const P& p) noexcept -> std::optional<FieldColumn> //
-						requires(
-							std::is_same_v<P, MonsterPlacement> ||
-							std::is_same_v<P, ExtraMonsterPlacement> ||
-							std::is_same_v<P, SpellTrapPlacement>
-						)
-					{
-						return p.column;
-					},
-					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldColumn>
-					{
-						return std::nullopt;
-					}
+				// MonsterPlacement/ExtraMonsterPlacement/SpellTrapPlacement/FieldSpellPlacement
+				if constexpr (requires { p.position; })
+				{
+					return p.position;
+				}
+				else
+				{
+					return std::nullopt;
+				}
 			},
 			placement
 		);
 	}
 
-	[[nodiscard]] constexpr auto column_of(const AnyMonsterPlacement& placement) noexcept -> FieldColumn
+	// ===========================================================================
+	// PLACEMENT ==> LOCATION
+	// ===========================================================================
+
+	template<typename P>
+		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+	[[nodiscard]] constexpr auto location_of(const P& placement) noexcept -> Location
 	{
 		return std::visit(
-			[](const auto& p) noexcept -> FieldColumn
+			[]<typename T>(const T& p) noexcept -> Location
 			{
-				return p.column;
+				constexpr auto index = utility::variant_index_v<T, Placement>;
+				// 假定Placement和Location对应结构体的位置一样!
+				using location_type = utility::variant_alternative_t<index, Location>;
+
+				// DeckPlacement/ExtraDeckPlacement/HandPlacement/GraveyardPlacement/BanishedPlacement
+				if constexpr (requires { p.index; })
+				{
+					return {location_type{.index = p.index}};
+				}
+				// MonsterPlacement/ExtraMonsterPlacement/SpellTrapPlacement
+				else if constexpr (requires { p.column; })
+				{
+					return {location_type{.column = p.column}};
+				}
+				else if constexpr (std::is_same_v<T, FieldSpellPlacement>)
+				{
+					return {location_type{}};
+				}
+				else
+				{
+					static_assert(index == utility::variant_index_v<NotExistPlacement, Placement>);
+					return {NotExistLocation{}};
+				}
 			},
 			placement
 		);
 	}
 
-	[[nodiscard]] constexpr auto position_of(const Placement& placement) noexcept -> std::optional<Position>
+	// ===========================================================================
+	// PLACEMENT ==> PLACEMENT
+	// ===========================================================================
+
+	template<typename P>
+		requires(std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+	[[nodiscard]] constexpr auto placement_of(const P& placement) noexcept -> Placement
 	{
 		return std::visit(
-			utility::Overloaded
+			[]<typename T>(const T& p) noexcept -> Placement
 			{
-					[]<typename P>(const P& p) noexcept -> std::optional<Position> //
-						requires(
-							std::is_same_v<P, ExtraDeckPlacement> ||
-							std::is_same_v<P, HandPlacement> ||
-							std::is_same_v<P, BanishedPlacement> ||
-							std::is_same_v<P, MonsterPlacement> ||
-							std::is_same_v<P, ExtraMonsterPlacement> ||
-							std::is_same_v<P, SpellTrapPlacement> ||
-							std::is_same_v<P, FieldSpellPlacement>
-						)
-					{
-						return p.position;
-					},
-					[]([[maybe_unused]] const DeckPlacement& p) noexcept -> std::optional<Position>
-					{
-						// return {Position::FACE_DOWN_DEFENSE};
-						return std::nullopt;
-					},
-					[]([[maybe_unused]] const GraveyardPlacement& p) noexcept -> std::optional<Position>
-					{
-						// return {Position::FACE_UP_ATTACK};
-						return std::nullopt;
-					},
-					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<Position>
-					{
-						return std::nullopt;
-					}
+				return {p};
 			},
 			placement
 		);
 	}
 
-	[[nodiscard]] constexpr auto field_info_of(const Placement& placement) noexcept -> std::optional<FieldInfo>
-	{
-		return std::visit(
-			utility::Overloaded
-			{
-					[]<typename P>(const P& p) noexcept -> std::optional<FieldInfo> //
-						requires(
-							std::is_same_v<P, MonsterPlacement> ||
-							std::is_same_v<P, ExtraMonsterPlacement> ||
-							std::is_same_v<P, SpellTrapPlacement>
-						)
-					{
-						return FieldInfo{.column = p.column, .position = p.position};
-					},
-					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldInfo>
-					{
-						return std::nullopt;
-					}
-			},
-			placement
-		);
-	}
+	// ===========================================================================
+	// PLACEMENT ==> FIELD INFO
+	// ===========================================================================
 
-	[[nodiscard]] constexpr auto field_info_of(const FieldPlacement& placement) noexcept -> std::optional<FieldInfo>
+	template<typename P>
+		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+	[[nodiscard]] constexpr auto field_info_of(const P& placement) noexcept -> std::conditional_t<
+		std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement>,
+		std::optional<FieldInfo>,
+		FieldInfo
+	>
 	{
 		return std::visit(
-			utility::Overloaded
+			[]<typename T>(const T& p) noexcept ->
+		std::conditional_t<
+			std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement>,
+			std::optional<FieldInfo>,
+			FieldInfo
+		>
 			{
-					[]<typename P>(const P& p) noexcept -> std::optional<FieldInfo> //
-						requires(
-							std::is_same_v<P, MonsterPlacement> ||
-							std::is_same_v<P, ExtraMonsterPlacement> ||
-							std::is_same_v<P, SpellTrapPlacement>
-						)
-					{
-						return FieldInfo{.column = p.column, .position = p.position};
-					},
-					[]([[maybe_unused]] const auto& unhandled) noexcept -> std::optional<FieldInfo>
-					{
-						return std::nullopt;
-					}
-			},
-			placement
-		);
-	}
-
-	[[nodiscard]] constexpr auto field_info_of(const AnyMonsterPlacement& placement) noexcept -> FieldInfo
-	{
-		return std::visit(
-			[](const auto& p) noexcept -> FieldInfo
-			{
-				return {.column = p.column, .position = p.position};
-			},
-			placement
-		);
-	}
-
-	[[nodiscard]] constexpr auto location_of(const Placement& placement) noexcept -> Location
-	{
-		return std::visit(
-			utility::Overloaded
-			{
-					[&]([[maybe_unused]] const DeckPlacement& p) noexcept -> Location
-					{
-						return {DeckLocation{.index = p.index}};
-					},
-					[&]([[maybe_unused]] const ExtraDeckPlacement& p) noexcept -> Location
-					{
-						return {ExtraDeckLocation{.index = p.index}};
-					},
-					[&]([[maybe_unused]] const HandPlacement& p) noexcept -> Location
-					{
-						return {HandLocation{.index = p.index}};
-					},
-					[&]([[maybe_unused]] const GraveyardPlacement& p) noexcept -> Location
-					{
-						return {GraveyardLocation{.index = p.index}};
-					},
-					[&]([[maybe_unused]] const BanishedPlacement& p) noexcept -> Location
-					{
-						return {BanishedLocation{.index = p.index}};
-					},
-					[&](const MonsterPlacement& p) noexcept -> Location
-					{
-						return {MonsterLocation{.column = p.column}};
-					},
-					[&](const ExtraMonsterPlacement& p) noexcept -> Location
-					{
-						return {ExtraMonsterLocation{.column = p.column}};
-					},
-					[&](const SpellTrapPlacement& p) noexcept -> Location
-					{
-						return {SpellTrapLocation{.column = p.column}};
-					},
-					[&]([[maybe_unused]] const FieldSpellPlacement& p) noexcept -> Location
-					{
-						return {FieldSpellLocation{}};
-					},
-					[](const NotExistPlacement&) noexcept -> Location
-					{
-						return {NotExistLocation{}};
-					},
-			},
-			placement
-		);
-	}
-
-	[[nodiscard]] constexpr auto location_of(const FieldPlacement& placement) noexcept -> Location
-	{
-		return std::visit(
-			utility::Overloaded
-			{
-					[&](const MonsterPlacement& p) noexcept -> Location
-					{
-						return {MonsterLocation{.column = p.column}};
-					},
-					[&](const ExtraMonsterPlacement& p) noexcept -> Location
-					{
-						return {ExtraMonsterLocation{.column = p.column}};
-					},
-					[&](const SpellTrapPlacement& p) noexcept -> Location
-					{
-						return {SpellTrapLocation{.column = p.column}};
-					},
-					[&]([[maybe_unused]] const FieldSpellPlacement& p) noexcept -> Location
-					{
-						return {FieldSpellLocation{}};
-					},
-			},
-			placement
-		);
-	}
-
-	[[nodiscard]] constexpr auto location_of(const AnyMonsterPlacement& placement) noexcept -> Location
-	{
-		return std::visit(
-			utility::Overloaded
-			{
-					[&](const MonsterPlacement& p) noexcept -> Location
-					{
-						return {MonsterLocation{.column = p.column}};
-					},
-					[&](const ExtraMonsterPlacement& p) noexcept -> Location
-					{
-						return {ExtraMonsterLocation{.column = p.column}};
-					},
+				// MonsterPlacement/ExtraMonsterPlacement/SpellTrapPlacement
+				if constexpr (requires { p.column; p.position; })
+				{
+					return FieldInfo{.column = p.column, .position = p.position};
+				}
+				else
+				{
+					return std::nullopt;
+				}
 			},
 			placement
 		);

@@ -339,10 +339,10 @@ namespace cg::codec
 	};
 
 	template<typename T>
-	// domain::Location / domain::FieldLocation / domain::AnyMonsterLocation 处理方式完全相同,一并处理
+	// domain::Location / domain::AnyFieldLocation / domain::AnyMonsterLocation 处理方式完全相同,一并处理
 		requires(
 			std::is_same_v<T, domain::Location> ||
-			std::is_same_v<T, domain::FieldLocation> ||
+			std::is_same_v<T, domain::AnyFieldLocation> ||
 			std::is_same_v<T, domain::AnyMonsterLocation>
 		)
 	class ValueCodec<T>
@@ -433,7 +433,7 @@ namespace cg::codec
 					}
 					return std::nullopt;
 				}
-				else if constexpr (std::is_same_v<T, domain::FieldLocation>)
+				else if constexpr (std::is_same_v<T, domain::AnyFieldLocation>)
 				{
 					if (type == "monster")
 					{
@@ -531,7 +531,7 @@ namespace cg::codec
 					default: {}
 				}
 			}
-			else if constexpr (std::is_same_v<T, domain::FieldLocation>)
+			else if constexpr (std::is_same_v<T, domain::AnyFieldLocation>)
 			{
 				switch (any.index())
 				{
@@ -742,10 +742,10 @@ namespace cg::codec
 	};
 
 	template<typename T>
-	// domain::Placement / domain::FieldPlacement / domain::AnyMonsterPlacement 处理方式完全相同,一并处理
+	// domain::Placement / domain::AnyFieldPlacement / domain::AnyMonsterPlacement 处理方式完全相同,一并处理
 		requires(
 			std::is_same_v<T, domain::Placement> ||
-			std::is_same_v<T, domain::FieldPlacement> ||
+			std::is_same_v<T, domain::AnyFieldPlacement> ||
 			std::is_same_v<T, domain::AnyMonsterPlacement>
 		)
 	class ValueCodec<T>
@@ -835,7 +835,7 @@ namespace cg::codec
 					}
 					return std::nullopt;
 				}
-				else if constexpr (std::is_same_v<T, domain::FieldPlacement>)
+				else if constexpr (std::is_same_v<T, domain::AnyFieldPlacement>)
 				{
 					if (type == "monster")
 					{
@@ -933,7 +933,7 @@ namespace cg::codec
 					default: {}
 				}
 			}
-			else if constexpr (std::is_same_v<T, domain::FieldPlacement>)
+			else if constexpr (std::is_same_v<T, domain::AnyFieldPlacement>)
 			{
 				switch (any.index())
 				{

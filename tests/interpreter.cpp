@@ -78,11 +78,14 @@ TEST_CASE("execution::Interpreter resolves Raigeki")
 	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
 
 	const auto raigeki = game.create_instance(raigeki_code, domain::Player::FIRST);
+	REQUIRE(raigeki.valid());
 	const auto own_monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(own_monster.valid());
 	const auto opponent_monster = game.create_instance(monster_code, domain::Player::SECOND);
+	REQUIRE(opponent_monster.valid());
 
-	REQUIRE(game.place(own_monster, domain::Placement{domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
-	REQUIRE(game.place(opponent_monster, domain::Placement{domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
+	game.place(*game.find_instance_mutable(own_monster), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(opponent_monster), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
 
 	const auto script = read_card_script("12580477.json");
 	REQUIRE(script.has_value());
@@ -112,11 +115,14 @@ TEST_CASE("execution::Interpreter resolves Tribute to the Doomed")
 	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
 
 	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
 	const auto hand_card = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(hand_card.valid());
 	const auto opponent_monster = game.create_instance(monster_code, domain::Player::SECOND);
+	REQUIRE(opponent_monster.valid());
 
-	REQUIRE(game.place(hand_card, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
-	REQUIRE(game.place(opponent_monster, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
+	game.place(*game.find_instance_mutable(hand_card), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(opponent_monster), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
 
 	const auto script = read_card_script("79759861.json");
 	REQUIRE(script.has_value());
@@ -190,11 +196,14 @@ TEST_CASE("execution::Interpreter searches a subtype from the deck")
 	game.register_definition(field_spell_code, field_spell);
 
 	const auto terraforming = game.create_instance(terraforming_code, domain::Player::FIRST);
+	REQUIRE(terraforming.valid());
 	const auto monster_in_deck = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(monster_in_deck.valid());
 	const auto field_spell_in_deck = game.create_instance(field_spell_code, domain::Player::FIRST);
+	REQUIRE(field_spell_in_deck.valid());
 
-	REQUIRE(game.place(monster_in_deck, {domain::DeckPlacement{.index = 0}}));
-	REQUIRE(game.place(field_spell_in_deck, {domain::DeckPlacement{.index = 1}}));
+	game.place(*game.find_instance_mutable(monster_in_deck), domain::DeckPlacement{.index = 0});
+	game.place(*game.find_instance_mutable(field_spell_in_deck), domain::DeckPlacement{.index = 1});
 
 	const auto script = read_card_script("73628505.json");
 	REQUIRE(script.has_value());
@@ -223,11 +232,14 @@ TEST_CASE("execution::Interpreter draws cards")
 	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
 
 	const auto pot = game.create_instance(pot_code, domain::Player::FIRST);
+	REQUIRE(pot.valid());
 	const auto deck_a = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(deck_a.valid());
 	const auto deck_b = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(deck_b.valid());
 
-	REQUIRE(game.place(deck_a, {domain::DeckPlacement{.index = 0}}));
-	REQUIRE(game.place(deck_b, {domain::DeckPlacement{.index = 1}}));
+	game.place(*game.find_instance_mutable(deck_a), domain::DeckPlacement{.index = 0});
+	game.place(*game.find_instance_mutable(deck_b), domain::DeckPlacement{.index = 1});
 
 	const auto script = read_card_script("55144522.json");
 	REQUIRE(script.has_value());
@@ -255,7 +267,9 @@ TEST_CASE("execution::Interpreter changes life points")
 	game.register_definition(dian_keto_code, make_definition(dian_keto_code, domain::CardType::SPELL));
 
 	const auto sparks = game.create_instance(sparks_code, domain::Player::FIRST);
+	REQUIRE(sparks.valid());
 	const auto dian_keto = game.create_instance(dian_keto_code, domain::Player::FIRST);
+	REQUIRE(dian_keto.valid());
 
 	game.change_life_points(domain::Player::FIRST, 8000);
 	game.change_life_points(domain::Player::SECOND, 8000);
@@ -301,17 +315,20 @@ TEST_CASE("execution::Interpreter matches a FLIP trigger and resolves")
 	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
 
 	const auto jar = game.create_instance(jar_code, domain::Player::FIRST);
-	REQUIRE(game.place(jar,{ domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}}));
+	REQUIRE(jar.valid());
+	game.place(*game.find_instance_mutable(jar), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE});
 
 	const auto add_to_hand = [&](const domain::Player player) -> void
 	{
 		const auto id = game.create_instance(monster_code, player);
-		REQUIRE(game.place(id, {domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}));
+		REQUIRE(id.valid());
+		game.place(*game.find_instance_mutable(id), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
 	};
 	const auto add_to_deck = [&](const domain::Player player) -> void
 	{
 		const auto id = game.create_instance(monster_code, player);
-		REQUIRE(game.place(id, {domain::DeckPlacement{.index = 0}}));
+		REQUIRE(id.valid());
+		game.place(*game.find_instance_mutable(id), domain::DeckPlacement{.index = 0});
 	};
 
 	add_to_hand(domain::Player::FIRST);
@@ -362,12 +379,15 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 
 	// 对手的壶实例ID更小,用于证明排序不是简单按实例顺序
 	const auto opponent_jar = game.create_instance(jar_code, domain::Player::SECOND);
+	REQUIRE(opponent_jar.valid());
 	const auto turn_jar = game.create_instance(jar_code, domain::Player::FIRST);
+	REQUIRE(turn_jar.valid());
 	const auto optional_card = game.create_instance(optional_code, domain::Player::FIRST);
+	REQUIRE(optional_card.valid());
 
-	REQUIRE(game.place(opponent_jar, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}}));
-	REQUIRE(game.place(turn_jar, {domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_DOWN_DEFENSE}}));
-	REQUIRE(game.place(optional_card, {domain::MonsterPlacement{.column = domain::FieldColumn::C3, .position = domain::Position::FACE_UP_ATTACK}}));
+	game.place(*game.find_instance_mutable(opponent_jar), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(turn_jar), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(optional_card), domain::MonsterPlacement{.column = domain::FieldColumn::C3, .position = domain::Position::FACE_UP_ATTACK});
 
 	const auto jar = read_card_script("33508719.json");
 	REQUIRE(jar.has_value());
@@ -430,17 +450,21 @@ TEST_CASE("execution::Interpreter builds and resolves a chain")
 
 	// 两只巨大老鼠在墓地(触发条件:在墓地)
 	const auto first_rat = game.create_instance(rat_code, domain::Player::FIRST);
+	REQUIRE(first_rat.valid());
 	const auto second_rat = game.create_instance(rat_code, domain::Player::SECOND);
+	REQUIRE(second_rat.valid());
 
-	REQUIRE(game.place(first_rat, {domain::GraveyardPlacement{.index = 0}}));
-	REQUIRE(game.place(second_rat, {domain::GraveyardPlacement{.index = 0}}));
+	game.place(*game.find_instance_mutable(first_rat), domain::GraveyardPlacement{.index = 0});
+	game.place(*game.find_instance_mutable(second_rat), domain::GraveyardPlacement{.index = 0});
 
 	// 双方卡组各一张可被检索的怪兽
 	const auto first_deck = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(first_deck.valid());
 	const auto second_deck = game.create_instance(monster_code, domain::Player::SECOND);
+	REQUIRE(second_deck.valid());
 
-	REQUIRE(game.place(first_deck, {domain::DeckPlacement{.index = 0}}));
-	REQUIRE(game.place(second_deck, {domain::DeckPlacement{.index = 0}}));
+	game.place(*game.find_instance_mutable(first_deck), domain::DeckPlacement{.index = 0});
+	game.place(*game.find_instance_mutable(second_deck), domain::DeckPlacement{.index = 0});
 
 	const auto rat = read_card_script("97017120.json");
 	REQUIRE(rat.has_value());
@@ -489,12 +513,15 @@ TEST_CASE("execution::Interpreter applies static numeric modifiers")
 	game.register_definition(warrior_code, make_monster(warrior_code, domain::Race::WARRIOR));
 
 	const auto mountain = game.create_instance(mountain_code, domain::Player::FIRST);
+	REQUIRE(mountain.valid());
 	const auto dragon = game.create_instance(dragon_code, domain::Player::FIRST);
+	REQUIRE(dragon.valid());
 	const auto warrior = game.create_instance(warrior_code, domain::Player::FIRST);
+	REQUIRE(warrior.valid());
 
-	REQUIRE(game.place(mountain, {domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}}));
-	REQUIRE(game.place(dragon, {domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}}));
-	REQUIRE(game.place(warrior, {domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}}));
+	game.place(*game.find_instance_mutable(mountain), domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(dragon), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(warrior), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
 
 	const auto mountain_script = read_card_script("50913601.json");
 	REQUIRE(mountain_script.has_value());

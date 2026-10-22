@@ -9,47 +9,112 @@
 
 namespace cg::flow
 {
-	auto Duel::perform_tribute_summon(
-		const state::CardInstanceId card,
-		const domain::FieldColumn column,
-		const std::span<const state::CardInstanceId> tributes,
-		const domain::Position position
-	) noexcept -> bool
+	auto Duel::summonable_instance_of(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement) noexcept -> state::CardInstance*
 	{
-		if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
+		if (const auto phase = turn_.phase();
+			phase != domain::Phase::MAIN_1 && phase != domain::Phase::MAIN_2)
 		{
-			return false;
-		}
-		if (state_.normal_summoned)
-		{
-			return false;
+			return nullptr;
 		}
 
-		const auto* instance = game_.find_instance(card);
+		auto* instance = game_.find_instance_mutable(card);
 		if (instance == nullptr)
 		{
-			return false;
+			return nullptr;
 		}
 
 		const auto controller = instance->controller();
 		if (controller != turn_.turn_player())
 		{
-			return false;
+			return nullptr;
 		}
 
-		if (game_.zone_of(card) != domain::Zone::HAND)
+		if (priority_.holder_player(turn_.turn_player()) != controller)
 		{
-			return false;
+			return nullptr;
 		}
 
 		if (const auto monster = card_state_.is_card_type(*instance, domain::CardType::MONSTER);
 			!monster)
 		{
+			return nullptr;
+		}
+
+		if (!game_.is_location_empty(controller, domain::location_of(placement)))
+		{
+			return nullptr;
+		}
+
+		return instance;
+	}
+
+	auto Duel::perform_normal_summon(const state::CardInstanceId card, const domain::MonsterPlacement placement) noexcept -> bool
+	{
+		// 如果已通招则召唤失败
+		if (state_.normal_summoned)
+		{
+			return false;
+		}
+
+		auto* instance = summonable_instance_of(card, {placement});
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		if (const auto zone = game_.zone_of(card);
+			zone != domain::Zone::HAND)
+		{
+			return false;
+		}
+
+		// 等级 5 以上需要祭品(使用 tribute_summon / tribute_set)
+		if (const auto level = card_state_.level(*instance);
+			level >= 5)
+		{
+			return false;
+		}
+
+		// 放置到场上
+		game_.place(*instance, {placement});
+
+		// 已通常召唤
+		state_.normal_summoned = true;
+
+		// 召唤/盖放的成功时点
+		if (placement.position == domain::Position::FACE_UP_ATTACK)
+		{
+			trigger_event(dsl::TriggerSource{domain::EventCode::NORMAL_SUMMON_SUCCESS}, card);
+		}
+		else
+		{
+			trigger_event(dsl::TriggerSource{domain::EventCode::MONSTER_SET}, card);
+		}
+
+		return true;
+	}
+
+	auto Duel::perform_tribute_summon(const state::CardInstanceId card, const domain::MonsterPlacement placement, const std::span<const state::CardInstanceId> tributes) noexcept -> bool
+	{
+		// 如果已通招则召唤失败
+		if (state_.normal_summoned)
+		{
+			return false;
+		}
+
+		auto* instance = summonable_instance_of(card, {placement});
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		if (const auto zone = game_.zone_of(card);
+			zone != domain::Zone::HAND)
+		{
 			return false;
 		}
 
 		const auto level = card_state_.level(*instance);
-
 		// 等级 5~6 需要 1 个祭品,等级 7+ 需要 2 个
 		if (const auto required = level >= 7 ? std::size_t{2} : (level >= 5 ? std::size_t{1} : std::size_t{0});
 			tributes.size() != required)
@@ -57,8 +122,15 @@ namespace cg::flow
 			return false;
 		}
 
+		const auto controller = instance->controller();
 		for (const auto [index, tribute]: tributes | std::views::enumerate)
 		{
+			// 祭品不能是自己且不能重复
+			if (tribute == card || std::ranges::count(tributes, tribute) != 1)
+			{
+				return false;
+			}
+
 			const auto* tribute_instance = game_.find_instance(tribute);
 
 			if (tribute_instance == nullptr)
@@ -66,47 +138,36 @@ namespace cg::flow
 				return false;
 			}
 
+			// 必须是自己控制的怪兽
 			if (const auto tribute_controller = tribute_instance->controller();
 				tribute_controller != controller)
 			{
 				return false;
 			}
 
+			// 必须是场上的怪兽
 			if (const auto zone = game_.zone_of(tribute);
 				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
 			{
 				return false;
 			}
-
-			if (std::ranges::contains(tributes.begin() + index + 1, tributes.end(), tribute))
-			{
-				return false;
-			}
-		}
-
-		if (!game_.is_location_empty(controller, domain::Location{domain::MonsterLocation{.column = column}}))
-		{
-			return false;
 		}
 
 		// 解放祭品
 		for (const auto tribute: tributes)
 		{
-			if (!game_.move_to_graveyard(tribute, {domain::Reason::RELEASE}))
-			{
-				return false;
-			}
+			auto* tribute_instance = game_.find_instance_mutable(tribute);
+			game_.move_to_graveyard(*tribute_instance, {domain::Reason::RELEASE});
 		}
 
-		if (!game_.place(card, {domain::MonsterPlacement{.column = column, .position = position}}))
-		{
-			return false;
-		}
+		// 放置到场上
+		game_.place(*instance, {placement});
 
+		// 已通常召唤
 		state_.normal_summoned = true;
 
 		// 祭品召唤/盖放的成功时点
-		if (position == domain::Position::FACE_UP_ATTACK)
+		if (placement.position == domain::Position::FACE_UP_ATTACK)
 		{
 			trigger_event(dsl::TriggerSource{domain::EventCode::NORMAL_SUMMON_SUCCESS}, card);
 		}
@@ -335,11 +396,16 @@ namespace cg::flow
 			return false;
 		}
 
-		if (!game_.move_to_hand(deck.front(), {domain::Reason::DRAW}, domain::Position::FACE_DOWN_DEFENSE))
+		auto* instance = game_.find_instance_mutable(deck.front());
+		if (instance == nullptr)
 		{
 			return false;
 		}
 
+		// 移动到手牌
+		game_.move_to_hand(*instance, {domain::Reason::DRAW}, domain::Position::FACE_DOWN_DEFENSE);
+
+		// 已抽牌
 		state_.drew_in_draw_phase = true;
 		return true;
 	}
@@ -404,182 +470,270 @@ namespace cg::flow
 
 	auto Duel::normal_summon(const state::CardInstanceId card, const domain::FieldColumn column) noexcept -> bool
 	{
-		if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
-		{
-			return false;
-		}
-		if (state_.normal_summoned)
-		{
-			return false;
-		}
-
-		const auto* instance = game_.find_instance(card);
-		if (instance == nullptr)
-		{
-			return false;
-		}
-
-		const auto controller = instance->controller();
-		if (controller != turn_.turn_player())
-		{
-			return false;
-		}
-
-		if (game_.zone_of(card) != domain::Zone::HAND)
-		{
-			return false;
-		}
-
-		if (const auto monster = card_state_.is_card_type(*instance, domain::CardType::MONSTER);
-			!monster)
-		{
-			return false;
-		}
-
-		// 等级 5 以上需要祭品(使用 tribute_summon / tribute_set)
-		if (const auto level = card_state_.level(*instance);
-			level >= 5)
-		{
-			return false;
-		}
-
-		if (!game_.is_location_empty(controller, domain::Location{domain::MonsterLocation{.column = column}}))
-		{
-			return false;
-		}
-
-		if (!game_.place(card, {domain::MonsterPlacement{.column = column, .position = domain::Position::FACE_UP_ATTACK}}))
-		{
-			return false;
-		}
-
-		state_.normal_summoned = true;
-
-		// 召唤成功时点
-		trigger_event(dsl::TriggerSource{domain::EventCode::NORMAL_SUMMON_SUCCESS}, card);
-		return true;
+		return perform_normal_summon(card, {.column = column, .position = domain::Position::FACE_UP_ATTACK});
 	}
 
 	auto Duel::set_monster(const state::CardInstanceId card, const domain::FieldColumn column) noexcept -> bool
 	{
-		if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
-		{
-			return false;
-		}
-		if (state_.normal_summoned)
-		{
-			return false;
-		}
-
-		const auto* instance = game_.find_instance(card);
-		if (instance == nullptr)
-		{
-			return false;
-		}
-
-		const auto controller = instance->controller();
-		if (controller != turn_.turn_player())
-		{
-			return false;
-		}
-
-		if (game_.zone_of(card) != domain::Zone::HAND)
-		{
-			return false;
-		}
-
-		if (const auto monster = card_state_.is_card_type(*instance, domain::CardType::MONSTER);
-			!monster)
-		{
-			return false;
-		}
-
-		// 等级 5 以上需要祭品(使用 tribute_summon / tribute_set)
-		if (const auto level = card_state_.level(*instance);
-			level >= 5)
-		{
-			return false;
-		}
-
-		if (!game_.is_location_empty(controller, domain::Location{domain::MonsterLocation{.column = column}}))
-		{
-			return false;
-		}
-
-		if (!game_.place(card, {domain::MonsterPlacement{.column = column, .position = domain::Position::FACE_DOWN_DEFENSE}}))
-		{
-			return false;
-		}
-
-		state_.normal_summoned = true;
-
-		// 盖放时点
-		trigger_event(dsl::TriggerSource{domain::EventCode::MONSTER_SET}, card);
-		return true;
+		return perform_normal_summon(card, {.column = column, .position = domain::Position::FACE_DOWN_DEFENSE});
 	}
 
 	auto Duel::tribute_summon(const state::CardInstanceId card, const domain::FieldColumn column, const std::span<const state::CardInstanceId> tributes) noexcept -> bool
 	{
-		return perform_tribute_summon(card, column, tributes, domain::Position::FACE_UP_ATTACK);
+		return perform_tribute_summon(card, {.column = column, .position = domain::Position::FACE_UP_ATTACK}, tributes);
 	}
 
 	auto Duel::tribute_set(const state::CardInstanceId card, const domain::FieldColumn column, const std::span<const state::CardInstanceId> tributes) noexcept -> bool
 	{
-		return perform_tribute_summon(card, column, tributes, domain::Position::FACE_DOWN_DEFENSE);
+		return perform_tribute_summon(card, {.column = column, .position = domain::Position::FACE_DOWN_DEFENSE}, tributes);
 	}
 
-	auto Duel::set_spell_trap(const state::CardInstanceId card, const domain::FieldColumn column) noexcept -> bool
+	auto Duel::synchro_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
-		const auto* instance = game_.find_instance(card);
+		// 必须是表侧攻击/守备表示
+		if (const auto position = domain::position_of(placement);
+			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
+		{
+			return false;
+		}
+
+		auto* instance = summonable_instance_of(card, placement);
 		if (instance == nullptr)
 		{
 			return false;
 		}
 
+		if (const auto zone = game_.zone_of(card);
+			zone != domain::Zone::EXTRA_DECK)
+		{
+			return false;
+		}
+
+		// 必须是同调子类型
+		if (!card_state_.is_card_subtype(*instance, domain::CardSubtype::SYNCHRO))
+		{
+			return false;
+		}
+
+		// 必须有同调素材(必须有吗?)
+		if (materials.empty())
+		{
+			return false;
+		}
+
 		const auto controller = instance->controller();
-		if (controller != turn_.turn_player())
+
+		// 等级+调整 满足要求
+		const auto target_level = card_state_.level(*instance);
+		std::underlying_type_t<domain::LevelRank> total_level{};
+		auto has_tuner{false};
+		auto has_non_tuner{false};
+
+		for (const auto material: materials)
+		{
+			// 素材不能是自己且不能重复
+			if (material == card || std::ranges::count(materials, material) != 1)
+			{
+				return false;
+			}
+
+			const auto* material_instance = game_.find_instance(material);
+
+			if (material_instance == nullptr)
+			{
+				return false;
+			}
+
+			// 必须是自己控制的怪兽
+			if (const auto material_controller = material_instance->controller();
+				material_controller != controller)
+			{
+				return false;
+			}
+
+			// 必须是场上的怪兽
+			if (const auto zone = game_.zone_of(material);
+				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
+			{
+				return false;
+			}
+
+			total_level += card_state_.level(*material_instance);
+			if (card_state_.is_card_subtype(*material_instance, domain::CardSubtype::TUNER))
+			{
+				has_tuner = true;
+			}
+			else
+			{
+				has_non_tuner = true;
+			}
+		}
+
+		if (!has_tuner || !has_non_tuner || total_level != target_level)
 		{
 			return false;
 		}
 
-		if (priority_.holder_player(turn_.turn_player()) != controller)
+		// 素材送入墓地
+		for (const auto material: materials)
+		{
+			auto* material_instance = game_.find_instance_mutable(material);
+			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
+			game_.move_to_graveyard(*material_instance, {domain::Reason::SYNCHRO});
+		}
+
+		// 先记录来的位置
+		const auto from = instance->placement();
+
+		// 放置到场上
+		game_.place(*instance, domain::placement_of(placement));
+
+		// 记录召唤信息
+		game_.set_summon_record(
+			*instance,
+			{
+					.player = controller,
+					.method = domain::SummonMethod::SYNCHRO,
+					.from = from,
+					.materials = {materials.begin(), materials.end()},
+			}
+		);
+
+		priority_.reset();
+
+		// 特殊召唤的成功时点
+		trigger_event(dsl::TriggerSource{domain::EventCode::SPECIAL_SUMMON_SUCCESS}, card);
+
+		return true;
+	}
+
+	auto Duel::xyz_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
+	{
+		// 必须是表侧攻击/守备表示
+		if (const auto position = domain::position_of(placement);
+			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
 		{
 			return false;
 		}
 
-		if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
+		auto* instance = summonable_instance_of(card, placement);
+		if (instance == nullptr)
 		{
 			return false;
 		}
 
-		if (game_.zone_of(card) != domain::Zone::HAND)
+		if (const auto zone = game_.zone_of(card);
+			zone != domain::Zone::EXTRA_DECK)
 		{
 			return false;
 		}
 
-		if (!card_state_.is_card_type(*instance, domain::CardType::SPELL) && !card_state_.is_card_type(*instance, domain::CardType::TRAP))
+		// 必须是超量子类型
+		if (!card_state_.is_card_subtype(*instance, domain::CardSubtype::XYZ))
 		{
 			return false;
 		}
 
-		if (!game_.is_location_empty(controller, domain::Location{domain::SpellTrapLocation{.column = column}}))
+		// 必须有超量素材(必须有吗?)
+		if (materials.size() < 2)
 		{
 			return false;
 		}
 
-		if (!game_.place(card, {domain::SpellTrapPlacement{.column = column, .position = domain::Position::FACE_DOWN_DEFENSE}}))
+		const auto controller = instance->controller();
+
+		// 等级+数量 满足要求
+		const auto target_level = card_state_.level(*instance);
+		std::optional<std::underlying_type_t<domain::LevelRank>> material_level{};
+		std::vector<const state::CardInstance*> material_instances{};
+
+		for (const auto material: materials)
+		{
+			// 素材不能是自己且不能重复
+			if (material == card || std::ranges::count(materials, material) != 1)
+			{
+				return false;
+			}
+
+			const auto* material_instance = game_.find_instance(material);
+
+			if (material_instance == nullptr)
+			{
+				return false;
+			}
+
+			// 必须是自己控制的怪兽
+			if (const auto material_controller = material_instance->controller();
+				material_controller != controller)
+			{
+				return false;
+			}
+
+			// 必须是场上的怪兽
+			if (const auto zone = game_.zone_of(material);
+				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
+			{
+				return false;
+			}
+
+			const auto level = card_state_.level(*material_instance);
+			if (!material_level.has_value())
+			{
+				material_level = level;
+			}
+			else if (material_level != level)
+			{
+				return false;
+			}
+
+			material_instances.push_back(material_instance);
+		}
+
+		if (material_level != target_level)
 		{
 			return false;
 		}
 
-		set_turns_.insert_or_assign(card, turn_.turn_id());
+		// 先记录来的位置
+		const auto from = instance->placement();
+
+		// 放置到场上
+		game_.place(*instance, domain::placement_of(placement));
+
+		// 记录召唤信息
+		game_.set_summon_record(
+			*instance,
+			{
+					.player = controller,
+					.method = domain::SummonMethod::XYZ,
+					.from = from,
+					.materials = std::vector<state::CardInstanceId>{materials.begin(), materials.end()},
+			}
+		);
+
+		// 将素材叠放
+		for (const auto material: materials)
+		{
+			// 素材送入未知区域(超量素材)
+			auto* material_instance = game_.find_instance_mutable(material);
+			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
+			game_.place(*material_instance, {domain::NotExistPlacement{}});
+
+			// 添加超量素材
+			game_.add_overlay(*instance, *material_instance);
+		}
+
+		priority_.reset();
+
+		// 特殊召唤的成功时点
+		trigger_event(dsl::TriggerSource{domain::EventCode::SPECIAL_SUMMON_SUCCESS}, card);
 
 		return true;
 	}
 
 	auto Duel::activate_card(const state::CardInstanceId card) noexcept -> bool
 	{
-		const auto* instance = game_.find_instance(card);
+		auto* instance = game_.find_instance_mutable(card);
 		if (instance == nullptr)
 		{
 			return false;
@@ -710,10 +864,7 @@ namespace cg::flow
 					return false;
 				}
 
-				if (!game_.place(card, {domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}}))
-				{
-					return false;
-				}
+				game_.place(*instance, domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK});
 			}
 			else
 			{
@@ -732,10 +883,7 @@ namespace cg::flow
 					return false;
 				}
 
-				if (!game_.place(card, {domain::SpellTrapPlacement{.column = *column, .position = domain::Position::FACE_UP_ATTACK}}))
-				{
-					return false;
-				}
+				game_.place(*instance, domain::SpellTrapPlacement{.column = *column, .position = domain::Position::FACE_UP_ATTACK});
 			}
 		}
 		else
@@ -749,10 +897,7 @@ namespace cg::flow
 				return false;
 			}
 
-			if (!game_.place(card, {domain::SpellTrapPlacement{.column = spell_trap->column, .position = domain::Position::FACE_UP_ATTACK}}))
-			{
-				return false;
-			}
+			game_.place(*instance, domain::SpellTrapPlacement{.column = spell_trap->column, .position = domain::Position::FACE_UP_ATTACK});
 		}
 
 		if (activated != nullptr)
@@ -771,10 +916,56 @@ namespace cg::flow
 		if (const auto stays = card_state_.is_card_subtype(*instance, {domain::CardSubtype::CONTINUOUS, domain::CardSubtype::FIELD, domain::CardSubtype::EQUIP});
 			!stays)
 		{
-			game_.move_to_graveyard(card, {domain::Reason::RULE});
+			game_.move_to_graveyard(*instance, {domain::Reason::RULE});
 		}
 
 		priority_.reset();
+
+		return true;
+	}
+
+	auto Duel::set_spell_trap(const state::CardInstanceId card, const domain::FieldColumn column) noexcept -> bool
+	{
+		auto* instance = game_.find_instance_mutable(card);
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		const auto controller = instance->controller();
+		if (controller != turn_.turn_player())
+		{
+			return false;
+		}
+
+		if (priority_.holder_player(turn_.turn_player()) != controller)
+		{
+			return false;
+		}
+
+		if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
+		{
+			return false;
+		}
+
+		if (game_.zone_of(card) != domain::Zone::HAND)
+		{
+			return false;
+		}
+
+		if (!card_state_.is_card_type(*instance, domain::CardType::SPELL) && !card_state_.is_card_type(*instance, domain::CardType::TRAP))
+		{
+			return false;
+		}
+
+		if (!game_.is_location_empty(controller, domain::Location{domain::SpellTrapLocation{.column = column}}))
+		{
+			return false;
+		}
+
+		game_.place(*instance, domain::SpellTrapPlacement{.column = column, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+		set_turns_.insert_or_assign(card, turn_.turn_id());
 
 		return true;
 	}
@@ -872,7 +1063,7 @@ namespace cg::flow
 		auto target_flipped{false};
 		if (target.has_value())
 		{
-			const auto* target_instance = game_.find_instance(*target);
+			auto* target_instance = game_.find_instance_mutable(*target);
 
 			const auto placement = target_instance->placement();
 			const auto field_info = domain::field_info_of(placement);
@@ -889,17 +1080,11 @@ namespace cg::flow
 
 				if (std::holds_alternative<domain::ExtraMonsterPlacement>(placement))
 				{
-					if (!game_.place(*target, {domain::ExtraMonsterPlacement{.column = field_info->column, .position = target_position}}))
-					{
-						return false;
-					}
+					game_.place(*target_instance, domain::ExtraMonsterPlacement{.column = field_info->column, .position = target_position});
 				}
 				else
 				{
-					if (!game_.place(*target, {domain::MonsterPlacement{.column = field_info->column, .position = target_position}}))
-					{
-						return false;
-					}
+					game_.place(*target_instance, domain::MonsterPlacement{.column = field_info->column, .position = target_position});
 				}
 			}
 		}
@@ -970,18 +1155,20 @@ namespace cg::flow
 		auto attacker_destroyed{false};
 		if (destroy_target.has_value())
 		{
-			if (const auto* target_instance = game_.find_instance(*destroy_target);
+			if (auto* target_instance = game_.find_instance_mutable(*destroy_target);
 				target_instance == nullptr || !card_state_.protections(*target_instance).contains(domain::Protection::BATTLE))
 			{
-				target_destroyed = game_.move_to_graveyard(*destroy_target, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
+				game_.move_to_graveyard(*target_instance, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
+				target_destroyed = true;
 			}
 		}
 		if (destroy_attacker.has_value())
 		{
-			if (const auto* attacker_instance = game_.find_instance(*destroy_attacker);
+			if (auto* attacker_instance = game_.find_instance_mutable(*destroy_attacker);
 				attacker_instance == nullptr || !card_state_.protections(*attacker_instance).contains(domain::Protection::BATTLE))
 			{
-				attacker_destroyed = game_.move_to_graveyard(*destroy_attacker, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
+				game_.move_to_graveyard(*attacker_instance, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
+				attacker_destroyed = true;
 			}
 		}
 		if (damage_to_opponent != 0)

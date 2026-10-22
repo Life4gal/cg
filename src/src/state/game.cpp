@@ -28,18 +28,6 @@ namespace cg::state
 		return nullptr;
 	}
 
-	auto Game::find_instance_mutable(const CardInstanceId card) noexcept -> CardInstance*
-	{
-		LIBASSERT_DEBUG_ASSERT(card.valid());
-
-		if (const auto it = std::ranges::find(card_instances_, card, &CardInstance::id); it != card_instances_.end())
-		{
-			return &*it;
-		}
-
-		return nullptr;
-	}
-
 	auto Game::register_definition(const domain::CardCode code, const CardDefinition& definition) noexcept -> const CardDefinition&
 	{
 		return card_definitions_.insert_or_assign(code, definition).first->second;
@@ -58,10 +46,7 @@ namespace cg::state
 			return CardInstanceId{CardInstanceId::invalid_id};
 		}
 
-		const auto id = generate_instance_id();
-		card_instances_.emplace_back(id, owner, *definition);
-
-		return id;
+		return card_instances_.emplace_back(generate_instance_id(), owner, *definition).id();
 	}
 
 	auto Game::instances() const noexcept -> std::span<const CardInstance>
@@ -77,6 +62,19 @@ namespace cg::state
 	}
 
 	auto Game::find_instance(const CardInstanceId card) const noexcept -> const CardInstance*
+	{
+		LIBASSERT_DEBUG_ASSERT(card.valid());
+
+		if (const auto it = std::ranges::find(card_instances_, card, &CardInstance::id);
+			it != card_instances_.end())
+		{
+			return &*it;
+		}
+
+		return nullptr;
+	}
+
+	auto Game::find_instance_mutable(const CardInstanceId card) noexcept -> CardInstance*
 	{
 		LIBASSERT_DEBUG_ASSERT(card.valid());
 
@@ -254,10 +252,10 @@ namespace cg::state
 		);
 	}
 
-	auto Game::is_location_empty(const domain::Player player, const domain::FieldLocation location) const noexcept -> bool
+	auto Game::is_location_empty(const domain::Player player, const domain::AnyFieldLocation location) const noexcept -> bool
 	{
 		return field_invoke(
-			static_cast<auto(Field::*)(domain::Player player, domain::FieldLocation location) const noexcept -> bool>(&Field::is_location_empty),
+			static_cast<auto(Field::*)(domain::Player player, domain::AnyFieldLocation location) const noexcept -> bool>(&Field::is_location_empty),
 			player,
 			location
 		);
@@ -280,10 +278,10 @@ namespace cg::state
 		);
 	}
 
-	auto Game::is_location_empty(const domain::FieldLocation location) const noexcept -> bool
+	auto Game::is_location_empty(const domain::AnyFieldLocation location) const noexcept -> bool
 	{
 		return field_invoke(
-			static_cast<auto(Field::*)(domain::FieldLocation location) const noexcept -> bool>(&Field::is_location_empty),
+			static_cast<auto(Field::*)(domain::AnyFieldLocation location) const noexcept -> bool>(&Field::is_location_empty),
 			location
 		);
 	}
@@ -305,10 +303,10 @@ namespace cg::state
 		);
 	}
 
-	auto Game::select_location_card(const domain::Player player, const domain::FieldLocation location) const noexcept -> CardInstanceId
+	auto Game::select_location_card(const domain::Player player, const domain::AnyFieldLocation location) const noexcept -> CardInstanceId
 	{
 		return field_invoke(
-			static_cast<auto(Field::*)(domain::Player player, domain::FieldLocation location) const noexcept -> CardInstanceId>(&Field::select_location_card),
+			static_cast<auto(Field::*)(domain::Player player, domain::AnyFieldLocation location) const noexcept -> CardInstanceId>(&Field::select_location_card),
 			player,
 			location
 		);
@@ -323,147 +321,113 @@ namespace cg::state
 		);
 	}
 
-	auto Game::place(const CardInstanceId card, const domain::Placement placement) noexcept -> bool
-	{
-		auto* instance = find_instance_mutable(card);
-		if (instance == nullptr)
-		{
-			return false;
-		}
-
-		place(*instance, placement);
-		return true;
-	}
-
 	auto Game::place(CardInstance& card, const domain::Placement placement) noexcept -> void
 	{
-		const auto prev = card.placement();
-		field_.remove(card.controller(), card.id(), prev);
+		field_.remove(card.controller(), card.id(), card.placement());
 
-		card.set_placement(placement);
+		CardInstance::Modifier modifier{card};
+		modifier.set_placement(placement);
+
 		field_.place(card.controller(), card.id(), placement);
 	}
 
-	auto Game::move_to_deck(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason) noexcept -> bool
+	auto Game::move_to(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::Placement placement) noexcept -> void
 	{
-		return do_move_to(
-			card,
-			reason,
-			[&](const domain::Player player) noexcept -> domain::Placement
-			{
-				const auto index = count_zone_card(player, domain::Zone::DECK);
-				const domain::DeckPlacement placement{.index = index};
+		CardInstance::Modifier modifier{card};
 
-				return {placement};
+		modifier.set_move_provenance(
+			{
+					.controller = card.controller(),
+					.reason = reason,
+					.placement = card.placement(),
+					.effect = dsl::EffectId{dsl::EffectId::invalid_id}
 			}
 		);
+
+		this->place(card, placement);
 	}
 
-	auto Game::move_to_extra_deck(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::Position position) noexcept -> bool
+	auto Game::move_to_deck(CardInstance& card, const utility::EnumMask<domain::Reason> reason) noexcept -> void
 	{
-		return do_move_to(
-			card,
-			reason,
-			[&](const domain::Player player) noexcept -> domain::Placement
-			{
-				const auto index = count_zone_card(player, domain::Zone::EXTRA_DECK);
-				const domain::ExtraDeckPlacement placement{.index = index, .position = position};
+		const auto index = count_zone_card(card.owner(), domain::Zone::DECK);
+		const domain::DeckPlacement placement{.index = index};
 
-				return {placement};
-			}
-		);
+		move_to(card, reason, placement);
 	}
 
-	auto Game::move_to_hand(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::Position position) noexcept -> bool
+	auto Game::move_to_extra_deck(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::Position position) noexcept -> void
 	{
-		return do_move_to(
-			card,
-			reason,
-			[&](const domain::Player player) noexcept -> domain::Placement
-			{
-				const auto index = count_zone_card(player, domain::Zone::HAND);
-				const domain::HandPlacement placement{.index = index, .position = position};
+		const auto index = count_zone_card(card.owner(), domain::Zone::EXTRA_DECK);
+		const domain::ExtraDeckPlacement placement{.index = index, .position = position};
 
-				return {placement};
-			}
-		);
+		move_to(card, reason, placement);
 	}
 
-	auto Game::move_to_graveyard(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason) noexcept -> bool
+	auto Game::move_to_hand(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::Position position) noexcept -> void
 	{
-		return do_move_to(
-			card,
-			reason,
-			[&](const domain::Player player) noexcept -> domain::Placement
-			{
-				const auto index = count_zone_card(player, domain::Zone::GRAVEYARD);
-				const domain::GraveyardPlacement placement{.index = index};
+		const auto index = count_zone_card(card.owner(), domain::Zone::HAND);
+		const domain::HandPlacement placement{.index = index, .position = position};
 
-				return {placement};
-			}
-		);
+		move_to(card, reason, placement);
 	}
 
-	auto Game::move_to_banished(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::Position position) noexcept -> bool
+	auto Game::move_to_graveyard(CardInstance& card, const utility::EnumMask<domain::Reason> reason) noexcept -> void
 	{
-		return do_move_to(
-			card,
-			reason,
-			[&](const domain::Player player) noexcept -> domain::Placement
-			{
-				const auto index = count_zone_card(player, domain::Zone::BANISHED);
-				const domain::BanishedPlacement placement{.index = index, .position = position};
+		const auto index = count_zone_card(card.owner(), domain::Zone::GRAVEYARD);
+		const domain::GraveyardPlacement placement{.index = index};
 
-				return {placement};
-			}
-		);
+		move_to(card, reason, placement);
 	}
 
-	auto Game::move_to_monster(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::MonsterPlacement placement) noexcept -> bool
+	auto Game::move_to_banished(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::Position position) noexcept -> void
 	{
-		return do_move_to(
-			card,
-			reason,
-			[&]([[maybe_unused]] const domain::Player player) noexcept -> domain::Placement
-			{
-				return {placement};
-			}
-		);
+		const auto index = count_zone_card(card.owner(), domain::Zone::BANISHED);
+		const domain::BanishedPlacement placement{.index = index, .position = position};
+
+		move_to(card, reason, placement);
 	}
 
-	auto Game::move_to_extra_monster(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::ExtraMonsterPlacement placement) noexcept -> bool
+	auto Game::move_to_monster(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::MonsterPlacement placement) noexcept -> void
 	{
-		return do_move_to(
-			card,
-			reason,
-			[&]([[maybe_unused]] const domain::Player player) noexcept -> domain::Placement
-			{
-				return {placement};
-			}
-		);
+		move_to(card, reason, placement);
 	}
 
-	auto Game::move_to_spell_trap(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::SpellTrapPlacement placement) noexcept -> bool
+	auto Game::move_to_extra_monster(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::ExtraMonsterPlacement placement) noexcept -> void
 	{
-		return do_move_to(
-			card,
-			reason,
-			[&]([[maybe_unused]] const domain::Player player) noexcept -> domain::Placement
-			{
-				return {placement};
-			}
-		);
+		move_to(card, reason, placement);
 	}
 
-	auto Game::move_to_field_spell(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, const domain::FieldSpellPlacement placement) noexcept -> bool
+	auto Game::move_to_spell_trap(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::SpellTrapPlacement placement) noexcept -> void
 	{
-		return do_move_to(
-			card,
-			reason,
-			[&]([[maybe_unused]] const domain::Player player) noexcept -> domain::Placement
-			{
-				return {placement};
-			}
-		);
+		move_to(card, reason, placement);
+	}
+
+	auto Game::move_to_field_spell(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::FieldSpellPlacement placement) noexcept -> void
+	{
+		move_to(card, reason, placement);
+	}
+
+	auto Game::set_summon_record(CardInstance& card, CardInstance::SummonRecord record) noexcept -> void
+	{
+		std::ignore = this;
+
+		CardInstance::Modifier modifier{card};
+		modifier.set_summon_record(std::move(record));
+	}
+
+	auto Game::add_overlay(CardInstance& card, const CardInstance& material) noexcept -> void
+	{
+		std::ignore = this;
+
+		CardInstance::Modifier modifier{card};
+		modifier.add_overlay(material);
+	}
+
+	auto Game::remove_overlay(CardInstance& card, const CardInstance& material) noexcept -> void
+	{
+		std::ignore = this;
+
+		CardInstance::Modifier modifier{card};
+		modifier.remove_overlay(material);
 	}
 }

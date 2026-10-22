@@ -28,7 +28,6 @@ namespace cg::state
 		[[nodiscard]] auto is_valid_instance_id(CardInstanceId card) const noexcept -> bool;
 
 		[[nodiscard]] auto find_definition(domain::CardCode code) const noexcept -> const CardDefinition*;
-		[[nodiscard]] auto find_instance_mutable(CardInstanceId card) noexcept -> CardInstance*;
 
 	public:
 		// 注册定义
@@ -39,7 +38,8 @@ namespace cg::state
 
 		// 获取指定卡密所属卡牌的定义
 
-		// 创建实例
+		// 创建实例,如果指定卡密未注册定义则无效ID
+		// 这个接口必须返回ID,指针可能因为重分配失效
 		[[nodiscard]] auto create_instance(domain::CardCode code, domain::Player owner) noexcept -> CardInstanceId;
 
 		// 全部实例(只读)
@@ -48,19 +48,21 @@ namespace cg::state
 		// 指定实例ID所属实例是否存在
 		[[nodiscard]] auto has_instance(CardInstanceId card) const noexcept -> bool;
 
-		// 获取实例ID所属实例
+		// 获取实例ID对应的实例
 		[[nodiscard]] auto find_instance(CardInstanceId card) const noexcept -> const CardInstance*;
+
+		[[nodiscard]] auto find_instance_mutable(CardInstanceId card) noexcept -> CardInstance*;
 
 		// ================================================================
 		//
 		// ================================================================
 
+	private:
 		// ==================================================================================
 		// 卡牌实例ID + 接口 ==> 场地 + 卡牌实例ID + 接口 ==> 场地->接口(卡牌实例ID)
 		// 玩家 + 区域 + 接口 ==> 场地 + 玩家 + 区域 + 接口 ==> 场地->接口(玩家+场地)
 		// ==================================================================================
 
-	private:
 		template<typename Interface, typename... Args>
 			requires std::is_invocable_v<Interface, Field&, Args...>
 		auto field_invoke(Interface&& interface, Args&&... args) noexcept -> decltype(auto)
@@ -77,16 +79,16 @@ namespace cg::state
 
 	public:
 		// ================================================================
-		// 生命值
+		// 场地
 		// ================================================================
 
 		auto set_life_points(domain::Player player, std::underlying_type_t<domain::AttackDefense> value) noexcept -> void;
 		[[nodiscard]] auto life_points(domain::Player player) const noexcept -> std::underlying_type_t<domain::AttackDefense>;
 		auto change_life_points(domain::Player player, std::underlying_type_t<domain::AttackDefense> delta) noexcept -> void;
 
-		// ==================================================================================
+		// =======================
 		// 指定卡牌的区域/位置
-		// ==================================================================================
+		// =======================
 
 		// 获取卡牌实例所在区域
 		[[nodiscard]] auto zone_of(CardInstanceId card) const noexcept -> domain::Zone;
@@ -94,9 +96,9 @@ namespace cg::state
 		// 获取卡牌实例所在位置
 		[[nodiscard]] auto location_of(CardInstanceId card) const noexcept -> domain::Location;
 
-		// ==================================================================================
+		// =======================
 		// 指定区域的卡牌实例
-		// ==================================================================================
+		// =======================
 
 		// 检查某个区域是否不存在卡牌实例
 		[[nodiscard]] auto is_zone_empty(domain::Player player, domain::Zone zone) const noexcept -> bool;
@@ -142,89 +144,82 @@ namespace cg::state
 		// 获取某个区域所有卡牌实例
 		[[nodiscard]] auto collect_zones_card(utility::EnumMask<domain::Zone> zones) const noexcept -> std::vector<CardInstanceId>;
 
-		// ==================================================================================
+		// =======================
 		// 指定位置的卡牌实例
-		// ==================================================================================
+		// =======================
 
 		// 检查某个位置是否为空(不存在卡牌实例) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律返回false
 		[[nodiscard]] auto is_location_empty(domain::Player player, domain::Location location) const noexcept -> bool;
 		// 检查某个位置是否为空(不存在卡牌实例)
-		[[nodiscard]] auto is_location_empty(domain::Player player, domain::FieldLocation location) const noexcept -> bool;
+		[[nodiscard]] auto is_location_empty(domain::Player player, domain::AnyFieldLocation location) const noexcept -> bool;
 		// 检查某个位置是否为空(不存在卡牌实例)
 		[[nodiscard]] auto is_location_empty(domain::Player player, domain::AnyMonsterLocation location) const noexcept -> bool;
 
 		// 检查双方玩家某个位置是否为空(不存在卡牌实例) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义
 		[[nodiscard]] auto is_location_empty(domain::Location location) const noexcept -> bool;
 		// 检查双方玩家某个位置是否为空(不存在卡牌实例)
-		[[nodiscard]] auto is_location_empty(domain::FieldLocation location) const noexcept -> bool;
+		[[nodiscard]] auto is_location_empty(domain::AnyFieldLocation location) const noexcept -> bool;
 		// 检查双方玩家某个位置是否为空(不存在卡牌实例)
 		[[nodiscard]] auto is_location_empty(domain::AnyMonsterLocation location) const noexcept -> bool;
 
 		// 获取指定位置的卡牌实例,如果目标位置不存在卡牌实例则返回无效ID
 		[[nodiscard]] auto select_location_card(domain::Player player, domain::Location location) const noexcept -> CardInstanceId;
 		// 获取指定位置的卡牌实例,如果目标位置不存在卡牌实例则返回无效ID
-		[[nodiscard]] auto select_location_card(domain::Player player, domain::FieldLocation location) const noexcept -> CardInstanceId;
+		[[nodiscard]] auto select_location_card(domain::Player player, domain::AnyFieldLocation location) const noexcept -> CardInstanceId;
 		// 获取指定位置的卡牌实例,如果目标位置不存在卡牌实例则返回无效ID
 		[[nodiscard]] auto select_location_card(domain::Player player, domain::AnyMonsterLocation location) const noexcept -> CardInstanceId;
 
-		// ==================================================================================
-		// 指定位置的卡牌实例
-		// ==================================================================================
+		// ================================================================
+		// 卡牌实例
+		// ================================================================
 
-		// 将卡放入其持有者的指定位置(自动从原位置移除) -- 指定实例不存在返回false
-		auto place(CardInstanceId card, domain::Placement placement) noexcept -> bool;
+		// 将卡放入其持有者的指定位置(自动从原位置移除)
+		template<typename P>
+			requires(utility::variant_index_v<P, domain::Placement> != utility::invalid_variant_index)
+		auto place(CardInstance& card, const P placement) noexcept -> void
+		{
+			this->place(card, domain::Placement{placement});
+		}
+
 		// 将卡放入其持有者的指定位置(自动从原位置移除)
 		auto place(CardInstance& card, domain::Placement placement) noexcept -> void;
 
 	private:
-		template<typename PlacementGetter>
-			requires std::is_invocable_r_v<domain::Placement, PlacementGetter, domain::Player>
-		auto do_move_to(CardInstance& card, const utility::EnumMask<domain::Reason> reason, PlacementGetter getter) noexcept -> void
+		template<typename P>
+			requires(utility::variant_index_v<P, domain::Placement> != utility::invalid_variant_index)
+		auto move_to(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const P placement) noexcept -> void
 		{
-			card.set_move_provenance(
-				{
-						.controller = card.controller(),
-						.reason = reason,
-						.placement = card.placement(),
-						.effect = dsl::EffectId{dsl::EffectId::invalid_id}
-				}
-			);
-
-			this->place(card, getter(card.owner()));
+			this->move_to(card, reason, domain::Placement{placement});
 		}
 
-		template<typename PlacementGetter>
-			requires std::is_invocable_r_v<domain::Placement, PlacementGetter, domain::Player>
-		auto do_move_to(const CardInstanceId card, const utility::EnumMask<domain::Reason> reason, PlacementGetter getter) noexcept -> bool
-		{
-			auto* instance = find_instance_mutable(card);
-			if (instance == nullptr)
-			{
-				return false;
-			}
-
-			this->do_move_to(*instance, reason, getter);
-			return true;
-		}
+		auto move_to(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::Placement placement) noexcept -> void;
 
 	public:
-		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
-		auto move_to_deck(CardInstanceId card, utility::EnumMask<domain::Reason> reason) noexcept -> bool;
-		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
-		auto move_to_extra_deck(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::Position position = domain::Position::FACE_DOWN_DEFENSE) noexcept -> bool;
-		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
-		auto move_to_hand(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::Position position = domain::Position::FACE_DOWN_DEFENSE) noexcept -> bool;
-		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
-		auto move_to_graveyard(CardInstanceId card, utility::EnumMask<domain::Reason> reason) noexcept -> bool;
-		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
-		auto move_to_banished(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::Position position = domain::Position::FACE_UP_ATTACK) noexcept -> bool;
-		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
-		auto move_to_monster(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::MonsterPlacement placement) noexcept -> bool;
-		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
-		auto move_to_extra_monster(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::ExtraMonsterPlacement placement) noexcept -> bool;
-		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
-		auto move_to_spell_trap(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::SpellTrapPlacement placement) noexcept -> bool;
-		// 将卡送入其持有者的指定位置 -- 指定实例不存在返回false
-		auto move_to_field_spell(CardInstanceId card, utility::EnumMask<domain::Reason> reason, domain::FieldSpellPlacement placement) noexcept -> bool;
+		// 将卡送入其持有者的指定位置
+		auto move_to_deck(CardInstance& card, utility::EnumMask<domain::Reason> reason) noexcept -> void;
+		// 将卡送入其持有者的指定位置
+		auto move_to_extra_deck(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::Position position = domain::Position::FACE_DOWN_DEFENSE) noexcept -> void;
+		// 将卡送入其持有者的指定位置
+		auto move_to_hand(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::Position position = domain::Position::FACE_DOWN_DEFENSE) noexcept -> void;
+		// 将卡送入其持有者的指定位置
+		auto move_to_graveyard(CardInstance& card, utility::EnumMask<domain::Reason> reason) noexcept -> void;
+		// 将卡送入其持有者的指定位置
+		auto move_to_banished(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::Position position = domain::Position::FACE_UP_ATTACK) noexcept -> void;
+		// 将卡送入其持有者的指定位置
+		auto move_to_monster(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::MonsterPlacement placement) noexcept -> void;
+		// 将卡送入其持有者的指定位置
+		auto move_to_extra_monster(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::ExtraMonsterPlacement placement) noexcept -> void;
+		// 将卡送入其持有者的指定位置
+		auto move_to_spell_trap(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::SpellTrapPlacement placement) noexcept -> void;
+		// 将卡送入其持有者的指定位置
+		auto move_to_field_spell(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::FieldSpellPlacement placement) noexcept -> void;
+
+		// 记录召唤信息
+		auto set_summon_record(CardInstance& card, CardInstance::SummonRecord record) noexcept -> void;
+
+		// 添加超量素材
+		auto add_overlay(CardInstance& card, const CardInstance& material) noexcept -> void;
+		// 移除超量素材
+		auto remove_overlay(CardInstance& card, const CardInstance& material) noexcept -> void;
 	};
 }

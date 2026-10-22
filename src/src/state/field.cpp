@@ -645,7 +645,7 @@ namespace cg::state
 		return !card.valid();
 	}
 
-	auto Field::is_location_empty(const domain::Player player, const domain::FieldLocation location) const noexcept -> bool
+	auto Field::is_location_empty(const domain::Player player, const domain::AnyFieldLocation location) const noexcept -> bool
 	{
 		const auto card = select_location_card(player, location);
 		return !card.valid();
@@ -662,7 +662,7 @@ namespace cg::state
 		return is_location_empty(domain::Player::FIRST, location) && is_location_empty(domain::Player::SECOND, location);
 	}
 
-	auto Field::is_location_empty(const domain::FieldLocation location) const noexcept -> bool
+	auto Field::is_location_empty(const domain::AnyFieldLocation location) const noexcept -> bool
 	{
 		return is_location_empty(domain::Player::FIRST, location) && is_location_empty(domain::Player::SECOND, location);
 	}
@@ -715,7 +715,7 @@ namespace cg::state
 		);
 	}
 
-	auto Field::select_location_card(const domain::Player player, const domain::FieldLocation location) const noexcept -> CardInstanceId
+	auto Field::select_location_card(const domain::Player player, const domain::AnyFieldLocation location) const noexcept -> CardInstanceId
 	{
 		const auto& player_zone = player_zone_of(player);
 
@@ -847,7 +847,7 @@ namespace cg::state
 		);
 	}
 
-	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::FieldLocation location) noexcept -> bool
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::AnyFieldLocation location) noexcept -> bool
 	{
 		auto& player_zone = player_zone_of(player);
 
@@ -989,7 +989,7 @@ namespace cg::state
 		);
 	}
 
-	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::FieldLocation location) noexcept -> bool
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::AnyFieldLocation location) noexcept -> bool
 	{
 		auto& player_zone = player_zone_of(player);
 
@@ -1044,7 +1044,7 @@ namespace cg::state
 		return place(player, card, location);
 	}
 
-	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::FieldPlacement placement) noexcept -> bool
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::AnyFieldPlacement placement) noexcept -> bool
 	{
 		const auto location = domain::location_of(placement);
 		return place(player, card, location);
@@ -1062,7 +1062,7 @@ namespace cg::state
 		return remove(player, card, location);
 	}
 
-	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::FieldPlacement placement) noexcept -> bool
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::AnyFieldPlacement placement) noexcept -> bool
 	{
 		const auto location = domain::location_of(placement);
 		return remove(player, card, location);

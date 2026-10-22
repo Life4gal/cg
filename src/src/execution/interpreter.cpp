@@ -735,10 +735,13 @@ namespace cg::execution
 		for (const utility::EnumMask reasons{static_cast<domain::Reason>(static_cast<std::underlying_type_t<domain::Reason>>(*reason))};
 		     const auto card: *cards)
 		{
-			if (!context.game.get().move_to_graveyard(card, reasons))
+			auto* instance = context.game.get().find_instance_mutable(card);
+			if (instance == nullptr)
 			{
 				return std::nullopt;
 			}
+
+			context.game.get().move_to_graveyard(*instance, reasons);
 
 			pending_events_.emplace_back(domain::EventCode::DESTROYED, card);
 			pending_events_.emplace_back(domain::EventCode::EFFECT_DESTROYED, card);
@@ -763,10 +766,13 @@ namespace cg::execution
 
 		for (const auto card: *cards)
 		{
-			if (!context.game.get().move_to_graveyard(card, {domain::Reason::DISCARD}))
+			auto* instance = context.game.get().find_instance_mutable(card);
+			if (instance == nullptr)
 			{
 				return std::nullopt;
 			}
+
+			context.game.get().move_to_graveyard(*instance, {domain::Reason::DISCARD});
 		}
 
 		return Value{Void{}};
@@ -1174,10 +1180,14 @@ namespace cg::execution
 					break;
 				}
 
-				if (!game.move_to_hand(deck.front(), {domain::Reason::DRAW}, domain::Position::FACE_DOWN_DEFENSE))
+				const auto card = deck.front();
+				auto* instance = game.find_instance_mutable(card);
+				if (instance == nullptr)
 				{
 					return std::nullopt;
 				}
+
+				game.move_to_hand(*instance, {domain::Reason::DRAW}, domain::Position::FACE_DOWN_DEFENSE);
 			}
 		}
 
@@ -1201,10 +1211,13 @@ namespace cg::execution
 		for (auto& game = context.game.get();
 		     const auto card: *cards)
 		{
-			if (!game.move_to_hand(card, {domain::Reason::EFFECT}, domain::Position::FACE_DOWN_DEFENSE))
+			auto* instance = game.find_instance_mutable(card);
+			if (instance == nullptr)
 			{
 				return std::nullopt;
 			}
+
+			game.move_to_hand(*instance, {domain::Reason::EFFECT}, domain::Position::FACE_DOWN_DEFENSE);
 		}
 
 		return Value{Void{}};
@@ -1227,12 +1240,16 @@ namespace cg::execution
 
 		const auto position = *face_down ? domain::Position::FACE_DOWN_DEFENSE : domain::Position::FACE_UP_ATTACK;
 
-		for (const auto card: *cards)
+		for (auto& game = context.game.get();
+		     const auto card: *cards)
 		{
-			if (!context.game.get().move_to_banished(card, {domain::Reason::EFFECT}, position))
+			auto* instance = game.find_instance_mutable(card);
+			if (instance == nullptr)
 			{
 				return std::nullopt;
 			}
+
+			game.move_to_banished(*instance, {domain::Reason::EFFECT}, position);
 		}
 
 		return Value{Void{}};
@@ -1255,9 +1272,10 @@ namespace cg::execution
 
 		const auto value = static_cast<std::underlying_type_t<domain::AttackDefense>>(*amount);
 
-		for (const auto player: players_of(*players, context))
+		for (auto& game = context.game.get();
+		     const auto player: players_of(*players, context))
 		{
-			context.game.get().change_life_points(player, -value);
+			game.change_life_points(player, -value);
 		}
 
 		return Value{Void{}};
@@ -1280,9 +1298,10 @@ namespace cg::execution
 
 		const auto value = static_cast<std::underlying_type_t<domain::AttackDefense>>(*amount);
 
-		for (const auto player: players_of(*players, context))
+		for (auto& game = context.game.get();
+		     const auto player: players_of(*players, context))
 		{
-			context.game.get().change_life_points(player, value);
+			game.change_life_points(player, value);
 		}
 
 		return Value{Void{}};
@@ -1303,7 +1322,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* instance = context.game.get().find_instance(*card);
+		auto* instance = context.game.get().find_instance_mutable(*card);
 		if (instance == nullptr)
 		{
 			return std::nullopt;
@@ -1344,10 +1363,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		if (!context.game.get().place(*card, *updated))
-		{
-			return std::nullopt;
-		}
+		context.game.get().place(*instance, *updated);
 
 		return Value{Void{}};
 	}
@@ -1363,10 +1379,13 @@ namespace cg::execution
 		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
 		const auto* method = as_argument<dsl::ValueClass::INT>(*args, 1);
 		const auto* position = as_argument<dsl::ValueClass::INT>(*args, 2);
+
 		if (card == nullptr || method == nullptr || position == nullptr)
 		{
 			return std::nullopt;
 		}
+
+		auto* instance = context.game.get().find_instance_mutable(*card);
 
 		// TODO: 记录召唤方式(method)
 		std::ignore = method;
@@ -1383,13 +1402,10 @@ namespace cg::execution
 				continue;
 			}
 
-			if (const auto placement = domain::MonsterPlacement{.column = column, .position = value};
-				!game.move_to_monster(*card, {domain::Reason::EFFECT}, placement))
-			{
-				return std::nullopt;
-			}
+			game.move_to_monster(*instance, {domain::Reason::EFFECT}, domain::MonsterPlacement{.column = column, .position = value});
 
 			pending_events_.emplace_back(domain::EventCode::SPECIAL_SUMMON_SUCCESS, *card);
+
 			return Value{Void{}};
 		}
 
