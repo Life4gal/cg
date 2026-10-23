@@ -544,7 +544,14 @@ namespace cg::flow
 
 		for (const auto& [code, card]: events)
 		{
-			windows.push_back({.source = dsl::TriggerSource{code}, .card = card});
+			windows.push_back(
+				{
+						.source = dsl::TriggerSource{code},
+						.card = card,
+						.player = std::nullopt,
+						.amount = std::nullopt,
+				}
+			);
 		}
 
 		open_timing(windows);
@@ -736,11 +743,9 @@ namespace cg::flow
 
 	auto Duel::open_battle_window(const dsl::TriggerSource source) noexcept -> void
 	{
-		const std::array windows
-		{
-				execution::EventWindow{.source = source, .card = std::nullopt},
-		};
-		open_timing(windows);
+		const execution::EventWindow window{.source = source, .card = std::nullopt, .player = std::nullopt, .amount = std::nullopt};
+
+		open_timing({&window, 1});
 	}
 
 	auto Duel::clear_attack() noexcept -> void
@@ -873,6 +878,45 @@ namespace cg::flow
 		return true;
 	}
 
+	auto Duel::finish_damage_step(AttackState& attack) noexcept -> void
+	{
+		std::vector<execution::EventWindow> windows{};
+
+		const auto add_destroyed = [&](const std::optional<state::CardInstanceId>& card) -> void
+		{
+			if (!card.has_value() || !is_on_field(*card))
+			{
+				return;
+			}
+
+			auto* instance = game_.find_instance_mutable(*card);
+			if (instance == nullptr)
+			{
+				return;
+			}
+
+			if (card_state_.protections(*instance).contains(domain::Protection::BATTLE))
+			{
+				return;
+			}
+
+			game_.move_to_graveyard(*instance, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
+			windows.emplace_back(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, *card);
+		};
+
+		add_destroyed(attack.destroy_target);
+		add_destroyed(attack.destroy_attacker);
+
+		if (attack.target_flipped && attack.target.has_value())
+		{
+			windows.emplace_back(dsl::TriggerSource{domain::EventCode::FLIP}, attack.target);
+		}
+
+		windows.emplace_back(dsl::TriggerSource{dsl::PeriodRef{domain::DamageStep::END}}, std::nullopt);
+
+		open_timing(windows);
+	}
+
 	auto Duel::open_after_calculation_window(AttackState& attack) noexcept -> void
 	{
 		std::vector<execution::EventWindow> windows{};
@@ -916,45 +960,6 @@ namespace cg::flow
 		open_timing(windows);
 	}
 
-	auto Duel::finish_damage_step(AttackState& attack) noexcept -> void
-	{
-		std::vector<execution::EventWindow> windows{};
-
-		const auto add_destroyed = [&](const std::optional<state::CardInstanceId>& card) -> void
-		{
-			if (!card.has_value() || !is_on_field(*card))
-			{
-				return;
-			}
-
-			auto* instance = game_.find_instance_mutable(*card);
-			if (instance == nullptr)
-			{
-				return;
-			}
-
-			if (card_state_.protections(*instance).contains(domain::Protection::BATTLE))
-			{
-				return;
-			}
-
-			game_.move_to_graveyard(*instance, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
-			windows.emplace_back(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, *card);
-		};
-
-		add_destroyed(attack.destroy_target);
-		add_destroyed(attack.destroy_attacker);
-
-		if (attack.target_flipped && attack.target.has_value())
-		{
-			windows.emplace_back(dsl::TriggerSource{domain::EventCode::FLIP}, attack.target);
-		}
-
-		windows.emplace_back(dsl::TriggerSource{dsl::PeriodRef{domain::DamageStep::END}}, std::nullopt);
-
-		open_timing(windows);
-	}
-
 	Duel::Duel(execution::Selector& selector) noexcept
 		:
 		// game_{},
@@ -970,9 +975,9 @@ namespace cg::flow
 		interpreter_{vocabulary_},
 		card_state_{game_, scripts_, vocabulary_, interpreter_, selector} {}
 
-	auto Duel::game() noexcept -> state::Game&
+	auto Duel::load_scripts(const std::filesystem::path& directory) noexcept -> bool
 	{
-		return game_;
+		return scripts_.load_directory(directory, types_, vocabulary_);
 	}
 
 	auto Duel::game() const noexcept -> const state::Game&
@@ -980,39 +985,19 @@ namespace cg::flow
 		return game_;
 	}
 
-	// auto Duel::turn() noexcept -> Turn&
-	// {
-	// 	return turn_;
-	// }
-
 	auto Duel::turn() const noexcept -> const Turn&
 	{
 		return turn_;
 	}
-
-	// auto Duel::priority() noexcept -> Priority&
-	// {
-	// 	return priority_;
-	// }
 
 	auto Duel::priority() const noexcept -> const Priority&
 	{
 		return priority_;
 	}
 
-	// auto Duel::battle() noexcept -> Battle&
-	// {
-	// 	return battle_;
-	// }
-
 	auto Duel::battle() const noexcept -> const Battle&
 	{
 		return battle_;
-	}
-
-	auto Duel::attack() const noexcept -> const std::optional<AttackState>&
-	{
-		return attack_;
 	}
 
 	auto Duel::pending_attack() const noexcept -> bool
@@ -1023,11 +1008,6 @@ namespace cg::flow
 	auto Duel::chain() const noexcept -> const execution::Chain&
 	{
 		return chain_;
-	}
-
-	auto Duel::windows() const noexcept -> std::span<const execution::EventWindow>
-	{
-		return windows_;
 	}
 
 	auto Duel::winner() const noexcept -> std::optional<domain::Player>
@@ -1054,21 +1034,6 @@ namespace cg::flow
 		}
 
 		return std::nullopt;
-	}
-
-	auto Duel::load_scripts(const std::filesystem::path& directory) noexcept -> bool
-	{
-		return scripts_.load_directory(directory, types_, vocabulary_);
-	}
-
-	// auto Duel::scripts() noexcept -> execution::ScriptRegistry&
-	// {
-	// 	return scripts_;
-	// }
-
-	auto Duel::scripts() const noexcept -> const execution::ScriptRegistry&
-	{
-		return scripts_;
 	}
 
 	auto Duel::draw_for_turn() noexcept -> bool
@@ -1844,6 +1809,8 @@ namespace cg::flow
 				{
 						.source = dsl::TriggerSource{domain::EventCode::ATTACK_DECLARED},
 						.card = attacker,
+						.player = std::nullopt,
+						.amount = std::nullopt,
 				},
 		};
 		open_timing(windows);
@@ -1971,6 +1938,21 @@ namespace cg::flow
 		return true;
 	}
 
+	auto Duel::game() noexcept -> state::Game&
+	{
+		return game_;
+	}
+
+	auto Duel::scripts() const noexcept -> const execution::ScriptRegistry&
+	{
+		return scripts_;
+	}
+
+	auto Duel::windows() const noexcept -> std::span<const execution::EventWindow>
+	{
+		return windows_;
+	}
+
 	auto Duel::trigger_event(const dsl::TriggerSource source, const std::optional<state::CardInstanceId> event_card) noexcept -> bool
 	{
 		if (!chain_.empty())
@@ -1979,7 +1961,7 @@ namespace cg::flow
 			return false;
 		}
 
-		const std::array windows{execution::EventWindow{.source = source, .card = event_card}};
-		return open_timing(windows);
+		const execution::EventWindow window{.source = source, .card = event_card, .player = std::nullopt, .amount = std::nullopt};
+		return open_timing({&window, 1});
 	}
 }

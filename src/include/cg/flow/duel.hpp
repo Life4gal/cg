@@ -26,6 +26,9 @@ namespace cg::flow
 	class Duel
 	{
 	public:
+		//
+
+	private:
 		// 回合内状态
 		class TurnState
 		{
@@ -68,7 +71,6 @@ namespace cg::flow
 			std::underlying_type_t<domain::AttackDefense> damage_to_controller = 0;
 		};
 
-	private:
 		// ================================================================
 		// 游戏状态
 		// ================================================================
@@ -266,36 +268,33 @@ namespace cg::flow
 		auto open_after_calculation_window(AttackState& attack) noexcept -> void;
 
 	public:
+		// ================================================================
+		// 构造 / 装配
+		// ================================================================
+
 		// 必须注入底层驱动;引擎不自动决策
 		explicit Duel(execution::Selector& selector) noexcept;
 
+		// 从目录加载卡脚本(文件名即卡密)
+		auto load_scripts(const std::filesystem::path& directory) noexcept -> bool;
+
 		// ================================================================
-		// 状态访问
+		// 状态查询(只读;供驱动/UI)
 		// ================================================================
 
-		[[nodiscard]] auto game() noexcept -> state::Game&;
 		[[nodiscard]] auto game() const noexcept -> const state::Game&;
 
-		// [[nodiscard]] auto turn() noexcept -> Turn&;
 		[[nodiscard]] auto turn() const noexcept -> const Turn&;
 
-		// [[nodiscard]] auto priority() noexcept -> Priority&;
 		[[nodiscard]] auto priority() const noexcept -> const Priority&;
 
-		// [[nodiscard]] auto battle() noexcept -> Battle&;
 		[[nodiscard]] auto battle() const noexcept -> const Battle&;
-
-		// 当前攻击(空 = 无攻击进行中)
-		[[nodiscard]] auto attack() const noexcept -> const std::optional<AttackState>&;
 
 		// 是否有攻击正在进行
 		[[nodiscard]] auto pending_attack() const noexcept -> bool;
 
 		// 当前连锁(空 = 开放状态)
 		[[nodiscard]] auto chain() const noexcept -> const execution::Chain&;
-
-		// 当前事件时点
-		[[nodiscard]] auto windows() const noexcept -> std::span<const execution::EventWindow>;
 
 		// ================================================================
 		// 胜负
@@ -305,17 +304,7 @@ namespace cg::flow
 		[[nodiscard]] auto winner() const noexcept -> std::optional<domain::Player>;
 
 		// ================================================================
-		// 卡脚本
-		// ================================================================
-
-		// 从目录加载卡脚本(文件名即卡密)
-		auto load_scripts(const std::filesystem::path& directory) noexcept -> bool;
-
-		// [[nodiscard]] auto scripts() noexcept -> execution::ScriptRegistry&;
-		[[nodiscard]] auto scripts() const noexcept -> const execution::ScriptRegistry&;
-
-		// ================================================================
-		// 回合 / 阶段
+		// 驱动动作: 回合/阶段
 		// ================================================================
 
 		// 抽卡阶段抽 1 张;卡组为空返回 false
@@ -334,7 +323,7 @@ namespace cg::flow
 		auto end_turn() noexcept -> bool;
 
 		// ================================================================
-		// 召唤
+		// 驱动动作: 召唤
 		// ================================================================
 
 		// 通常召唤(表侧攻击表示)
@@ -357,7 +346,6 @@ namespace cg::flow
 			return this->synchro_summon(card, {placement}, materials);
 		}
 
-		// 同调召唤(1 Tuner + 1+ non-Tuner;等级合计等于目标)
 		auto synchro_summon(state::CardInstanceId card, domain::AnyMonsterPlacement placement, std::span<const state::CardInstanceId> materials) noexcept -> bool;
 
 		// 超量召唤(2+ 同等级怪兽;作为超量素材)
@@ -368,11 +356,10 @@ namespace cg::flow
 			return this->xyz_summon(card, {placement}, materials);
 		}
 
-		// 超量召唤(2+ 同等级怪兽;作为超量素材)
 		auto xyz_summon(state::CardInstanceId card, domain::AnyMonsterPlacement placement, std::span<const state::CardInstanceId> materials) noexcept -> bool;
 
 		// ================================================================
-		// 卡牌发动(魔法/陷阱)
+		// 驱动动作: 卡牌发动(魔法/陷阱)
 		// ================================================================
 
 		// 发动魔法卡(当前仅手牌;场地/永续/装备留场,其余结算后送墓)
@@ -382,20 +369,35 @@ namespace cg::flow
 		auto set_spell_trap(state::CardInstanceId card, domain::FieldColumn column) noexcept -> bool;
 
 		// ================================================================
-		// 战斗
+		// 驱动动作: 战斗
 		// ================================================================
 
 		// 攻击宣言:target = 空表示直接攻击
 		auto declare_attack(state::CardInstanceId attacker, std::optional<state::CardInstanceId> target) noexcept -> bool;
 
 		// ================================================================
-		// 效果
+		// 驱动动作: 效果
 		// ================================================================
 
 		// 主动发动(Ignition/Quick):需当前优先权持有者控制该卡
 		auto activate_effect(state::CardInstanceId card, std::size_t effect_index) noexcept -> bool;
 
-		// 事件发生后:收集触发 → 构建连锁 → 逆序结算
+		// ================================================================
+		// 测试 / 调试支持
+		// - 仅为 tests/ 与本地工具暴露;不属于稳定对外 API
+		// - 生产驱动应使用上面的查询接口与 Selector 决策
+		// ================================================================
+
+		// 可变状态访问:测试构造用
+		[[nodiscard]] auto game() noexcept -> state::Game&;
+
+		// 脚本注册表:测试断言用
+		[[nodiscard]] auto scripts() const noexcept -> const execution::ScriptRegistry&;
+
+		// 当前事件时点:测试断言用;触发选择通过Selector
+		[[nodiscard]] auto windows() const noexcept -> std::span<const execution::EventWindow>;
+
+		// 原始事件注入:测试/调试用;正常流程应走召唤/战斗等动作
 		auto trigger_event(dsl::TriggerSource source, std::optional<state::CardInstanceId> event_card = std::nullopt) noexcept -> bool;
 	};
 }

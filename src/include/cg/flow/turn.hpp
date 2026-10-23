@@ -9,6 +9,7 @@
 
 namespace cg::flow
 {
+	// 回合状态机: 回合玩家/回合ID/阶段.
 	class Turn
 	{
 	public:

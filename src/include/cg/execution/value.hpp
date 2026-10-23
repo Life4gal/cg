@@ -187,6 +187,4 @@ namespace cg::execution
 				// dsl::ValueClass::ENUM_SET
 				EnumMask
 			> {};
-
-	class ValueList : public std::vector<Value> {};
 }

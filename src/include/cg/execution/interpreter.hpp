@@ -66,6 +66,9 @@ namespace cg::execution
 		[[nodiscard]] auto execute_action(const dsl::ActionCall& call, Context& context) noexcept -> bool;
 		[[nodiscard]] auto execute_statements(const dsl::StatementList& statements, Context& context) noexcept -> bool;
 
+		// 结算(仅效果处理段);由 resolve(Chain&) / execute 内部使用
+		[[nodiscard]] auto resolve(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;
+
 		// ===========================================================
 		// 原语
 		// ===========================================================
@@ -113,15 +116,15 @@ namespace cg::execution
 	public:
 		explicit Interpreter(const dsl::Vocabulary& vocabulary) noexcept;
 
+		// ================================================================
+		// 执行入口(flow 层)
+		// ================================================================
+
 		// 取出并清空结算过程中产生的事件
 		[[nodiscard]] auto take_events() noexcept -> PendingEventList;
 
 		// 触发效果是否匹配当前事件(触发源 + 触发时条件)
 		[[nodiscard]] auto matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool;
-
-		// 收集当前事件触发的全部效果(SEGOC顺序:必发优先,回合玩家优先)
-		// - 单窗口重载使用 context.event
-		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, domain::Player turn_player) noexcept -> TriggeredEffectList;
 
 		// 收集同一时点多个事件触发的全部效果
 		// - 同一效果被多个事件命中只取首个;不同效果可以进入同一连锁
@@ -130,14 +133,20 @@ namespace cg::execution
 		// 激活(condition → cost → target);不执行效果处理
 		[[nodiscard]] auto activate(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;
 
-		// 结算(仅效果处理段)
-		[[nodiscard]] auto resolve(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;
-
-		// 由触发列表构建连锁(逐条激活)
-		[[nodiscard]] auto build_chain(const TriggeredEffectList& triggered, const Context& context) noexcept -> Chain;
-
 		// 逆序结算整条连锁
 		[[nodiscard]] auto resolve(Chain& chain) noexcept -> bool;
+
+		// ================================================================
+		// 测试 / 嵌入支持
+		// - 不属于 flow 主路径;当前由 tests/interpreter.cpp 使用
+		// ================================================================
+
+		// 单窗口便捷重载:使用 context.event;flow 使用 span 版本
+		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, domain::Player turn_player) noexcept -> TriggeredEffectList;
+
+		// 由触发列表构建连锁(逐条激活)
+		// 注意:当前与 Duel::open_timing 的建链逻辑重复,待收敛
+		[[nodiscard]] auto build_chain(const TriggeredEffectList& triggered, const Context& context) noexcept -> Chain;
 
 		// 执行一张发动类效果:condition → cost → target → resolve
 		[[nodiscard]] auto execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;

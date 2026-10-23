@@ -45,15 +45,15 @@ namespace cg::execution
 		// 效果来源卡
 		state::CardInstanceId source;
 
-		// 执行帧(绑定/作用域)
+		// 执行帧(绑定/作用域);仅执行层内部使用
 		Frame frame;
 
-		// 有效值查询(为空时回退CardInstance::origin_*)
+		// 有效值查询(为空时回退CardInstance::origin_*;测试路径可能为空)
 		CardStateResolver* card_state;
 
-		// 触发时点;空 = 非触发上下文
+		// 事件快照;condition / activation / resolution 均可查询 event_*
 		std::optional<EventWindow> event;
-		// 连锁结算位置;空 = 非结算上下文
+		// 连锁结算位置;仅 Interpreter::resolve(Chain&) 设置
 		std::optional<ChainCursor> chain;
 
 		constexpr Context(

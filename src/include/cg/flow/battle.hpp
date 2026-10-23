@@ -7,6 +7,7 @@
 
 namespace cg::flow
 {
+	// 战斗/伤害步骤 状态机
 	class Battle
 	{
 	public:

@@ -6,6 +6,8 @@
 
 namespace cg::driver
 {
+	// 测试用 Selector:默认只选必发,选发/目标选择需注入回调.
+	// 仅 tests/ 使用;不属于稳定驱动 API.
 	class LocalTestSelector final : public execution::Selector
 	{
 	public:

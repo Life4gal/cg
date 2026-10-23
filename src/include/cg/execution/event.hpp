@@ -22,9 +22,9 @@ namespace cg::execution
 
 	class PendingEventList : public std::vector<PendingEvent> {};
 
-	// 一个事件时点:触发源 + 事件关联卡
-	// - 同一时点可能同时发生多个事件(如一次效果同时破坏两张卡)
-	// - 流程层把同一批事件一起交给触发收集,组成同一组连锁
+	// 事件快照:source/card是触发身份,player/amount是可选事件载荷
+	// - 不是"仅触发键":载荷需随触发链保留到结算
+	// - 同一时点可能同时有多个事件(如一次效果同时破坏两张卡)
 	class EventWindow
 	{
 	public:

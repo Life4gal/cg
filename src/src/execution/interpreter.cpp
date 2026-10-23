@@ -653,6 +653,11 @@ namespace cg::execution
 		return true;
 	}
 
+	auto Interpreter::resolve(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool
+	{
+		return execute_statements(effect.effect, context);
+	}
+
 	auto Interpreter::find_cards(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
 		const auto args = evaluate_arguments(definition, call, context);
@@ -1733,11 +1738,6 @@ namespace cg::execution
 		}
 
 		return execute_statements(effect.target, context);
-	}
-
-	auto Interpreter::resolve(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool
-	{
-		return execute_statements(effect.effect, context);
 	}
 
 	auto Interpreter::build_chain(const TriggeredEffectList& triggered, const Context& context) noexcept -> Chain

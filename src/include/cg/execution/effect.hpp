@@ -24,7 +24,7 @@ namespace cg
 
 namespace cg::execution
 {
-	// 一条已匹配的触发效果
+	// 已触发的效果候选:由Interpreter生成,Duel使用
 	class TriggeredEffect
 	{
 	public:
@@ -37,7 +37,7 @@ namespace cg::execution
 		std::reference_wrapper<const dsl::ActivatedEffect> activated;
 		std::reference_wrapper<const dsl::Trigger> trigger;
 
-		// 命中的事件时点(同一效果可能被多个同时事件满足,取首个)
+		// 触发事件快照(保留到结算,供event_* 查询)
 		EventWindow window;
 	};
 

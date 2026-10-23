@@ -17,13 +17,13 @@ namespace cg::execution
 	class TriggerChoice
 	{
 	public:
-		// 触发者
+		// 控制者
 		domain::Player controller;
 		// 效果来源卡
 		state::CardInstanceId source;
 		// 效果稳定标识
 		dsl::EffectId effect;
-		// 命中的事件时点(触发源 + 事件关联卡)
+		// 触发事件快照(触发源 + 事件关联卡)
 		EventWindow window;
 		// 选发/必发
 		bool optional;
