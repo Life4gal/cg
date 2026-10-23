@@ -13,6 +13,7 @@
 #include <cg/execution/interpreter.hpp>
 #include <cg/execution/card_state_resolver.hpp>
 #include <cg/execution/script_registry.hpp>
+#include <cg/driver/local_test_selector.hpp>
 
 #include <nlohmann/json.hpp>
 #include <doctest/doctest.h>
@@ -68,14 +69,7 @@ namespace
 		return g_reader.read_card_script(nlohmann::json::parse(buffer.str()), file);
 	}
 
-	// 测试驱动:选择前 min 张(与旧的默认行为一致)
-	[[nodiscard]] auto select_first(const execution::Group& candidates, const std::size_t min, [[maybe_unused]] const std::size_t max) -> execution::Group
-	{
-		const auto count = std::ranges::min(min, candidates.size());
-		return {candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(count)};
-	}
-
-	const execution::Context::selector_type g_select_first{select_first};
+	driver::LocalTestSelector g_selector{};
 }
 
 TEST_CASE("execution::Interpreter resolves Raigeki")
@@ -105,7 +99,7 @@ TEST_CASE("execution::Interpreter resolves Raigeki")
 	REQUIRE(activated != nullptr);
 
 	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, domain::Player::FIRST, raigeki};
+	execution::Context context{game, g_selector, domain::Player::FIRST, raigeki};
 
 	CHECK(interpreter.execute(*activated, context));
 
@@ -142,8 +136,7 @@ TEST_CASE("execution::Interpreter resolves Tribute to the Doomed")
 	REQUIRE(activated != nullptr);
 
 	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, domain::Player::FIRST};
-	context.selector = &g_select_first;
+	execution::Context context{game, g_selector, domain::Player::FIRST};
 
 	CHECK(interpreter.execute(*activated, context));
 
@@ -176,7 +169,7 @@ TEST_CASE("execution::Interpreter evaluates boolean operators")
 		REQUIRE(activated != nullptr);
 
 		execution::Interpreter interpreter{g_vocabulary};
-		execution::Context context{game, domain::Player::FIRST};
+		execution::Context context{game, g_selector, domain::Player::FIRST};
 
 		return interpreter.execute(*activated, context);
 	};
@@ -224,8 +217,7 @@ TEST_CASE("execution::Interpreter searches a subtype from the deck")
 	REQUIRE(activated != nullptr);
 
 	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, domain::Player::FIRST, terraforming};
-	context.selector = &g_select_first;
+	execution::Context context{game, g_selector, domain::Player::FIRST, terraforming};
 
 	CHECK(interpreter.execute(*activated, context));
 
@@ -261,7 +253,7 @@ TEST_CASE("execution::Interpreter draws cards")
 	REQUIRE(activated != nullptr);
 
 	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, domain::Player::FIRST, pot};
+	execution::Context context{game, g_selector, domain::Player::FIRST, pot};
 
 	CHECK(interpreter.execute(*activated, context));
 
@@ -296,7 +288,7 @@ TEST_CASE("execution::Interpreter changes life points")
 		const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 		REQUIRE(activated != nullptr);
 
-		execution::Context context{game, domain::Player::FIRST, sparks};
+		execution::Context context{game, g_selector, domain::Player::FIRST, sparks};
 		CHECK(interpreter.execute(*activated, context));
 	}
 
@@ -310,7 +302,7 @@ TEST_CASE("execution::Interpreter changes life points")
 		const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 		REQUIRE(activated != nullptr);
 
-		execution::Context context{game, domain::Player::FIRST, dian_keto};
+		execution::Context context{game, g_selector, domain::Player::FIRST, dian_keto};
 		CHECK(interpreter.execute(*activated, context));
 	}
 
@@ -365,8 +357,8 @@ TEST_CASE("execution::Interpreter matches a FLIP trigger and resolves")
 	REQUIRE(trigger != nullptr);
 
 	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, domain::Player::FIRST, jar};
-	context.trigger = execution::Context::TriggerInfo{.source = dsl::TriggerSource{domain::EventCode::FLIP}, .event_card = jar};
+	execution::Context context{game, g_selector, domain::Player::FIRST, jar};
+	context.event = execution::EventWindow{.source = dsl::TriggerSource{domain::EventCode::FLIP}, .card = jar};
 
 	CHECK(interpreter.matches(*trigger, context));
 	CHECK(interpreter.execute(*activated, context));
@@ -438,8 +430,8 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 	scripts.add(optional_code, std::move(optional_script));
 
 	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, domain::Player::FIRST};
-	context.trigger = execution::Context::TriggerInfo{.source = dsl::TriggerSource{domain::EventCode::FLIP}};
+	execution::Context context{game, g_selector, domain::Player::FIRST};
+	context.event = execution::EventWindow{.source = dsl::TriggerSource{domain::EventCode::FLIP}, .card = std::nullopt};
 
 	const auto triggered = interpreter.collect_triggered(scripts, context, domain::Player::FIRST);
 	REQUIRE(triggered.size() == 3);
@@ -483,10 +475,9 @@ TEST_CASE("execution::Interpreter builds and resolves a chain")
 	scripts.add(rat_code, *rat);
 
 	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, domain::Player::FIRST};
-	context.selector = &g_select_first;
+	execution::Context context{game, g_selector, domain::Player::FIRST};
 
-	context.trigger = execution::Context::TriggerInfo{.source = dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}};
+	context.event = execution::EventWindow{.source = dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, .card = std::nullopt};
 
 	const auto triggered = interpreter.collect_triggered(scripts, context, domain::Player::FIRST);
 	REQUIRE(triggered.size() == 2);
@@ -540,7 +531,7 @@ TEST_CASE("execution::Interpreter applies static numeric modifiers")
 	execution::ScriptRegistry scripts{};
 	scripts.add(mountain_code, *mountain_script);
 	execution::Interpreter interpreter{g_vocabulary};
-	execution::CardStateResolver resolver{game, scripts, g_vocabulary, interpreter};
+	execution::CardStateResolver resolver{game, scripts, g_vocabulary, interpreter, g_selector};
 
 	const auto* dragon_instance = game.find_instance(dragon);
 	const auto* warrior_instance = game.find_instance(warrior);

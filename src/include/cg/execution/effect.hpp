@@ -1,14 +1,11 @@
 #pragma once
 
 #include <functional>
-#include <optional>
 #include <vector>
 
 #include <cg/domain/player.hpp>
 
-#include <cg/dsl/trigger.hpp>
-
-#include <cg/state/id.hpp>
+#include <cg/execution/event.hpp>
 
 namespace cg
 {
@@ -41,8 +38,7 @@ namespace cg::execution
 		std::reference_wrapper<const dsl::Trigger> trigger;
 
 		// 命中的事件时点(同一效果可能被多个同时事件满足,取首个)
-		dsl::TriggerSource source;
-		std::optional<state::CardInstanceId> event_card;
+		EventWindow window;
 	};
 
 	class TriggeredEffectList : public std::vector<TriggeredEffect> {};

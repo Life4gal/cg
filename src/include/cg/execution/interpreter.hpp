@@ -118,7 +118,7 @@ namespace cg::execution
 		[[nodiscard]] auto matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool;
 
 		// 收集当前事件触发的全部效果(SEGOC顺序:必发优先,回合玩家优先)
-		// - 单窗口重载使用 context.trigger
+		// - 单窗口重载使用 context.event
 		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, domain::Player turn_player) noexcept -> TriggeredEffectList;
 
 		// 收集同一时点多个事件触发的全部效果

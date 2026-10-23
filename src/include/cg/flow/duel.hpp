@@ -10,6 +10,7 @@
 
 #include <cg/execution/card_state_resolver.hpp>
 #include <cg/execution/chain.hpp>
+#include <cg/execution/decision.hpp>
 #include <cg/execution/interpreter.hpp>
 #include <cg/execution/script_registry.hpp>
 
@@ -21,49 +22,10 @@
 
 namespace cg::flow
 {
-	// 一个可选择的触发效果(供外部驱动决策)
-	class TriggerChoice
-	{
-	public:
-		// 触发者
-		domain::Player controller;
-		// 效果来源卡
-		state::CardInstanceId source;
-		// 效果稳定标识
-		dsl::EffectId effect;
-		// 触发源(事件/期间)
-		dsl::TriggerSource trigger_source;
-		// 事件关联卡
-		std::optional<state::CardInstanceId> event_card;
-		// 选发/必发
-		bool optional;
-	};
-
-	// 当前需要外部驱动决策的一组触发(SEGOC 的同一优先级组)
-	class TriggerDecision
-	{
-	public:
-		// 需要做出选择的玩家
-		domain::Player player;
-		// true = 选发组(可选子集);false = 必发组(必须全选,仅决定顺序)
-		bool optional;
-		// 候选;驱动返回的索引指向此列表,顺序即发动顺序
-		// - 仅在本次回调期间有效,驱动不得保存 span
-		std::span<const TriggerChoice> candidates;
-	};
-
 	// 最小决斗驱动:状态 + 回合/优先权/战斗流程 + 核心动作 + 卡脚本执行
 	class Duel
 	{
 	public:
-		// 外部驱动:选择回调(目标/代价/处理)
-		using selector_type = execution::Context::selector_type;
-
-		// 外部驱动:触发选择回调
-		// - 返回 candidates 的下标;顺序即发动顺序
-		// - 必发组必须返回全部下标;选发组可返回空
-		using trigger_chooser_type = std::function<auto(const TriggerDecision&) /*noexcept*/ -> std::vector<std::size_t>>;
-
 		// 回合内状态
 		class TurnState
 		{
@@ -185,13 +147,10 @@ namespace cg::flow
 		dsl::TypeRegistry types_;
 		dsl::Vocabulary vocabulary_;
 
+		std::reference_wrapper<execution::Selector> selector_;
 		execution::ScriptRegistry scripts_;
 		execution::Interpreter interpreter_;
 		execution::CardStateResolver card_state_;
-
-		// 外部驱动:选择/触发决策;为空时引擎不自动决策
-		selector_type selector_;
-		trigger_chooser_type trigger_chooser_;
 
 		// ================================================================
 		// 内部动作
@@ -254,13 +213,8 @@ namespace cg::flow
 		auto unmark_used(const dsl::Effect& effect, const state::CardInstance& card, bool mutex_inserted) noexcept -> void;
 
 	public:
-		Duel() noexcept;
-
-		// 设置外部选择器(目标/代价/处理);未设置时相关发动失败
-		auto set_selector(selector_type selector) noexcept -> void;
-
-		// 设置外部触发选择器;未设置时触发时点不会建立连锁
-		auto set_trigger_chooser(trigger_chooser_type chooser) noexcept -> void;
+		// 必须注入底层驱动;引擎不自动决策
+		explicit Duel(execution::Selector& selector) noexcept;
 
 		// ================================================================
 		// 状态访问

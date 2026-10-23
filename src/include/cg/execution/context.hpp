@@ -1,17 +1,12 @@
 #pragma once
 
-#include <cstddef>
 #include <functional>
-#include <map>
 #include <optional>
-#include <vector>
 
 #include <cg/domain/player.hpp>
 
-#include <cg/dsl/id.hpp>
-#include <cg/dsl/trigger.hpp>
-
-#include <cg/execution/value.hpp>
+#include <cg/execution/event.hpp>
+#include <cg/execution/frame.hpp>
 
 namespace cg::state
 {
@@ -22,50 +17,28 @@ namespace cg::execution
 {
 	class CardStateResolver;
 	class Chain;
+	class Selector;
 
 	// 一个效果发动/结算(连锁link)的执行帧
-	// - 基础帧:game / controller / source / frame
-	// - 环境:card_state / selector(可空)
-	// - 可选子上下文:trigger(触发时点) / chain(连锁结算位置)
+	// - 基础帧:game / controller / source
+	// - 求值帧:frame(绑定/作用域)
+	// - 环境:card_state / selector(必选)
+	// - 可选子上下文:event(触发时点) / chain(连锁结算位置)
 	class Context
 	{
 	public:
-		// 选择回调:从候选中选出 [min, max] 张
-		using selector_type = std::function<auto(const Group& candidates, std::size_t min, std::size_t max) /*noexcept*/ -> Group>;
-
-		// 执行帧局部状态
-		class Frame
-		{
-		public:
-			using bindings_type = std::map<dsl::BindingId, Value>;
-			using scopes_type = std::vector<state::CardInstanceId>;
-
-			// 效果帧绑定
-			bindings_type bindings;
-			// 元素作用域栈($)
-			scopes_type element_scopes;
-		};
-
-		// 触发时点(仅触发收集/结算时存在)
-		class TriggerInfo
-		{
-		public:
-			// 当前事件/期间
-			dsl::TriggerSource source;
-			// 事件关联卡
-			std::optional<state::CardInstanceId> event_card;
-		};
-
 		// 连锁结算位置(仅 Interpreter::resolve(Chain&) 时存在)
 		class ChainCursor
 		{
 		public:
-			Chain* chain;
+			std::reference_wrapper<Chain> chain;
 			// 当前 link 在 chain 中的下标
 			std::size_t link_index;
 		};
 
 		std::reference_wrapper<state::Game> game;
+		// 选择器(由 Duel/驱动持有并保证生命周期)
+		std::reference_wrapper<Selector> selector;
 
 		// 效果控制者
 		domain::Player controller;
@@ -77,26 +50,25 @@ namespace cg::execution
 
 		// 有效值查询(为空时回退CardInstance::origin_*)
 		CardStateResolver* card_state;
-		// 选择回调;为空 = 未注入,选择类原语失败
-		const selector_type* selector;
 
 		// 触发时点;空 = 非触发上下文
-		std::optional<TriggerInfo> trigger;
+		std::optional<EventWindow> event;
 		// 连锁结算位置;空 = 非结算上下文
 		std::optional<ChainCursor> chain;
 
 		constexpr Context(
 			state::Game& game,
+			Selector& selector,
 			const domain::Player controller,
 			const state::CardInstanceId source = state::CardInstanceId{state::CardInstanceId::invalid_id}
 		) noexcept
 			: game{game},
+			  selector{selector},
 			  controller{controller},
 			  source{source},
 			  frame{},
 			  card_state{nullptr},
-			  selector{nullptr},
-			  trigger{std::nullopt},
+			  event{std::nullopt},
 			  chain{std::nullopt} {}
 
 		Context(const Context&) = delete;
@@ -107,17 +79,16 @@ namespace cg::execution
 
 		~Context() noexcept = default;
 
-		// 为新效果/新 link 创建子帧:共享环境,复制触发时点,局部帧为空
+		// 为新效果/新 link 创建子帧:共享环境,复制事件时点,局部求值帧为空
 		[[nodiscard]] auto make_child(
 			const domain::Player child_controller,
 			const state::CardInstanceId child_source
 		) const noexcept -> Context
 		{
-			Context child{game.get(), child_controller, child_source};
+			Context child{game.get(), selector.get(), child_controller, child_source};
 
 			child.card_state = card_state;
-			child.selector = selector;
-			child.trigger = trigger;
+			child.event = event;
 
 			return child;
 		}

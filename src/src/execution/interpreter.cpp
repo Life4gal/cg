@@ -11,6 +11,7 @@
 #include <cg/dsl/vocabulary.hpp>
 #include <cg/state/game.hpp>
 #include <cg/execution/card_state_resolver.hpp>
+#include <cg/execution/decision.hpp>
 #include <cg/execution/chain.hpp>
 #include <cg/execution/script_registry.hpp>
 
@@ -183,13 +184,13 @@ namespace cg::execution
 
 		[[nodiscard]] auto select(const Context& context, const Group& candidates, const std::size_t min, const std::size_t max) -> std::optional<Group>
 		{
-			// 引擎不自动决策:必须由外部提供选择
-			if (!context.selector || !*context.selector || min > max || candidates.size() < min)
+			if (min > max || candidates.size() < min)
 			{
 				return std::nullopt;
 			}
 
-			auto selected = (*context.selector)(candidates, min, max);
+			// 引擎不自动决策:必须由外部提供选择
+			auto selected = context.selector.get().select_cards(context.controller, candidates, min, max);
 			if (selected.size() < min || selected.size() > max)
 			{
 				return std::nullopt;
@@ -1158,12 +1159,12 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		if (!context.trigger.has_value() || !context.trigger->event_card.has_value())
+		if (!context.event.has_value() || !context.event->card.has_value())
 		{
 			return std::nullopt;
 		}
 
-		return Value{Card{*context.trigger->event_card}};
+		return Value{Card{*context.event->card}};
 	}
 
 	auto Interpreter::sole_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1455,7 +1456,9 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		auto& link = (*context.chain->chain)[context.chain->link_index - 1];
+		auto& chain = context.chain->chain.get();
+		auto& link = chain[context.chain->link_index - 1];
+
 		link.negate_activation();
 
 		return Value{Void{}};
@@ -1474,7 +1477,9 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		auto& link = (*context.chain->chain)[context.chain->link_index - 1];
+		auto& chain = context.chain->chain.get();
+		auto& link = chain[context.chain->link_index - 1];
+
 		link.negate_effect();
 
 		return Value{Void{}};
@@ -1536,20 +1541,12 @@ namespace cg::execution
 
 	auto Interpreter::matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool
 	{
-		if (!context.trigger.has_value())
+		if (!context.event.has_value())
 		{
 			return false;
 		}
 
-		const auto matched = std::ranges::any_of(
-			trigger.spec.sources,
-			[&](const dsl::TriggerSource& source) noexcept -> bool
-			{
-				return source == context.trigger->source;
-			}
-		);
-
-		if (!matched)
+		if (!std::ranges::contains(trigger.spec.sources, context.event->source))
 		{
 			return false;
 		}
@@ -1574,12 +1571,12 @@ namespace cg::execution
 
 	auto Interpreter::collect_triggered(const ScriptRegistry& scripts, const Context& context, const domain::Player turn_player) noexcept -> TriggeredEffectList
 	{
-		if (!context.trigger.has_value())
+		if (!context.event.has_value())
 		{
 			return {};
 		}
 
-		const EventWindow window{.source = context.trigger->source, .card = context.trigger->event_card};
+		const EventWindow& window = *context.event;
 
 		return collect_triggered(scripts, context, {&window, 1}, turn_player);
 	}
@@ -1633,22 +1630,24 @@ namespace cg::execution
 				for (const auto& window: windows)
 				{
 					auto card_context = context.make_child(instance.controller(), instance.id());
-					card_context.trigger = {.source = window.source, .event_card = window.card};
+					card_context.event = window;
 
 					if (!matches(*trigger, card_context))
 					{
 						continue;
 					}
 
-					result.emplace_back(
-						instance.controller(),
-						std::ref(instance),
-						std::ref(effect),
-						std::ref(*activated),
-						std::ref(*trigger),
-						window.source,
-						window.card
-					);
+					const TriggeredEffect triggered_effect
+					{
+							.controller = instance.controller(),
+							.instance = std::ref(instance),
+							.effect = std::ref(effect),
+							.activated = std::ref(*activated),
+							.trigger = std::ref(*trigger),
+							.window = window,
+					};
+
+					result.push_back(triggered_effect);
 					break;
 				}
 			}
@@ -1707,7 +1706,7 @@ namespace cg::execution
 		for (const auto& entry: triggered)
 		{
 			auto link_context = context.make_child(entry.controller, entry.instance.get().id());
-			link_context.trigger = {.source = entry.source, .event_card = entry.event_card};
+			link_context.event = entry.window;
 
 			if (!activate(entry.activated.get(), link_context))
 			{

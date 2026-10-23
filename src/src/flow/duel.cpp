@@ -20,18 +20,11 @@ namespace cg::flow
 
 		windows_.assign(windows.begin(), windows.end());
 
-		execution::Context context{game_, turn_.turn_player()};
+		execution::Context context{game_, selector_, turn_.turn_player()};
 		context.card_state = &card_state_;
-		context.selector = &selector_;
 
 		const auto candidates = interpreter_.collect_triggered(scripts_, context, windows_, turn_.turn_player());
 		if (candidates.empty())
-		{
-			return false;
-		}
-
-		// 引擎不自动决策:没有外部触发选择器时不建立连锁
-		if (!trigger_chooser_)
 		{
 			return false;
 		}
@@ -46,7 +39,7 @@ namespace cg::flow
 			const auto player = is_turn_player ? turn_.turn_player() : domain::opponent_of(turn_.turn_player());
 
 			std::vector<std::size_t> group_indices{};
-			std::vector<TriggerChoice> choices{};
+			std::vector<execution::TriggerChoice> choices{};
 
 			for (std::size_t index = 0; index < candidates.size(); ++index)
 			{
@@ -68,12 +61,11 @@ namespace cg::flow
 
 				group_indices.push_back(index);
 				choices.push_back(
-					TriggerChoice{
+					execution::TriggerChoice{
 							.controller = entry.controller,
 							.source = entry.instance.get().id(),
 							.effect = entry.effect.get().id,
-							.trigger_source = entry.source,
-							.event_card = entry.event_card,
+							.window = entry.window,
 							.optional = optional,
 					}
 				);
@@ -84,18 +76,18 @@ namespace cg::flow
 				continue;
 			}
 
-			const auto selected = trigger_chooser_(
-				TriggerDecision
+			const auto selected = selector_.get().choose_triggers(
+				execution::TriggerDecision
 				{
 						.player = player,
 						.optional = optional,
-						.candidates = std::span<const TriggerChoice>{choices},
+						.candidates = std::span<const execution::TriggerChoice>{choices},
 				}
 			);
 
 			// 外部选择校验:索引合法、不重复;必发组必须全选
 			// 非法选择视为驱动错误,引擎不自动纠正
-			std::vector selected_flags(choices.size(), false);
+			std::vector<bool> selected_flags(choices.size(), false);
 			for (const auto choice: selected)
 			{
 				if (choice >= choices.size() || selected_flags[choice])
@@ -121,7 +113,7 @@ namespace cg::flow
 				}
 
 				auto link_context = context.make_child(entry.controller, instance.id());
-				link_context.trigger = execution::Context::TriggerInfo{.source = entry.source, .event_card = entry.event_card};
+				link_context.event = entry.window;
 
 				if (!interpreter_.activate(entry.activated.get(), link_context))
 				{
@@ -624,7 +616,7 @@ namespace cg::flow
 		}
 	}
 
-	Duel::Duel() noexcept
+	Duel::Duel(execution::Selector& selector) noexcept
 		:
 		// game_{},
 		// turn_{},
@@ -634,9 +626,10 @@ namespace cg::flow
 		loser_{std::nullopt},
 		// types_{},
 		vocabulary_{types_},
+		selector_{selector},
 		// scripts_{},
 		interpreter_{vocabulary_},
-		card_state_{game_, scripts_, vocabulary_, interpreter_} {}
+		card_state_{game_, scripts_, vocabulary_, interpreter_, selector} {}
 
 	auto Duel::game() noexcept -> state::Game&
 	{
@@ -686,16 +679,6 @@ namespace cg::flow
 	auto Duel::windows() const noexcept -> std::span<const execution::EventWindow>
 	{
 		return windows_;
-	}
-
-	auto Duel::set_selector(selector_type selector) noexcept -> void
-	{
-		selector_ = std::move(selector);
-	}
-
-	auto Duel::set_trigger_chooser(trigger_chooser_type chooser) noexcept -> void
-	{
-		trigger_chooser_ = std::move(chooser);
 	}
 
 	auto Duel::winner() const noexcept -> std::optional<domain::Player>
@@ -1238,10 +1221,9 @@ namespace cg::flow
 					windows_,
 					[&](const execution::EventWindow& window) noexcept -> bool
 					{
-						execution::Context timing_context{game_, controller, card};
+						execution::Context timing_context{game_, selector_, controller, card};
 						timing_context.card_state = &card_state_;
-						timing_context.selector = &selector_;
-						timing_context.trigger = execution::Context::TriggerInfo{.source = window.source, .event_card = window.card};
+						timing_context.event = window;
 
 						return interpreter_.matches(
 							dsl::Trigger{.spec = *card_activation->timing, .optional = false},
@@ -1290,12 +1272,11 @@ namespace cg::flow
 			return false;
 		}
 
-		execution::Context context{game_, controller, card};
+		execution::Context context{game_, selector_, controller, card};
 		context.card_state = &card_state_;
-		context.selector = &selector_;
 		if (matched_window.has_value())
 		{
-			context.trigger = execution::Context::TriggerInfo{.source = matched_window->source, .event_card = matched_window->card};
+			context.event = *matched_window;
 		}
 
 		if (activated != nullptr && !interpreter_.activate(*activated, context))
@@ -1715,9 +1696,8 @@ namespace cg::flow
 			return false;
 		}
 
-		execution::Context context{game_, controller, card};
+		execution::Context context{game_, selector_, controller, card};
 		context.card_state = &card_state_;
-		context.selector = &selector_;
 		if (!interpreter_.activate(*activated, context))
 		{
 			return false;

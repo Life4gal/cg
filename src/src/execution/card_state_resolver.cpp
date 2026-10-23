@@ -310,23 +310,25 @@ namespace cg::execution
 		state::Game& game,
 		const ScriptRegistry& scripts,
 		const dsl::Vocabulary& vocabulary,
-		Interpreter& interpreter
+		Interpreter& interpreter,
+		Selector& selector
 	) noexcept
 		: game_{game},
 		  scripts_{scripts},
 		  vocabulary_{vocabulary},
-		  interpreter_{interpreter} {}
+		  interpreter_{interpreter},
+		  selector_{selector} {}
 
 	auto CardStateResolver::effective_code(const state::CardInstance& card) const noexcept -> domain::CardCode
 	{
-		Context context{game_.get(), card.controller()};
+		Context context{game_.get(), selector_.get(), card.controller()};
 
 		return static_code(card, context).value_or(card.origin_code());
 	}
 
 	auto CardStateResolver::card_types(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardType>
 	{
-		Context context{game_.get(), card.controller()};
+		Context context{game_.get(), selector_.get(), card.controller()};
 		auto result = static_card_types(card, context);
 		result.unite_with(card.origin_kind());
 
@@ -335,7 +337,7 @@ namespace cg::execution
 
 	auto CardStateResolver::card_subtypes(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardSubtype>
 	{
-		Context context{game_.get(), card.controller()};
+		Context context{game_.get(), selector_.get(), card.controller()};
 		auto result = static_card_subtypes(card, context);
 		result.unite_with(card.origin_subtypes());
 
@@ -349,7 +351,7 @@ namespace cg::execution
 			return true;
 		}
 
-		Context context{game_.get(), card.controller()};
+		Context context{game_.get(), selector_.get(), card.controller()};
 		return static_card_types(card, context).contains(type);
 	}
 
@@ -360,7 +362,7 @@ namespace cg::execution
 			return true;
 		}
 
-		Context context{game_.get(), card.controller()};
+		Context context{game_.get(), selector_.get(), card.controller()};
 		return static_card_subtypes(card, context).contains(subtype);
 	}
 
@@ -371,7 +373,7 @@ namespace cg::execution
 			return true;
 		}
 
-		Context context{game_.get(), card.controller()};
+		Context context{game_.get(), selector_.get(), card.controller()};
 		const auto extra = static_card_subtypes(card, context);
 
 		return (extra.value() & subtypes.value()) != 0;
@@ -379,7 +381,7 @@ namespace cg::execution
 
 	auto CardStateResolver::attack(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>
 	{
-		Context context{game_.get(), card.controller()};
+		Context context{game_.get(), selector_.get(), card.controller()};
 		const auto bonus = static_numeric_bonus(card, domain::NumericProperty::ATTACK, context);
 
 		return static_cast<std::underlying_type_t<domain::AttackDefense>>(card.origin_attack() + bonus);
@@ -387,7 +389,7 @@ namespace cg::execution
 
 	auto CardStateResolver::defense(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>
 	{
-		Context context{game_.get(), card.controller()};
+		Context context{game_.get(), selector_.get(), card.controller()};
 		const auto bonus = static_numeric_bonus(card, domain::NumericProperty::DEFENSE, context);
 
 		return static_cast<std::underlying_type_t<domain::AttackDefense>>(card.origin_defense() + bonus);
@@ -395,7 +397,7 @@ namespace cg::execution
 
 	auto CardStateResolver::attributes(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Attribute>
 	{
-		Context context{game_.get(), card.controller()};
+		Context context{game_.get(), selector_.get(), card.controller()};
 		auto result = static_attributes(card, context);
 		result.add_with(card.origin_attribute());
 
@@ -411,7 +413,7 @@ namespace cg::execution
 
 	auto CardStateResolver::level(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::LevelRank>
 	{
-		Context context{game_.get(), card.controller()};
+		Context context{game_.get(), selector_.get(), card.controller()};
 		const auto bonus = static_level_bonus(card, context);
 
 		return static_cast<std::underlying_type_t<domain::LevelRank>>(card.origin_level() + bonus);
@@ -419,7 +421,7 @@ namespace cg::execution
 
 	auto CardStateResolver::protections(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Protection>
 	{
-		Context context{game_.get(), card.controller()};
+		Context context{game_.get(), selector_.get(), card.controller()};
 
 		return static_protections(card, context);
 	}

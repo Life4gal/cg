@@ -28,6 +28,7 @@ namespace cg::execution
 	class Context;
 	class Interpreter;
 	class ScriptRegistry;
+	class Selector;
 
 	// 有效值:印刷值 + 场上持续效果修正
 	class CardStateResolver
@@ -40,6 +41,7 @@ namespace cg::execution
 		std::reference_wrapper<const ScriptRegistry> scripts_;
 		std::reference_wrapper<const dsl::Vocabulary> vocabulary_;
 		std::reference_wrapper<Interpreter> interpreter_;
+		std::reference_wrapper<Selector> selector_;
 
 		// 收集作用于目标卡的静态修饰(已通过 apply_to / condition 筛选)
 		[[nodiscard]] auto collect_static_modifiers(
@@ -60,7 +62,8 @@ namespace cg::execution
 			state::Game& game,
 			const ScriptRegistry& scripts,
 			const dsl::Vocabulary& vocabulary,
-			Interpreter& interpreter
+			Interpreter& interpreter,
+			Selector& selector
 		) noexcept;
 
 		// 获取卡密 = 印刷值 + 静态修饰

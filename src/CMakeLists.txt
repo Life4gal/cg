@@ -48,6 +48,14 @@ add_library(
 	src/execution/card_state_resolver.cpp
 	src/execution/interpreter.cpp
 	src/execution/script_registry.cpp
+
+	# ===================================
+	# DRIVER
+	# ===================================
+
+	src/driver/local_test_selector.cpp
+
+	src/driver/network_selector.cpp
 )
 
 target_sources(
@@ -84,16 +92,7 @@ target_sources(
 	include/cg/domain/win.hpp
 	include/cg/domain/reject_reason.hpp
 	include/cg/domain/selection_context.hpp
-	
-	# ===================================
-	# DRIVER
-	# ===================================
 
-	include/cg/driver/action.hpp
-	include/cg/driver/request.hpp
-	include/cg/driver/response.hpp
-	include/cg/driver/driver.hpp
-	
 	# ===================================
 	# SERVER
 	# ===================================
@@ -164,11 +163,24 @@ target_sources(
 	include/cg/execution/value.hpp
 	include/cg/execution/effect.hpp
 	include/cg/execution/event.hpp
+	include/cg/execution/frame.hpp
+	include/cg/execution/decision.hpp
 	include/cg/execution/context.hpp
 	include/cg/execution/chain.hpp
 	include/cg/execution/card_state_resolver.hpp
 	include/cg/execution/interpreter.hpp
 	include/cg/execution/script_registry.hpp
+
+	# ===================================
+	# DRIVER
+	# ===================================
+
+	include/cg/driver/local_test_selector.hpp
+
+	include/cg/driver/action.hpp
+	include/cg/driver/request.hpp
+	include/cg/driver/response.hpp
+	include/cg/driver/network_selector.hpp
 )
 
 target_include_directories(

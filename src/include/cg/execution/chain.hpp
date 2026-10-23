@@ -95,7 +95,7 @@ namespace cg::execution
 
 		auto set_chain_position(Chain& chain, const std::size_t link_index) noexcept -> void
 		{
-			context_.chain = {.chain = &chain, .link_index = link_index};
+			context_.chain = {.chain = chain, .link_index = link_index};
 		}
 
 		[[nodiscard]] auto activation_negated() const noexcept -> bool
