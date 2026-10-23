@@ -1646,24 +1646,8 @@ namespace cg::execution
 			}
 		);
 
-		// 同一张卡在一个连锁上只能发动一个效果(排序后保留优先级最高的那个)
-		TriggeredEffectList deduplicated{};
-		deduplicated.reserve(result.size());
-
-		std::vector<state::CardInstanceId> activated_cards{};
-		for (const auto& entry: result)
-		{
-			const auto id = entry.instance.get().id();
-			if (std::ranges::contains(activated_cards, id))
-			{
-				continue;
-			}
-
-			activated_cards.push_back(id);
-			deduplicated.push_back(entry);
-		}
-
-		return deduplicated;
+		// 同一效果被多个事件命中只取首个;不同效果可以进入同一连锁
+		return result;
 	}
 
 	auto Interpreter::activate(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool

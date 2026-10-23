@@ -122,7 +122,7 @@ namespace cg::execution
 		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, domain::Player turn_player) noexcept -> TriggeredEffectList;
 
 		// 收集同一时点多个事件触发的全部效果
-		// - 同一张卡的同一效果被多个事件命中只取首个;同一张卡只取一个效果
+		// - 同一效果被多个事件命中只取首个;不同效果可以进入同一连锁
 		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, std::span<const EventWindow> windows, domain::Player turn_player) noexcept -> TriggeredEffectList;
 
 		// 激活(condition → cost → target);不执行效果处理

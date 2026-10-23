@@ -160,6 +160,17 @@ namespace cg::flow
 		}
 	}
 
+	auto Duel::contains_duplicated_effect(const state::CardInstanceId source, const dsl::Effect* effect) const noexcept -> bool
+	{
+		return std::ranges::any_of(
+			chain_,
+			[&](const execution::ChainLink& link) noexcept -> bool
+			{
+				return link.source() == source && link.effect() == effect;
+			}
+		);
+	}
+
 	auto Duel::activation_speed(const state::CardInstance& card, const dsl::ActivationKind& activation) const noexcept -> domain::EffectSpeed
 	{
 		const auto type = [&] noexcept -> domain::CardType
@@ -1017,12 +1028,6 @@ namespace cg::flow
 			return false;
 		}
 
-		// 同一张卡在一个连锁上只能发动一次(含不同效果)
-		if (std::ranges::contains(chain_, card, &execution::ChainLink::source))
-		{
-			return false;
-		}
-
 		const auto is_spell = card_state_.is_card_type(*instance, domain::CardType::SPELL);
 		const auto is_trap = card_state_.is_card_type(*instance, domain::CardType::TRAP);
 		if (!is_spell && !is_trap)
@@ -1168,6 +1173,12 @@ namespace cg::flow
 
 		// 声明了卡发动效果但当前时点不匹配 → 不可作为纯静态卡发动
 		if (activated == nullptr && has_card_activation)
+		{
+			return false;
+		}
+
+		// 同一效果不能在同一连锁上重复发动;不同效果可以
+		if (contains_duplicated_effect(card, activated_effect))
 		{
 			return false;
 		}
@@ -1542,12 +1553,6 @@ namespace cg::flow
 			return false;
 		}
 
-		// 同一张卡在一个连锁上只能发动一次(含不同效果)
-		if (std::ranges::contains(chain_, card, &execution::ChainLink::source))
-		{
-			return false;
-		}
-
 		const auto code = instance->origin_code();
 
 		const auto* script = scripts_.find(code);
@@ -1569,6 +1574,12 @@ namespace cg::flow
 		if (activated == nullptr)
 		{
 			// 指定实例的卡牌效果不是发动效果
+			return false;
+		}
+
+		// 同一效果不能在同一连锁上重复发动;不同效果可以
+		if (contains_duplicated_effect(card, &effect))
+		{
 			return false;
 		}
 

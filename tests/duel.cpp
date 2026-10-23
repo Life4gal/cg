@@ -1734,9 +1734,9 @@ TEST_CASE("flow::Duel collects simultaneous triggers into one chain")
 	std::filesystem::remove_all(directory);
 }
 
-TEST_CASE("flow::Duel allows only one effect per card per chain")
+TEST_CASE("flow::Duel allows different effects of one card in one chain")
 {
-	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_chain_one_card";
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_chain_same_card";
 	std::filesystem::remove_all(directory);
 	std::filesystem::create_directories(directory);
 
@@ -1752,7 +1752,7 @@ TEST_CASE("flow::Duel allows only one effect per card per chain")
 	);
 	write(
 		"94500002.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":300}}]}]})"
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":300}}]},{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":400}}]}]})"
 	);
 
 	constexpr domain::CardCode double_code{94500001};
@@ -1783,16 +1783,92 @@ TEST_CASE("flow::Duel allows only one effect per card per chain")
 	// C1:同一张卡的效果0
 	CHECK(duel.activate_effect(double_card, 0));
 
-	// C2:对方连锁;之后优先权回到回合玩家
+	// C2:对方连锁;优先权回到回合玩家
 	CHECK(duel.activate_effect(opponent_card, 0));
 
-	// 同一张卡在同一连锁上不能再发动效果1
-	CHECK_FALSE(duel.activate_effect(double_card, 1));
-	REQUIRE(duel.chain().size() == 2);
+	// C3:同一张卡的不同效果 → 允许
+	CHECK(duel.activate_effect(double_card, 1));
+
+	// C4:对方再连锁;优先权回到回合玩家
+	CHECK(duel.activate_effect(opponent_card, 1));
+
+	// 同一效果不能在同一连锁上再次发动
+	CHECK_FALSE(duel.activate_effect(double_card, 0));
+	REQUIRE(duel.chain().size() == 4);
 
 	CHECK(duel.pass_priority());
-	CHECK(game.life_points(domain::Player::FIRST) == 7700);
-	CHECK(game.life_points(domain::Player::SECOND) == 7900);
+	CHECK(duel.chain().empty());
+
+	// C4 400 + C2 300 打 FIRST;C3 200 + C1 100 打 SECOND
+	CHECK(game.life_points(domain::Player::FIRST) == 7300);
+	CHECK(game.life_points(domain::Player::SECOND) == 7700);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel collects multiple effects of one card into one chain")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_chain_one_card_segoc";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94600001.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":false},"effect":[{"call":"draw","args":{"players":["SELF"],"count":1}}]},{"type":"activated","activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":false},"effect":[{"call":"recover_life","args":{"players":["SELF"],"amount":500}}]}]})"
+	);
+	write(
+		"94600002.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"destroy","args":{"cards":{"call":"find_cards","args":{"players":["SELF","OPPONENT"],"zones":["MONSTER","EXTRA_MONSTER"]}},"reason":"EFFECT"}}]}]})"
+	);
+
+	constexpr domain::CardCode victim_code{94600001};
+	constexpr domain::CardCode destroyer_code{94600002};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(victim_code, make_monster(victim_code));
+	game.register_definition(destroyer_code, make_monster(destroyer_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
+	REQUIRE(destroyer.valid());
+	game.place(*game.find_instance_mutable(destroyer), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto victim = game.create_instance(victim_code, domain::Player::FIRST);
+	REQUIRE(victim.valid());
+	game.place(*game.find_instance_mutable(victim), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto deck_card = game.create_instance(victim_code, domain::Player::FIRST);
+	REQUIRE(deck_card.valid());
+	game.place(*game.find_instance_mutable(deck_card), domain::DeckPlacement{.index = 0});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_effect(destroyer, 0));
+
+	// 破坏链结算后,同一张卡的两个 DESTROYED 触发应同时入链
+	CHECK(duel.pass_priority());
+	REQUIRE(duel.chain().size() == 2);
+	CHECK(duel.chain()[0].controller() == domain::Player::FIRST);
+	CHECK(duel.chain()[1].controller() == domain::Player::FIRST);
+
+	settle(duel);
+
+	CHECK(game.life_points(domain::Player::FIRST) == 8500);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 1);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::DECK) == 0);
 
 	std::filesystem::remove_all(directory);
 }

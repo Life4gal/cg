@@ -164,6 +164,10 @@ namespace cg::flow
 		// 把待结算的连锁全部结算完(战斗等同步流程使用)
 		auto settle_chain() noexcept -> void;
 
+		// 连锁中是否已存在同一张卡的同一效果
+		// - 同一效果一链一次;同一张卡的不同效果可以同链
+		[[nodiscard]] auto contains_duplicated_effect(state::CardInstanceId source, const dsl::Effect* effect) const noexcept -> bool;
+
 		// 发动速度(由有效卡种/副种类与激活窗口派生)
 		[[nodiscard]] auto activation_speed(const state::CardInstance& card, const dsl::ActivationKind& activation) const noexcept -> domain::EffectSpeed;
 
