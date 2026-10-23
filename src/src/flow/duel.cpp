@@ -18,6 +18,9 @@ namespace cg::flow
 			return false;
 		}
 
+		// 新时点从回合玩家的优先权开始
+		priority_.reset();
+
 		windows_.assign(windows.begin(), windows.end());
 
 		execution::Context context{game_, selector_, turn_.turn_player()};
@@ -224,14 +227,6 @@ namespace cg::flow
 
 		// 结算中产生的事件:合并为下一个时点
 		process_pending_events();
-	}
-
-	auto Duel::settle_chain() noexcept -> void
-	{
-		while (!chain_.empty())
-		{
-			pass_priority();
-		}
 	}
 
 	auto Duel::contains_duplicated_effect(const state::CardInstanceId source, const dsl::Effect* effect) const noexcept -> bool
@@ -616,6 +611,262 @@ namespace cg::flow
 		}
 	}
 
+	auto Duel::is_on_field(const state::CardInstanceId card) const noexcept -> bool
+	{
+		const auto zone = game_.zone_of(card);
+		return zone == domain::Zone::MONSTER || zone == domain::Zone::EXTRA_MONSTER;
+	}
+
+	auto Duel::advance_battle() noexcept -> void
+	{
+		if (!attack_.has_value())
+		{
+			return;
+		}
+
+		auto& attack = *attack_;
+
+		if (battle_.battle_step() == domain::BattleStep::BATTLE)
+		{
+			if (!is_on_field(attack.attacker))
+			{
+				clear_attack();
+				return;
+			}
+
+			battle_.advance_battle_step(); // BATTLE → DAMAGE
+			open_battle_window(dsl::TriggerSource{dsl::PeriodRef{domain::DamageStep::START}});
+			return;
+		}
+
+		if (battle_.battle_step() != domain::BattleStep::DAMAGE)
+		{
+			clear_attack();
+			return;
+		}
+
+		switch (battle_.damage_step())
+		{
+			case domain::DamageStep::START:
+			{
+				if (!is_on_field(attack.attacker) || !prepare_attack_target(attack))
+				{
+					clear_attack();
+					return;
+				}
+				battle_.advance_damage_step(); // START → BEFORE
+				open_battle_window(dsl::TriggerSource{dsl::PeriodRef{domain::DamageStep::BEFORE_CALCULATION}});
+				break;
+			}
+			case domain::DamageStep::BEFORE_CALCULATION:
+			{
+				battle_.advance_damage_step(); // BEFORE → PERFORM
+				open_battle_window(dsl::TriggerSource{dsl::PeriodRef{domain::DamageStep::PERFORM_CALCULATION}});
+				break;
+			}
+			case domain::DamageStep::PERFORM_CALCULATION:
+			{
+				if (!calculate_battle(attack))
+				{
+					clear_attack();
+					return;
+				}
+				battle_.advance_damage_step(); // PERFORM → AFTER
+				open_battle_window(dsl::TriggerSource{dsl::PeriodRef{domain::DamageStep::AFTER_CALCULATION}});
+				break;
+			}
+			case domain::DamageStep::AFTER_CALCULATION:
+			{
+				battle_.advance_damage_step(); // AFTER → END
+				finish_damage_step(attack);
+				break;
+			}
+			case domain::DamageStep::END:
+			{
+				clear_attack();
+				break;
+			}
+		}
+	}
+
+	auto Duel::open_battle_window(const dsl::TriggerSource source) noexcept -> void
+	{
+		const std::array windows
+		{
+				execution::EventWindow{.source = source, .card = std::nullopt},
+		};
+		open_timing(windows);
+	}
+
+	auto Duel::clear_attack() noexcept -> void
+	{
+		attack_.reset();
+		battle_.reset();
+		// START → BATTLE:下一次攻击仍从战斗步骤开始
+		battle_.advance_battle_step();
+		priority_.reset();
+		windows_.clear();
+	}
+
+	auto Duel::prepare_attack_target(AttackState& attack) noexcept -> bool
+	{
+		if (!attack.target.has_value())
+		{
+			return true;
+		}
+
+		if (!is_on_field(*attack.target))
+		{
+			return false;
+		}
+
+		auto* target_instance = game_.find_instance_mutable(*attack.target);
+		if (target_instance == nullptr)
+		{
+			return false;
+		}
+
+		const auto placement = target_instance->placement();
+		const auto field_info = domain::field_info_of(placement);
+		if (!field_info.has_value())
+		{
+			return false;
+		}
+
+		attack.target_position = field_info->position;
+		if (attack.target_position != domain::Position::FACE_DOWN_DEFENSE)
+		{
+			return true;
+		}
+
+		attack.target_position = domain::Position::FACE_UP_DEFENSE;
+		attack.target_flipped = true;
+
+		if (std::holds_alternative<domain::ExtraMonsterPlacement>(placement))
+		{
+			game_.place(*target_instance, domain::ExtraMonsterPlacement{.column = field_info->column, .position = attack.target_position});
+		}
+		else
+		{
+			game_.place(*target_instance, domain::MonsterPlacement{.column = field_info->column, .position = attack.target_position});
+		}
+
+		return true;
+	}
+
+	auto Duel::calculate_battle(AttackState& attack) noexcept -> bool
+	{
+		const auto* attacker_instance = game_.find_instance(attack.attacker);
+		if (attacker_instance == nullptr || !is_on_field(attack.attacker))
+		{
+			return false;
+		}
+
+		const auto attacker_attack = card_state_.attack(*attacker_instance);
+		const auto controller = attacker_instance->controller();
+		const auto opponent = domain::opponent_of(controller);
+
+		attack.destroy_attacker.reset();
+		attack.destroy_target.reset();
+		attack.damage_to_opponent = 0;
+		attack.damage_to_controller = 0;
+
+		if (!attack.target.has_value())
+		{
+			attack.damage_to_opponent = attacker_attack;
+		}
+		else
+		{
+			const auto* target_instance = game_.find_instance(*attack.target);
+			if (target_instance == nullptr || !is_on_field(*attack.target))
+			{
+				return false;
+			}
+
+			if (attack.target_position == domain::Position::FACE_UP_ATTACK)
+			{
+				if (const auto target_attack = card_state_.attack(*target_instance);
+					attacker_attack > target_attack)
+				{
+					attack.destroy_target = *attack.target;
+					attack.damage_to_opponent = attacker_attack - target_attack;
+				}
+				else if (attacker_attack < target_attack)
+				{
+					attack.destroy_attacker = attack.attacker;
+					attack.damage_to_controller = target_attack - attacker_attack;
+				}
+				else
+				{
+					attack.destroy_attacker = attack.attacker;
+					attack.destroy_target = *attack.target;
+				}
+			}
+			else
+			{
+				if (const auto target_defense = card_state_.defense(*target_instance);
+					attacker_attack > target_defense)
+				{
+					attack.destroy_target = *attack.target;
+				}
+				else if (attacker_attack < target_defense)
+				{
+					attack.damage_to_controller = target_defense - attacker_attack;
+				}
+			}
+		}
+
+		if (attack.damage_to_opponent != 0)
+		{
+			game_.change_life_points(opponent, -attack.damage_to_opponent);
+		}
+		if (attack.damage_to_controller != 0)
+		{
+			game_.change_life_points(controller, -attack.damage_to_controller);
+		}
+
+		return true;
+	}
+
+	auto Duel::finish_damage_step(AttackState& attack) noexcept -> void
+	{
+		std::vector<execution::EventWindow> windows{};
+
+		const auto add_destroyed = [&](const std::optional<state::CardInstanceId>& card) -> void
+		{
+			if (!card.has_value() || !is_on_field(*card))
+			{
+				return;
+			}
+
+			auto* instance = game_.find_instance_mutable(*card);
+			if (instance == nullptr)
+			{
+				return;
+			}
+
+			if (card_state_.protections(*instance).contains(domain::Protection::BATTLE))
+			{
+				return;
+			}
+
+			game_.move_to_graveyard(*instance, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
+			windows.emplace_back(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, *card);
+		};
+
+		add_destroyed(attack.destroy_target);
+		add_destroyed(attack.destroy_attacker);
+
+		if (attack.target_flipped && attack.target.has_value())
+		{
+			windows.emplace_back(dsl::TriggerSource{domain::EventCode::FLIP}, attack.target);
+		}
+
+		windows.emplace_back(dsl::TriggerSource{dsl::PeriodRef{domain::DamageStep::END}}, std::nullopt);
+
+		open_timing(windows);
+	}
+
 	Duel::Duel(execution::Selector& selector) noexcept
 		:
 		// game_{},
@@ -669,6 +920,16 @@ namespace cg::flow
 	auto Duel::battle() const noexcept -> const Battle&
 	{
 		return battle_;
+	}
+
+	auto Duel::attack() const noexcept -> const std::optional<AttackState>&
+	{
+		return attack_;
+	}
+
+	auto Duel::pending_attack() const noexcept -> bool
+	{
+		return attack_.has_value();
 	}
 
 	auto Duel::chain() const noexcept -> const execution::Chain&
@@ -762,14 +1023,21 @@ namespace cg::flow
 
 	auto Duel::change_phase() noexcept -> bool
 	{
-		if (!chain_.empty() || !priority_.both_passed())
+		if (!chain_.empty() || attack_.has_value() || !priority_.both_passed())
 		{
 			return false;
 		}
 
+		const auto previous_phase = turn_.phase();
 		if (!turn_.advance_phase())
 		{
 			return false;
+		}
+
+		// 离开战斗阶段时清理战斗步骤
+		if (previous_phase == domain::Phase::BATTLE)
+		{
+			battle_.reset();
 		}
 
 		priority_.reset();
@@ -795,12 +1063,19 @@ namespace cg::flow
 
 		// 双方通过后关闭事件时点
 		windows_.clear();
+
+		// 战斗中:当前战斗/伤害步骤时点关闭 → 进入下一步骤
+		if (attack_.has_value())
+		{
+			advance_battle();
+		}
+
 		return true;
 	}
 
 	auto Duel::end_turn() noexcept -> bool
 	{
-		if (turn_.phase() != domain::Phase::END || !chain_.empty())
+		if (turn_.phase() != domain::Phase::END || !chain_.empty() || attack_.has_value())
 		{
 			return false;
 		}
@@ -808,6 +1083,7 @@ namespace cg::flow
 		turn_.end_turn();
 		priority_.reset();
 		battle_.reset();
+		attack_.reset();
 		windows_.clear();
 		state_ = TurnState{};
 
@@ -1373,6 +1649,11 @@ namespace cg::flow
 			return false;
 		}
 
+		if (attack_.has_value())
+		{
+			return false;
+		}
+
 		const auto* instance = game_.find_instance(attacker);
 		if (instance == nullptr)
 		{
@@ -1444,168 +1725,28 @@ namespace cg::flow
 			return false;
 		}
 
-		// 攻击宣言开启新的窗口
+		// 攻击宣言只开时点;伤害步骤由 pass_priority 推进
 		windows_.clear();
 
 		state_.attacked_monsters.push_back(attacker);
 		state_.attacked = true;
 		state_.entered_battle_phase = true;
 
-		const auto attacker_attack = card_state_.attack(*instance);
+		attack_ = {.attacker = attacker, .target = target};
 
-		// 战斗步骤:攻击宣言 → 伤害步骤
 		battle_.reset();
 		// START → BATTLE
 		battle_.advance_battle_step();
-		// BATTLE → DAMAGE
-		battle_.advance_battle_step();
 
-		// 伤害步骤开始:里侧守备 → 表侧守备
-		auto target_position = domain::Position::FACE_UP_ATTACK;
-		auto target_flipped{false};
-		if (target.has_value())
+		const std::array windows
 		{
-			auto* target_instance = game_.find_instance_mutable(*target);
-
-			const auto placement = target_instance->placement();
-			const auto field_info = domain::field_info_of(placement);
-			if (!field_info.has_value())
-			{
-				return false;
-			}
-
-			target_position = field_info->position;
-			if (target_position == domain::Position::FACE_DOWN_DEFENSE)
-			{
-				target_position = domain::Position::FACE_UP_DEFENSE;
-				target_flipped = true;
-
-				if (std::holds_alternative<domain::ExtraMonsterPlacement>(placement))
+				execution::EventWindow
 				{
-					game_.place(*target_instance, domain::ExtraMonsterPlacement{.column = field_info->column, .position = target_position});
-				}
-				else
-				{
-					game_.place(*target_instance, domain::MonsterPlacement{.column = field_info->column, .position = target_position});
-				}
-			}
-		}
-
-		// START → BEFORE_CALCULATION
-		battle_.advance_damage_step();
-		// BEFORE_CALCULATION → PERFORM_CALCULATION
-		battle_.advance_damage_step();
-
-		// 伤害计算
-		std::optional<state::CardInstanceId> destroy_attacker{};
-		std::optional<state::CardInstanceId> destroy_target{};
-		std::underlying_type_t<domain::AttackDefense> damage_to_opponent = 0;
-		std::underlying_type_t<domain::AttackDefense> damage_to_controller = 0;
-
-		if (!target.has_value())
-		{
-			damage_to_opponent = attacker_attack;
-		}
-		else
-		{
-			const auto* target_instance = game_.find_instance(*target);
-			if (target_instance == nullptr)
-			{
-				return false;
-			}
-
-			if (target_position == domain::Position::FACE_UP_ATTACK)
-			{
-				if (const auto target_attack = card_state_.attack(*target_instance);
-					attacker_attack > target_attack)
-				{
-					destroy_target = *target;
-					damage_to_opponent = attacker_attack - target_attack;
-				}
-				else if (attacker_attack < target_attack)
-				{
-					destroy_attacker = attacker;
-					damage_to_controller = target_attack - attacker_attack;
-				}
-				else
-				{
-					destroy_attacker = attacker;
-					destroy_target = *target;
-				}
-			}
-			else
-			{
-				if (const auto target_defense = card_state_.defense(*target_instance);
-					attacker_attack > target_defense)
-				{
-					destroy_target = *target;
-				}
-				else if (attacker_attack < target_defense)
-				{
-					damage_to_controller = target_defense - attacker_attack;
-				}
-			}
-		}
-
-		// PERFORM_CALCULATION → AFTER_CALCULATION
-		battle_.advance_damage_step();
-		// AFTER_CALCULATION → END
-		battle_.advance_damage_step();
-
-		// 应用破坏与战斗伤害
-		auto target_destroyed{false};
-		auto attacker_destroyed{false};
-		if (destroy_target.has_value())
-		{
-			if (auto* target_instance = game_.find_instance_mutable(*destroy_target);
-				target_instance == nullptr || !card_state_.protections(*target_instance).contains(domain::Protection::BATTLE))
-			{
-				game_.move_to_graveyard(*target_instance, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
-				target_destroyed = true;
-			}
-		}
-		if (destroy_attacker.has_value())
-		{
-			if (auto* attacker_instance = game_.find_instance_mutable(*destroy_attacker);
-				attacker_instance == nullptr || !card_state_.protections(*attacker_instance).contains(domain::Protection::BATTLE))
-			{
-				game_.move_to_graveyard(*attacker_instance, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
-				attacker_destroyed = true;
-			}
-		}
-		if (damage_to_opponent != 0)
-		{
-			game_.change_life_points(opponent, -damage_to_opponent);
-		}
-		if (damage_to_controller != 0)
-		{
-			game_.change_life_points(controller, -damage_to_controller);
-		}
-
-		// DAMAGE → END
-		battle_.advance_battle_step();
-
-		// 翻转效果 → 战斗破坏时点
-		// TODO(战斗时点):目前战斗仍是同步结算,先把每组触发链结算完再进入下一个事件;
-		// 完整窗口(攻击宣言/伤害计算/伤害步骤结束)待战斗流程重构时拆分。
-		if (target_flipped && target.has_value())
-		{
-			trigger_event(dsl::TriggerSource{domain::EventCode::FLIP}, *target);
-			settle_chain();
-		}
-		if (target_destroyed)
-		{
-			trigger_event(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, *destroy_target);
-			settle_chain();
-		}
-		if (attacker_destroyed)
-		{
-			trigger_event(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, attacker);
-			settle_chain();
-		}
-
-		// 战斗已同步处理完,不留下过期时点
-		windows_.clear();
+						.source = dsl::TriggerSource{domain::EventCode::ATTACK_DECLARED},
+						.card = attacker,
+				},
+		};
+		open_timing(windows);
 
 		return true;
 	}

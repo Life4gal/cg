@@ -45,6 +45,26 @@ namespace cg::flow
 			std::vector<state::CardInstanceId> attacked_monsters;
 		};
 
+		// 当前攻击(攻击宣言后持续到伤害步骤结束时点关闭)
+		class AttackState
+		{
+		public:
+			// 攻击怪兽
+			state::CardInstanceId attacker;
+			// 攻击目标(空 = 直接攻击)
+			std::optional<state::CardInstanceId> target;
+			// 伤害计算时目标的表示形式
+			domain::Position target_position = domain::Position::FACE_UP_ATTACK;
+			// 目标是否因攻击翻面
+			bool target_flipped = false;
+			// 伤害计算确定的破坏(实际送墓在伤害步骤结束时)
+			std::optional<state::CardInstanceId> destroy_attacker = std::nullopt;
+			std::optional<state::CardInstanceId> destroy_target = std::nullopt;
+			// 战斗伤害
+			std::underlying_type_t<domain::AttackDefense> damage_to_opponent = 0;
+			std::underlying_type_t<domain::AttackDefense> damage_to_controller = 0;
+		};
+
 	private:
 		// ================================================================
 		// 游戏状态
@@ -59,6 +79,9 @@ namespace cg::flow
 		Turn turn_;
 		Priority priority_;
 		Battle battle_;
+
+		// 当前攻击(空 = 无攻击进行中)
+		std::optional<AttackState> attack_;
 
 		// 当前连锁(空 = 开放状态;下标 0 = Chain Link 1)
 		execution::Chain chain_;
@@ -163,9 +186,6 @@ namespace cg::flow
 		// 结算整条连锁(LIFO)→ 回滚无效发动的次数 → 不能留场的卡送墓 → 开新时点
 		auto resolve_chain() noexcept -> void;
 
-		// 把待结算的连锁全部结算完(战斗等同步流程使用)
-		auto settle_chain() noexcept -> void;
-
 		// 连锁中是否已存在同一张卡的同一效果
 		// - 同一效果一链一次;同一张卡的不同效果可以同链
 		[[nodiscard]] auto contains_duplicated_effect(state::CardInstanceId source, const dsl::Effect* effect) const noexcept -> bool;
@@ -212,6 +232,30 @@ namespace cg::flow
 		// 发动/效果被无效时回滚次数
 		auto unmark_used(const dsl::Effect& effect, const state::CardInstance& card, bool mutex_inserted) noexcept -> void;
 
+		// 卡是否仍在怪兽区(攻击者/目标可用性)
+		[[nodiscard]] auto is_on_field(state::CardInstanceId card) const noexcept -> bool;
+
+		// 推进当前攻击到下一个战斗/伤害步骤,并开启对应时点
+		// - 攻击宣言窗口关闭 → 伤害步骤开始
+		// - 伤害步骤各窗口关闭 → 下一个伤害步骤
+		// - 伤害步骤结束时点关闭 → 清除攻击状态
+		auto advance_battle() noexcept -> void;
+
+		// 开一个无关联卡的事件时点(伤害步骤)
+		auto open_battle_window(dsl::TriggerSource source) noexcept -> void;
+
+		// 攻击结束:清除攻击状态并回到战斗步骤
+		auto clear_attack() noexcept -> void;
+
+		// 目标在伤害步骤开始时翻面并确定表示形式;目标已离场返回 false
+		auto prepare_attack_target(AttackState& attack) noexcept -> bool;
+
+		// 伤害计算;攻击者/目标已离场返回 false
+		auto calculate_battle(AttackState& attack) noexcept -> bool;
+
+		// 伤害步骤结束:送墓,开翻转/战斗破坏/伤害步骤结束时点
+		auto finish_damage_step(AttackState& attack) noexcept -> void;
+
 	public:
 		// 必须注入底层驱动;引擎不自动决策
 		explicit Duel(execution::Selector& selector) noexcept;
@@ -231,6 +275,12 @@ namespace cg::flow
 
 		// [[nodiscard]] auto battle() noexcept -> Battle&;
 		[[nodiscard]] auto battle() const noexcept -> const Battle&;
+
+		// 当前攻击(空 = 无攻击进行中)
+		[[nodiscard]] auto attack() const noexcept -> const std::optional<AttackState>&;
+
+		// 是否有攻击正在进行
+		[[nodiscard]] auto pending_attack() const noexcept -> bool;
 
 		// 当前连锁(空 = 开放状态)
 		[[nodiscard]] auto chain() const noexcept -> const execution::Chain&;

@@ -70,6 +70,15 @@ namespace
 	}
 
 	// 双方放弃优先权后推进阶段
+	// 推进并结算当前攻击,直到伤害步骤结束时点关闭
+	auto resolve_attack(flow::Duel& duel) -> void
+	{
+		while (duel.pending_attack())
+		{
+			duel.pass_priority();
+		}
+	}
+
 	auto advance_phase(flow::Duel& duel) -> bool
 	{
 		settle(duel);
@@ -188,6 +197,7 @@ TEST_CASE("flow::Duel resolves an attack-position battle")
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
 
 	CHECK(duel.declare_attack(attacker, defender));
+	resolve_attack(duel);
 
 	CHECK(game.zone_of(defender) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
@@ -196,11 +206,217 @@ TEST_CASE("flow::Duel resolves an attack-position battle")
 	CHECK(duel.winner() == std::nullopt);
 
 	// 战斗/伤害步骤状态机推进到结束
-	CHECK(duel.battle().battle_step() == domain::BattleStep::END);
+	CHECK_FALSE(duel.pending_attack());
+	CHECK(duel.battle().battle_step() == domain::BattleStep::BATTLE);
 	CHECK_FALSE(duel.battle().is_in_damage_step());
 
 	// 同一怪兽一回合只能攻击一次
 	CHECK_FALSE(duel.declare_attack(attacker, std::nullopt));
+}
+
+TEST_CASE("flow::Duel delays battle resolution until the attack declaration window closes")
+{
+	constexpr domain::CardCode attacker_code{91000030};
+	constexpr domain::CardCode defender_code{91000031};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+	game.register_definition(defender_code, make_monster(defender_code, 800, 1000));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(defender.valid());
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker.valid());
+
+	game.place(*game.find_instance_mutable(defender), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	CHECK(duel.declare_attack(attacker, defender));
+
+	// 攻击宣言时点打开:尚未进行伤害计算,双方都可以响应
+	CHECK(duel.pending_attack());
+	CHECK(duel.battle().battle_step() == domain::BattleStep::BATTLE);
+	CHECK_FALSE(duel.battle().is_in_damage_step());
+	CHECK(game.zone_of(defender) == domain::Zone::MONSTER);
+	CHECK(game.life_points(domain::Player::FIRST) == 8000);
+	CHECK(game.life_points(domain::Player::SECOND) == 8000);
+
+	resolve_attack(duel);
+
+	CHECK_FALSE(duel.pending_attack());
+	CHECK(game.zone_of(defender) == domain::Zone::GRAVEYARD);
+	CHECK(game.life_points(domain::Player::FIRST) == 7800);
+}
+
+TEST_CASE("flow::Duel resolves attack-declaration triggers before damage calculation")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_attack_trigger";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	std::ofstream stream{directory / "97000021.json", std::ios::binary};
+	stream <<
+			R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"EARTH","race":"BEAST","level":4,"attack":800,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"ATTACK_DECLARED"},"timing":"WHEN","optional":false},"effect":[{"call":"destroy","args":{"cards":{"call":"find_cards","args":{"players":["OPPONENT"],"zones":["MONSTER","EXTRA_MONSTER"]}},"reason":"EFFECT"}}]}]})";
+	stream.close();
+
+	constexpr domain::CardCode watcher_code{97000021};
+	constexpr domain::CardCode attacker_code{97000022};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(watcher_code, make_monster(watcher_code, 800, 1000));
+	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto watcher = game.create_instance(watcher_code, domain::Player::FIRST);
+	REQUIRE(watcher.valid());
+	game.place(*game.find_instance_mutable(watcher), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker.valid());
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	CHECK(duel.declare_attack(attacker, watcher));
+
+	// 攻击宣言触发已入链,但效果尚未结算
+	REQUIRE(duel.chain().size() == 1);
+	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
+
+	resolve_attack(duel);
+
+	// 攻击者被触发效果破坏,攻击中止,不进行伤害计算
+	CHECK(game.zone_of(attacker) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(watcher) == domain::Zone::MONSTER);
+	CHECK(game.life_points(domain::Player::FIRST) == 8000);
+	CHECK(game.life_points(domain::Player::SECOND) == 8000);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel sends battle-destroyed monsters at the end of the damage step")
+{
+	constexpr domain::CardCode attacker_code{91000040};
+	constexpr domain::CardCode defender_code{91000041};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+	game.register_definition(defender_code, make_monster(defender_code, 800, 1000));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(defender.valid());
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker.valid());
+
+	game.place(*game.find_instance_mutable(defender), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	CHECK(duel.declare_attack(attacker, defender));
+
+	// 攻击宣言 → 伤害步骤开始
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.pass_priority());
+	CHECK(duel.battle().battle_step() == domain::BattleStep::DAMAGE);
+	CHECK(duel.battle().damage_step() == domain::DamageStep::START);
+
+	// 伤害步骤开始 → 伤害计算前
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.pass_priority());
+	CHECK(duel.battle().damage_step() == domain::DamageStep::BEFORE_CALCULATION);
+
+	// 伤害计算前 → 伤害计算时
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.pass_priority());
+	CHECK(duel.battle().damage_step() == domain::DamageStep::PERFORM_CALCULATION);
+
+	// 伤害计算时 → 伤害计算后:伤害已确定,但破坏尚未送墓
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.pass_priority());
+	CHECK(duel.battle().damage_step() == domain::DamageStep::AFTER_CALCULATION);
+	CHECK(game.zone_of(defender) == domain::Zone::MONSTER);
+	CHECK(game.life_points(domain::Player::FIRST) == 7800);
+
+	// 伤害计算后 → 伤害步骤结束:此时才送墓
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.pass_priority());
+	CHECK(duel.battle().damage_step() == domain::DamageStep::END);
+	CHECK(game.zone_of(defender) == domain::Zone::GRAVEYARD);
+	CHECK(duel.pending_attack());
+
+	// 结束时点关闭,攻击状态清除
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.pass_priority());
+	CHECK_FALSE(duel.pending_attack());
+	CHECK(duel.battle().battle_step() == domain::BattleStep::BATTLE);
+}
+
+TEST_CASE("flow::Duel allows another monster to attack after the first attack ends")
+{
+	constexpr domain::CardCode attacker_code{91000050};
+	constexpr domain::CardCode defender_code{91000051};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+	game.register_definition(defender_code, make_monster(defender_code, 800, 1000));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto defender_a = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(defender_a.valid());
+	const auto defender_b = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(defender_b.valid());
+	const auto attacker_a = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker_a.valid());
+	const auto attacker_b = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker_b.valid());
+
+	game.place(*game.find_instance_mutable(defender_a), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(defender_b), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(attacker_a), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(attacker_b), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	CHECK(duel.declare_attack(attacker_a, defender_a));
+	resolve_attack(duel);
+	CHECK(game.zone_of(defender_a) == domain::Zone::GRAVEYARD);
+
+	// 第一次攻击结束后回到战斗步骤,另一只怪兽可以继续攻击
+	CHECK(duel.battle().battle_step() == domain::BattleStep::BATTLE);
+	CHECK(duel.declare_attack(attacker_b, defender_b));
+	resolve_attack(duel);
+
+	CHECK(game.zone_of(defender_b) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(attacker_a) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(attacker_b) == domain::Zone::MONSTER);
+	CHECK(game.life_points(domain::Player::FIRST) == 7600);
 }
 
 TEST_CASE("flow::Duel resolves a defense-position battle")
@@ -229,6 +445,7 @@ TEST_CASE("flow::Duel resolves a defense-position battle")
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
 
 	CHECK(duel.declare_attack(attacker, defender));
+	resolve_attack(duel);
 
 	// 守备力更高:攻击方不破坏,受到差值伤害
 	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
@@ -258,6 +475,7 @@ TEST_CASE("flow::Duel direct attack and winner")
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
 
 	CHECK(duel.declare_attack(attacker, std::nullopt));
+	resolve_attack(duel);
 
 	CHECK(game.life_points(domain::Player::FIRST) == 0);
 	CHECK(duel.winner() == domain::Player::SECOND);
@@ -289,6 +507,7 @@ TEST_CASE("flow::Duel flips a face-down defender before damage calculation")
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
 
 	CHECK(duel.declare_attack(attacker, defender));
+	resolve_attack(duel);
 
 	// 里侧守备被翻面后因守备力较低被破坏,且不造成战斗伤害
 	CHECK(game.zone_of(defender) == domain::Zone::GRAVEYARD);
@@ -495,6 +714,7 @@ TEST_CASE("flow::Duel applies static modifiers in battle")
 
 	// 龙族 1000 + Mountain 200 = 1200 > 战士 1000
 	CHECK(duel.declare_attack(attacker, defender));
+	resolve_attack(duel);
 
 	CHECK(game.zone_of(defender) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
@@ -782,6 +1002,7 @@ TEST_CASE("flow::Duel keeps battle-protected monsters")
 
 	// 攻击力差仍造成战斗伤害,但被保护的怪物不会被战斗破坏
 	CHECK(duel.declare_attack(attacker, defender));
+	resolve_attack(duel);
 
 	CHECK(game.zone_of(defender) == domain::Zone::MONSTER);
 	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
@@ -834,6 +1055,7 @@ TEST_CASE("flow::Duel lets the driver choose battle destruction triggers")
 	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
 
 	CHECK(duel.declare_attack(attacker, rat));
+	resolve_attack(duel);
 
 	// 战破后 Giant Rat 的选发触发由驱动选择并结算
 	CHECK(game.zone_of(rat) == domain::Zone::GRAVEYARD);
