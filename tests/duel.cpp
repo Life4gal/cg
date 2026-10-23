@@ -79,6 +79,18 @@ namespace
 		}
 	}
 
+	// 推进到指定伤害步骤(测试无触发/连锁的战斗)
+	auto advance_to_damage_step(flow::Duel& duel, const domain::DamageStep step) -> void
+	{
+		while (
+			duel.pending_attack() &&
+			(duel.battle().battle_step() != domain::BattleStep::DAMAGE || duel.battle().damage_step() != step)
+		)
+		{
+			duel.pass_priority();
+		}
+	}
+
 	auto advance_phase(flow::Duel& duel) -> bool
 	{
 		settle(duel);
@@ -417,6 +429,173 @@ TEST_CASE("flow::Duel allows another monster to attack after the first attack en
 	CHECK(game.zone_of(attacker_a) == domain::Zone::MONSTER);
 	CHECK(game.zone_of(attacker_b) == domain::Zone::MONSTER);
 	CHECK(game.life_points(domain::Player::FIRST) == 7600);
+}
+
+TEST_CASE("flow::Duel enforces damage-step activation categories")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_damage_step_properties";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	std::ofstream stream{directory / "97000041.json", std::ios::binary};
+	stream <<
+			R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]},{"type":"activated","activation":{"mode":"quick"},"properties":["ATK_DEF_CHANGE"],"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]},{"type":"activated","activation":{"mode":"quick"},"properties":["DAMAGE_CALCULATION"],"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]},{"type":"activated","activation":{"mode":"quick"},"properties":["ACTIVATION_NEGATE"],"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})";
+	stream.close();
+
+	constexpr domain::CardCode quick_code{97000041};
+	constexpr domain::CardCode attacker_code{97000042};
+	constexpr domain::CardCode defender_code{97000043};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(quick_code, make_monster(quick_code, 1000, 1000));
+	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+	game.register_definition(defender_code, make_monster(defender_code, 1000, 1000));
+
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto quick = game.create_instance(quick_code, domain::Player::FIRST);
+	REQUIRE(quick.valid());
+	game.place(*game.find_instance_mutable(quick), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(defender.valid());
+	game.place(*game.find_instance_mutable(defender), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker.valid());
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	CHECK(duel.declare_attack(attacker, defender));
+	advance_to_damage_step(duel, domain::DamageStep::BEFORE_CALCULATION);
+	REQUIRE(duel.battle().battle_step() == domain::BattleStep::DAMAGE);
+	REQUIRE(duel.battle().damage_step() == domain::DamageStep::BEFORE_CALCULATION);
+
+	// 让非回合玩家(FIRST)获得优先权
+	CHECK_FALSE(duel.pass_priority());
+
+	// 无属性:伤害步骤内不可发动
+	CHECK_FALSE(duel.activate_effect(quick, 0));
+	CHECK(duel.chain().empty());
+
+	// ATK/DEF 变化:伤害计算前可发动
+	CHECK(duel.activate_effect(quick, 1));
+	CHECK(duel.chain().size() == 1);
+	settle(duel);
+	CHECK(game.life_points(domain::Player::SECOND) == 7500);
+
+	// 明确「伤害计算时」:伤害计算前不可发动
+	CHECK_FALSE(duel.pass_priority());
+	CHECK_FALSE(duel.activate_effect(quick, 2));
+
+	// 进入伤害计算时
+	advance_to_damage_step(duel, domain::DamageStep::PERFORM_CALCULATION);
+	REQUIRE(duel.battle().damage_step() == domain::DamageStep::PERFORM_CALCULATION);
+
+	CHECK_FALSE(duel.pass_priority());
+
+	// ATK/DEF 变化在伤害计算时起不可发动
+	CHECK_FALSE(duel.activate_effect(quick, 1));
+
+	// 明确「伤害计算时」在此时可发动
+	CHECK(duel.activate_effect(quick, 2));
+	settle(duel);
+	CHECK(game.life_points(domain::Player::SECOND) == 7000);
+
+	// 无效「发动」类:伤害计算后仍可发动
+	advance_to_damage_step(duel, domain::DamageStep::AFTER_CALCULATION);
+	REQUIRE(duel.battle().damage_step() == domain::DamageStep::AFTER_CALCULATION);
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.activate_effect(quick, 3));
+	settle(duel);
+	CHECK(game.life_points(domain::Player::SECOND) == 6500);
+
+	resolve_attack(duel);
+
+	CHECK(game.zone_of(attacker) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(defender) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(quick) == domain::Zone::MONSTER);
+	CHECK(game.life_points(domain::Player::FIRST) == 8000);
+	CHECK(game.life_points(domain::Player::SECOND) == 6500);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel allows Counter Traps in the damage step")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_damage_step_counter";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	std::ofstream stream{directory / "97000051.json", std::ios::binary};
+	stream <<
+			R"({"identity":{"kind":"TRAP","subtypes":["COUNTER"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"effect":[]}]})";
+	stream.close();
+
+	constexpr domain::CardCode counter_code{97000051};
+	constexpr domain::CardCode attacker_code{97000052};
+	constexpr domain::CardCode defender_code{97000053};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(counter_code, make_trap(counter_code, {domain::CardSubtype::COUNTER}));
+	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+	game.register_definition(defender_code, make_monster(defender_code, 1000, 1000));
+
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto counter = game.create_instance(counter_code, domain::Player::FIRST);
+	REQUIRE(counter.valid());
+	game.place(*game.find_instance_mutable(counter), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(defender.valid());
+	game.place(*game.find_instance_mutable(defender), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker.valid());
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	// 第一回合盖放,第二回合发动
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.set_spell_trap(counter, domain::FieldColumn::C1));
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(advance_phase(duel)); // BATTLE
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	CHECK(duel.declare_attack(attacker, defender));
+	advance_to_damage_step(duel, domain::DamageStep::BEFORE_CALCULATION);
+	REQUIRE(duel.battle().damage_step() == domain::DamageStep::BEFORE_CALCULATION);
+
+	CHECK_FALSE(duel.pass_priority());
+
+	// Counter Trap 在伤害步骤内可发动
+	CHECK(duel.activate_card(counter));
+	CHECK(duel.chain().size() == 1);
+	settle(duel);
+	CHECK(game.zone_of(counter) == domain::Zone::GRAVEYARD);
+
+	resolve_attack(duel);
+	CHECK(game.zone_of(attacker) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(defender) == domain::Zone::GRAVEYARD);
+
+	std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("flow::Duel resolves a defense-position battle")

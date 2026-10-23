@@ -1915,7 +1915,7 @@ namespace cg::dsl::json
 				return std::nullopt;
 			}
 
-			// usage和mutex属于EffectBody,但是不在EffectBody中解析
+			// usage/properties/mutex属于EffectBody,但是不在EffectBody中解析
 
 			std::optional<UsageRestriction> usage;
 			if (const auto it = item.find("usage");
@@ -1965,6 +1965,21 @@ namespace cg::dsl::json
 				mutex_index = v;
 			}
 
+			utility::EnumMask<EffectProperty> properties{};
+			if (const auto it = item.find("properties");
+				it != item.end())
+			{
+				auto properties_path = std::format("{}.properties", item_path);
+
+				auto parsed = read_effect_properties(it.value(), properties_path);
+				if (!parsed.has_value())
+				{
+					return std::nullopt;
+				}
+
+				properties = *parsed;
+			}
+
 			// TODO: EffectId如何设计?是全局ID,还是卡牌内效果ID?
 			EffectId id{static_cast<EffectId::value_type>(index)};
 
@@ -1979,11 +1994,11 @@ namespace cg::dsl::json
 				}
 
 				const auto mutex = *target_effect.mutex;
-				list.emplace_back(id, *std::move(body), usage, mutex);
+				list.emplace_back(id, *std::move(body), usage, mutex, properties);
 			}
 			else
 			{
-				list.emplace_back(id, *std::move(body), usage);
+				list.emplace_back(id, *std::move(body), usage, std::nullopt, properties);
 			}
 		}
 
@@ -2040,9 +2055,9 @@ namespace cg::dsl::json
 		LIBASSERT_DEBUG_ASSERT(json.contains("type") && json.at("type").is_string() && json.at("type").get_ref<const nlohmann::json::string_t&>() == "activated");
 		LIBASSERT_DEBUG_ASSERT(types_.get().contains("bool"));
 
-		if (!only_specified_keys(json, {"type", "activation", "zones", "condition", "cost", "target", "effect", "usage", "mutex"}))
+		if (!only_specified_keys(json, {"type", "activation", "zones", "condition", "cost", "target", "effect", "usage", "mutex", "properties"}))
 		{
-			fail(path, "activated effect allows only `type` / `activation` / `zones` / `condition` / `cost` / `target` / `effect` / `usage` / `mutex`");
+			fail(path, "activated effect allows only `type` / `activation` / `zones` / `condition` / `cost` / `target` / `effect` / `usage` / `mutex` / `properties`");
 			return std::nullopt;
 		}
 
@@ -2666,6 +2681,39 @@ namespace cg::dsl::json
 		}
 
 		return UsageRestriction{.kind = *kind, .count = count, .verb = verb};
+	}
+
+	auto Reader::read_effect_properties(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<utility::EnumMask<EffectProperty>>
+	{
+		if (!json.is_array())
+		{
+			fail(path, "must be an array");
+			return std::nullopt;
+		}
+
+		utility::EnumMask<EffectProperty> result{};
+		for (const auto [index, item]: json | std::views::enumerate)
+		{
+			auto item_path = std::format("{}[{}]", path, index);
+
+			if (!item.is_string())
+			{
+				fail(std::move(item_path), "must be a string");
+				return std::nullopt;
+			}
+
+			const auto& text = item.get_ref<const nlohmann::json::string_t&>();
+			const auto property = utility::from_string<EffectProperty>(text);
+			if (!property.has_value())
+			{
+				fail(std::move(item_path), std::format("unknown effect property `{}`", text));
+				return std::nullopt;
+			}
+
+			result.add_with(*property);
+		}
+
+		return result;
 	}
 
 	Reader::Reader(const TypeRegistry& types, const Vocabulary& vocabulary) noexcept

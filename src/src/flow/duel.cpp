@@ -303,6 +303,51 @@ namespace cg::flow
 		);
 	}
 
+	auto Duel::can_activate_in_damage_step(const state::CardInstance& card, const dsl::Effect* effect) const noexcept -> bool
+	{
+		if (!battle_.is_in_damage_step())
+		{
+			return true;
+		}
+
+		// Counter Trap 在伤害步骤内不受限制
+		if (card_state_.is_card_type(card, domain::CardType::TRAP) &&
+		    card_state_.is_card_subtype(card, domain::CardSubtype::COUNTER))
+		{
+			return true;
+		}
+
+		if (effect == nullptr || effect->properties.empty())
+		{
+			return false;
+		}
+
+		const auto& properties = effect->properties;
+		const auto damage_step = battle_.damage_step();
+
+		// 无效「发动」的快速效果:任意伤害步骤窗口
+		if (properties.contains(dsl::EffectProperty::ACTIVATION_NEGATE))
+		{
+			return true;
+		}
+
+		// 明确「伤害计算时」:仅伤害计算窗口
+		if (properties.contains(dsl::EffectProperty::DAMAGE_CALCULATION))
+		{
+			return damage_step == domain::DamageStep::PERFORM_CALCULATION;
+		}
+
+		// 直接改变 ATK/DEF:仅伤害步骤开始 / 伤害计算前
+		if (properties.contains(dsl::EffectProperty::ATK_DEF_CHANGE))
+		{
+			return damage_step == domain::DamageStep::START ||
+			       damage_step == domain::DamageStep::BEFORE_CALCULATION;
+		}
+
+		// 卡片文本明确允许伤害步骤:具体窗口由脚本负责
+		return properties.contains(dsl::EffectProperty::DAMAGE_STEP);
+	}
+
 	auto Duel::summonable_instance_of(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement) noexcept -> state::CardInstance*
 	{
 		// 连锁中只能发动效果,不能进行召唤等行动
@@ -1527,6 +1572,12 @@ namespace cg::flow
 			return false;
 		}
 
+		if (!can_activate_in_damage_step(*instance, activated_effect))
+		{
+			// 伤害步骤内该卡/效果不属于可发动类别
+			return false;
+		}
+
 		// 同一效果不能在同一连锁上重复发动;不同效果可以
 		if (contains_duplicated_effect(card, activated_effect))
 		{
@@ -1823,6 +1874,12 @@ namespace cg::flow
 		else if (!std::holds_alternative<dsl::Quick>(activated->activation))
 		{
 			// 卡发动/诱发效果不可手动激活
+			return false;
+		}
+
+		if (!can_activate_in_damage_step(*instance, &effect))
+		{
+			// 伤害步骤内该效果不属于可发动类别
 			return false;
 		}
 

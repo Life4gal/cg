@@ -199,6 +199,9 @@ namespace cg::flow
 		// 结算后是否留在场上(通常魔法/陷阱送墓;永续/场地/装备留场)
 		[[nodiscard]] auto can_stay_on_field(const state::CardInstance& card) const noexcept -> bool;
 
+		// 伤害步骤内是否允许手动发动该效果(不含自动收集的诱发效果)
+		[[nodiscard]] auto can_activate_in_damage_step(const state::CardInstance& card, const dsl::Effect* effect) const noexcept -> bool;
+
 		// 如果当前可以召唤且指定位置为空,返回对应实例,否则返回空指针
 		// - 检查是否是合适阶段(主要阶段1或者主要阶段2)
 		// - 检查卡牌控制者是当前回合玩家

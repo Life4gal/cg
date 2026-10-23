@@ -120,6 +120,7 @@ namespace cg::dsl::json
 		[[nodiscard]] auto read_static_effect_modifier(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<StaticModifier>;
 
 		[[nodiscard]] auto read_effect_usage_restriction(const nlohmann::json::const_iterator& usage, std::string_view path) noexcept -> std::optional<UsageRestriction>;
+		[[nodiscard]] auto read_effect_properties(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<utility::EnumMask<EffectProperty>>;
 
 	public:
 		Reader(const TypeRegistry& types, const Vocabulary& vocabulary) noexcept;

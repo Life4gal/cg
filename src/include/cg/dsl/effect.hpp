@@ -105,6 +105,22 @@ namespace cg::dsl
 	};
 
 	// ===========================================
+	// 效果属性(伤害步骤可发动性等)
+	// ===========================================
+
+	enum class EffectProperty : std::uint8_t
+	{
+		// 卡片文本明确允许在伤害步骤发动(具体窗口由脚本的时点负责)
+		DAMAGE_STEP,
+		// 在伤害计算时发动(仅 PERFORM_CALCULATION 窗口)
+		DAMAGE_CALCULATION,
+		// 直接改变怪兽的攻击力/守备力(仅 START / BEFORE_CALCULATION 窗口)
+		ATK_DEF_CHANGE,
+		// 无效卡片/效果的发动(伤害步骤内任意窗口)
+		ACTIVATION_NEGATE,
+	};
+
+	// ===========================================
 	// 发动类效果
 	// ===========================================
 
@@ -174,6 +190,8 @@ namespace cg::dsl
 		std::optional<UsageRestriction> usage;
 		// 互斥组代表(按卡名、按回合)
 		std::optional<EffectId> mutex;
+		// 效果属性(伤害步骤可发动性等)
+		utility::EnumMask<EffectProperty> properties;
 
 		[[nodiscard]] auto operator==(const Effect&) const -> bool = default;
 	};
