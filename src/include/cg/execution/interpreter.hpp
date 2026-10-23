@@ -112,8 +112,6 @@ namespace cg::execution
 		[[nodiscard]] auto negate_activation(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 		[[nodiscard]] auto negate_effect(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 
-		[[nodiscard]] auto filter(Context& context, const dsl::Expression& predicate, const Group& candidates) noexcept -> std::optional<Group>;
-
 	public:
 		explicit Interpreter(const dsl::Vocabulary& vocabulary) noexcept;
 
@@ -123,6 +121,9 @@ namespace cg::execution
 
 		// 取出并清空结算过程中产生的事件
 		[[nodiscard]] auto take_events() noexcept -> PendingEventList;
+
+		// 用当前上下文筛选候选卡;`$` 绑定候选(召唤素材等)
+		[[nodiscard]] auto filter(const dsl::Expression& predicate, const Group& candidates, Context& context) noexcept -> std::optional<Group>;
 
 		// 触发效果是否匹配当前事件(触发源 + 触发时条件)
 		[[nodiscard]] auto matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool;

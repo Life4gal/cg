@@ -188,8 +188,15 @@ namespace cg::flow
 		// 返回是否建立了连锁
 		auto open_timing(std::span<const execution::EventWindow> windows) noexcept -> bool;
 
+		// 结算后统一处理 Interpreter 产生的事件(破坏/特召等)
+		auto process_pending_events() noexcept -> void;
+
 		// 结算整条连锁(LIFO)→ 回滚无效发动的次数 → 不能留场的卡送墓 → 开新时点
 		auto resolve_chain() noexcept -> void;
+
+		// ================================================================
+		// 效果/发动合法性
+		// ================================================================
 
 		// 连锁中是否已存在同一张卡的同一效果
 		// - 同一效果一链一次;同一张卡的不同效果可以同链
@@ -206,6 +213,41 @@ namespace cg::flow
 
 		// 伤害步骤内是否允许手动发动该效果(不含自动收集的诱发效果)
 		[[nodiscard]] auto can_activate_in_damage_step(const state::CardInstance& card, const dsl::Effect* effect) const noexcept -> bool;
+
+		// ================================================================
+		// 召唤校验
+		// ================================================================
+
+		// 查找卡脚本中对应召唤方式的 procedure(空 = 无 procedure,不可召唤)
+		[[nodiscard]] auto find_summon_procedure(const state::CardInstance& card, domain::SummonMethod method) const noexcept -> const dsl::SummonProcedure*;
+
+		// 素材共同校验:非自身、不重复、同控制者、怪兽区、表侧表示
+		[[nodiscard]] auto all_summon_materials_valid(const state::CardInstance& card, std::span<const state::CardInstanceId> materials) const noexcept -> bool;
+
+		// 用 procedure 的素材谓词筛选素材($ = 候选)
+		[[nodiscard]] auto match_summon_materials(
+			const state::CardInstance& card,
+			const dsl::Expression& predicate,
+			std::span<const state::CardInstanceId> materials
+		) noexcept -> std::optional<execution::Group>;
+
+		// 同调:至少 2 素材;tuner/non_tuner 谓词各命中且可用不同素材;等级合计 = 目标
+		[[nodiscard]] auto validate_synchro_materials(
+			const state::CardInstance& card,
+			const dsl::SynchroProcedure& procedure,
+			std::span<const state::CardInstanceId> materials
+		) noexcept -> bool;
+
+		// 超量:素材数 = procedure.count(0 = 至少 2);全部素材命中谓词;等级一致且 = 目标
+		[[nodiscard]] auto validate_xyz_materials(
+			const state::CardInstance& summon_card,
+			const dsl::XyzProcedure& procedure,
+			std::span<const state::CardInstanceId> materials
+		) noexcept -> bool;
+
+		// ================================================================
+		// 召唤动作
+		// ================================================================
 
 		// 如果当前可以召唤且指定位置为空,返回对应实例,否则返回空指针
 		// - 检查是否是合适阶段(主要阶段1或者主要阶段2)
@@ -224,8 +266,9 @@ namespace cg::flow
 		auto perform_normal_summon(state::CardInstanceId card, domain::MonsterPlacement placement) noexcept -> bool;
 		auto perform_tribute_summon(state::CardInstanceId card, domain::MonsterPlacement placement, std::span<const state::CardInstanceId> tributes) noexcept -> bool;
 
-		// 结算后统一处理 Interpreter 产生的事件(破坏/特召等)
-		auto process_pending_events() noexcept -> void;
+		// ================================================================
+		// 使用限制/互斥
+		// ================================================================
 
 		// 使用限制相关
 		[[nodiscard]] auto usage_owner(dsl::UsageKind kind, const state::CardInstance& card) const noexcept -> UsageKey::owner_type;
@@ -239,6 +282,10 @@ namespace cg::flow
 		auto mark_used(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> bool;
 		// 发动/效果被无效时回滚次数
 		auto unmark_used(const dsl::Effect& effect, const state::CardInstance& card, bool mutex_inserted) noexcept -> void;
+
+		// ================================================================
+		// 战斗/伤害步骤
+		// ================================================================
 
 		// 卡是否仍在怪兽区(攻击者/目标可用性)
 		[[nodiscard]] auto is_on_field(state::CardInstanceId card) const noexcept -> bool;

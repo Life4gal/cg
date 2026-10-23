@@ -1586,7 +1586,7 @@ namespace cg::dsl::json
 		}
 		else if (has_filter)
 		{
-			auto filter = read_expression(filter_it.value(), types_.get().find("bool")->id, filter_path);
+			auto filter = read_summon_material_expression(filter_it.value(), filter_path);
 			if (!filter.has_value())
 			{
 				return std::nullopt;
@@ -1648,12 +1648,12 @@ namespace cg::dsl::json
 			return std::nullopt;
 		}
 
-		auto tuner = read_expression(tuner_it.value(), types_.get().find("bool")->id, tuner_path);
+		auto tuner = read_summon_material_expression(tuner_it.value(), tuner_path);
 		if (!tuner.has_value())
 		{
 			return std::nullopt;
 		}
-		auto non_tuner = read_expression(non_tuner_it.value(), types_.get().find("bool")->id, non_tuner_path);
+		auto non_tuner = read_summon_material_expression(non_tuner_it.value(), non_tuner_path);
 		if (!non_tuner.has_value())
 		{
 			return std::nullopt;
@@ -1682,7 +1682,7 @@ namespace cg::dsl::json
 			fail(path, "xyz requires `material`");
 			return std::nullopt;
 		}
-		auto material = read_expression(material_it.value(), types_.get().find("bool")->id, material_path);
+		auto material = read_summon_material_expression(material_it.value(), material_path);
 		if (!material.has_value())
 		{
 			return std::nullopt;
@@ -1733,7 +1733,7 @@ namespace cg::dsl::json
 			fail(path, "link requires `material`");
 			return std::nullopt;
 		}
-		auto material = read_expression(material_it.value(), types_.get().find("bool")->id, material_path);
+		auto material = read_summon_material_expression(material_it.value(), material_path);
 		if (!material.has_value())
 		{
 			return std::nullopt;
@@ -1787,7 +1787,7 @@ namespace cg::dsl::json
 			return std::nullopt;
 		}
 
-		auto material = read_expression(material_it.value(), types_.get().find("bool")->id, material_path);
+		auto material = read_summon_material_expression(material_it.value(), material_path);
 		if (!material.has_value())
 		{
 			return std::nullopt;
@@ -1889,6 +1889,17 @@ namespace cg::dsl::json
 		}
 
 		return SelfSpecialProcedure{.condition = std::move(condition), .cost = std::move(cost), .source_zones = source_zones};
+	}
+
+	auto Reader::read_summon_material_expression(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<Expression>
+	{
+		LIBASSERT_DEBUG_ASSERT(types_.get().contains("bool") && types_.get().contains("card"));
+
+		element_scopes_.push_back(types_.get().find("card")->id);
+		auto result = read_expression(json, types_.get().find("bool")->id, path);
+		element_scopes_.pop_back();
+
+		return result;
 	}
 
 	auto Reader::read_effect_list(

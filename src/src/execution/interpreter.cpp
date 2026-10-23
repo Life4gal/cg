@@ -212,6 +212,24 @@ namespace cg::execution
 		}
 	}
 
+	Interpreter::Evaluator::Evaluator(Interpreter& interpreter) noexcept
+		: interpreter_{interpreter} {}
+
+	auto Interpreter::Evaluator::evaluate_list(const dsl::ExpressionList& expressions, Context& context) const noexcept -> std::optional<std::vector<Value>>
+	{
+		return interpreter_.get().evaluate_list(expressions, context);
+	}
+
+	auto Interpreter::Evaluator::evaluate_scoped(const dsl::Expression& expression, const state::CardInstanceId element, Context& context) const noexcept -> std::optional<Value>
+	{
+		return interpreter_.get().evaluate_scoped(expression, element, context);
+	}
+
+	auto Interpreter::Evaluator::evaluate(const dsl::Expression& expression, Context& context) const noexcept -> std::optional<Value>
+	{
+		return interpreter_.get().evaluate(expression, context);
+	}
+
 	auto Interpreter::evaluate_arguments(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<std::vector<std::optional<Value>>>
 	{
 		std::vector<std::optional<Value>> values{};
@@ -677,7 +695,7 @@ namespace cg::execution
 
 		if (call.args.size() > 2)
 		{
-			auto filtered = filter(context, call.args[2], candidates);
+			auto filtered = filter(call.args[2], candidates, context);
 			if (!filtered.has_value())
 			{
 				return std::nullopt;
@@ -709,7 +727,7 @@ namespace cg::execution
 
 		if (call.args.size() > 3)
 		{
-			auto filtered = filter(context, call.args[3], candidates);
+			auto filtered = filter(call.args[3], candidates, context);
 			if (!filtered.has_value())
 			{
 				return std::nullopt;
@@ -742,7 +760,7 @@ namespace cg::execution
 
 		if (call.args.size() > 4)
 		{
-			auto filtered = filter(context, call.args[4], candidates);
+			auto filtered = filter(call.args[4], candidates, context);
 			if (!filtered.has_value())
 			{
 				return std::nullopt;
@@ -751,7 +769,7 @@ namespace cg::execution
 			candidates = *std::move(filtered);
 		}
 
-		const auto selected = select(context, candidates, static_cast<std::size_t>(*min), static_cast<std::size_t>(*max));
+		auto selected = select(context, candidates, static_cast<std::size_t>(*min), static_cast<std::size_t>(*max));
 		if (!selected.has_value())
 		{
 			return std::nullopt;
@@ -1531,7 +1549,15 @@ namespace cg::execution
 		return Value{Void{}};
 	}
 
-	auto Interpreter::filter(Context& context, const dsl::Expression& predicate, const Group& candidates) noexcept -> std::optional<Group>
+	Interpreter::Interpreter(const dsl::Vocabulary& vocabulary) noexcept
+		: vocabulary_{vocabulary} {}
+
+	auto Interpreter::take_events() noexcept -> PendingEventList
+	{
+		return std::exchange(pending_events_, {});
+	}
+
+	auto Interpreter::filter(const dsl::Expression& predicate, const Group& candidates, Context& context) noexcept -> std::optional<Group>
 	{
 		Group result{};
 		result.reserve(candidates.size());
@@ -1557,32 +1583,6 @@ namespace cg::execution
 		}
 
 		return result;
-	}
-
-	Interpreter::Interpreter(const dsl::Vocabulary& vocabulary) noexcept
-		: vocabulary_{vocabulary} {}
-
-	auto Interpreter::take_events() noexcept -> PendingEventList
-	{
-		return std::exchange(pending_events_, {});
-	}
-
-	Interpreter::Evaluator::Evaluator(Interpreter& interpreter) noexcept
-		: interpreter_{interpreter} {}
-
-	auto Interpreter::Evaluator::evaluate_list(const dsl::ExpressionList& expressions, Context& context) const noexcept -> std::optional<std::vector<Value>>
-	{
-		return interpreter_.get().evaluate_list(expressions, context);
-	}
-
-	auto Interpreter::Evaluator::evaluate_scoped(const dsl::Expression& expression, const state::CardInstanceId element, Context& context) const noexcept -> std::optional<Value>
-	{
-		return interpreter_.get().evaluate_scoped(expression, element, context);
-	}
-
-	auto Interpreter::Evaluator::evaluate(const dsl::Expression& expression, Context& context) const noexcept -> std::optional<Value>
-	{
-		return interpreter_.get().evaluate(expression, context);
 	}
 
 	auto Interpreter::matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool

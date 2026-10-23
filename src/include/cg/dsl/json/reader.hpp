@@ -102,6 +102,9 @@ namespace cg::dsl::json
 		[[nodiscard]] auto read_summon_ritual_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<RitualProcedure>;
 		[[nodiscard]] auto read_summon_self_special_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<SelfSpecialProcedure>;
 
+		// 素材谓词:以 `card` 作为 `$` 的作用域类型读取 bool 表达式
+		[[nodiscard]] auto read_summon_material_expression(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<Expression>;
+
 		// =====================================================================================
 		// dsl::CardScript::effects
 		// =====================================================================================

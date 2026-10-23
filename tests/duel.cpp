@@ -833,12 +833,18 @@ TEST_CASE("flow::Duel tribute summons a level 5 monster")
 	REQUIRE(high.valid());
 	const auto tribute = game.create_instance(low_code, domain::Player::FIRST);
 	REQUIRE(tribute.valid());
+	const auto low_hand = game.create_instance(low_code, domain::Player::FIRST);
+	REQUIRE(low_hand.valid());
 
 	game.place(*game.find_instance_mutable(high), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(low_hand), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
 	game.place(*game.find_instance_mutable(tribute), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
 
 	// 等级 5 不能直接通常召唤
 	CHECK_FALSE(duel.normal_summon(high, domain::FieldColumn::C2));
+
+	// 等级 4 不是上级召唤,不能以 0 祭品走 tribute_summon
+	CHECK_FALSE(duel.tribute_summon(low_hand, domain::FieldColumn::C3, std::span<const state::CardInstanceId>{}));
 
 	const std::array tributes{tribute};
 	CHECK(duel.tribute_summon(high, domain::FieldColumn::C2, tributes));
@@ -1178,14 +1184,47 @@ TEST_CASE("flow::CardStateResolver applies static discrete properties")
 	std::filesystem::remove_all(directory);
 }
 
-TEST_CASE("flow::Duel performs Synchro and Xyz summons")
+TEST_CASE("flow::Duel validates Synchro and Xyz summon procedures")
 {
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_synchro_xyz";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	// 合法同调:调整 + 通常怪兽,等级合计 8
+	write(
+		"99600003.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["SYNCHRO"],"monster":{"attribute":"EARTH","race":"DRAGON","level":8,"attack":2500,"defense":2000}},"summons":[{"method":"synchro","tuner":{"call":"is_card_subtype","args":{"card":"$","subtype":"TUNER"}},"non_tuner":{"call":"is_card_subtype","args":{"card":"$","subtype":"NORMAL"}}}]})"
+	);
+	// 受限同调:要求 non_tuner 为 EFFECT;测试素材中的通常怪兽不满足
+	write(
+		"99600007.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["SYNCHRO"],"monster":{"attribute":"EARTH","race":"DRAGON","level":8,"attack":2500,"defense":2000}},"summons":[{"method":"synchro","tuner":{"call":"is_card_subtype","args":{"card":"$","subtype":"TUNER"}},"non_tuner":{"call":"is_card_subtype","args":{"card":"$","subtype":"EFFECT"}}}]})"
+	);
+	// 合法超量:2 只怪兽,同等级 4
+	write(
+		"99600004.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["XYZ"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"xyz","material":{"call":"is_card_type","args":{"card":"$","card_type":"MONSTER"}},"count":2}]})"
+	);
+	// 受限超量:要求素材为 TUNER;测试素材不满足
+	write(
+		"99600008.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["XYZ"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"xyz","material":{"call":"is_card_subtype","args":{"card":"$","subtype":"TUNER"}},"count":2}]})"
+	);
+
 	constexpr domain::CardCode tuner_code{99600001};
 	constexpr domain::CardCode non_tuner_code{99600002};
 	constexpr domain::CardCode synchro_code{99600003};
 	constexpr domain::CardCode xyz_code{99600004};
 	constexpr domain::CardCode material_a_code{99600005};
 	constexpr domain::CardCode material_b_code{99600006};
+	constexpr domain::CardCode synchro_restricted_code{99600007};
+	constexpr domain::CardCode xyz_restricted_code{99600008};
 
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
@@ -1199,6 +1238,10 @@ TEST_CASE("flow::Duel performs Synchro and Xyz summons")
 	xyz.subtypes = {domain::CardSubtype::XYZ};
 	auto material_a = make_monster(material_a_code, 1000, 1000, 4);
 	auto material_b = make_monster(material_b_code, 1000, 1000, 4);
+	auto synchro_restricted = make_monster(synchro_restricted_code, 2500, 2000, 8);
+	synchro_restricted.subtypes = {domain::CardSubtype::SYNCHRO};
+	auto xyz_restricted = make_monster(xyz_restricted_code, 2000, 2000, 4);
+	xyz_restricted.subtypes = {domain::CardSubtype::XYZ};
 
 	game.register_definition(tuner_code, tuner);
 	game.register_definition(non_tuner_code, non_tuner);
@@ -1206,6 +1249,10 @@ TEST_CASE("flow::Duel performs Synchro and Xyz summons")
 	game.register_definition(xyz_code, xyz);
 	game.register_definition(material_a_code, material_a);
 	game.register_definition(material_b_code, material_b);
+	game.register_definition(synchro_restricted_code, synchro_restricted);
+	game.register_definition(xyz_restricted_code, xyz_restricted);
+
+	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -1229,25 +1276,47 @@ TEST_CASE("flow::Duel performs Synchro and Xyz summons")
 	const auto xyz_card = game.create_instance(xyz_code, domain::Player::FIRST);
 	REQUIRE(xyz_card.valid());
 	game.place(*game.find_instance_mutable(xyz_card), domain::ExtraDeckPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+	const auto synchro_restricted_card = game.create_instance(synchro_restricted_code, domain::Player::FIRST);
+	REQUIRE(synchro_restricted_card.valid());
+	game.place(*game.find_instance_mutable(synchro_restricted_card), domain::ExtraDeckPlacement{.index = 2, .position = domain::Position::FACE_DOWN_DEFENSE});
+	const auto xyz_restricted_card = game.create_instance(xyz_restricted_code, domain::Player::FIRST);
+	REQUIRE(xyz_restricted_card.valid());
+	game.place(*game.find_instance_mutable(xyz_restricted_card), domain::ExtraDeckPlacement{.index = 3, .position = domain::Position::FACE_DOWN_DEFENSE});
 
 	advance_phase(duel); // STANDBY
 	advance_phase(duel); // MAIN_1
 	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
 
 	const std::array synchro_materials{tuner_card, non_tuner_card};
+	const std::array xyz_materials{material_a_card, material_b_card};
+
+	// 硬编码规则会接受这些素材,但脚本 procedure 的素材谓词不满足
+	CHECK_FALSE(duel.synchro_summon(synchro_restricted_card, domain::MonsterPlacement{.column = domain::FieldColumn::C5, .position = domain::Position::FACE_UP_ATTACK}, synchro_materials));
+
+	// 没有 Tuner 的素材组合
+	const std::array invalid_synchro_materials{non_tuner_card, material_a_card};
+	CHECK_FALSE(duel.synchro_summon(synchro_card, domain::MonsterPlacement{.column = domain::FieldColumn::C5, .position = domain::Position::FACE_UP_ATTACK}, invalid_synchro_materials));
+
 	CHECK(duel.synchro_summon(synchro_card, domain::MonsterPlacement{.column = domain::FieldColumn::C5, .position = domain::Position::FACE_UP_ATTACK}, synchro_materials));
 	CHECK(game.zone_of(synchro_card) == domain::Zone::MONSTER);
 	CHECK(game.zone_of(tuner_card) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(non_tuner_card) == domain::Zone::GRAVEYARD);
 	CHECK(game.find_instance(synchro_card)->summon_record().method == domain::SummonMethod::SYNCHRO);
 
-	const std::array xyz_materials{material_a_card, material_b_card};
+	CHECK_FALSE(duel.xyz_summon(xyz_restricted_card, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, xyz_materials));
+
+	// 素材数量不足(procedure count = 2)
+	const std::array one_material{material_a_card};
+	CHECK_FALSE(duel.xyz_summon(xyz_card, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, one_material));
+
 	CHECK(duel.xyz_summon(xyz_card, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, xyz_materials));
 	CHECK(game.zone_of(xyz_card) == domain::Zone::EXTRA_MONSTER);
 	CHECK(game.zone_of(material_a_card) == domain::Zone::NOT_EXIST);
 	CHECK(game.zone_of(material_b_card) == domain::Zone::NOT_EXIST);
 	CHECK(game.find_instance(xyz_card)->overlays().size() == 2);
 	CHECK(game.find_instance(xyz_card)->summon_record().method == domain::SummonMethod::XYZ);
+
+	std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("flow::Duel keeps battle-protected monsters")

@@ -142,6 +142,39 @@ namespace cg::flow
 		return added;
 	}
 
+	auto Duel::process_pending_events() noexcept -> void
+	{
+		// 连锁中产生的事件由结算结束时统一处理
+		if (!chain_.empty())
+		{
+			return;
+		}
+
+		const auto events = interpreter_.take_events();
+		if (events.empty())
+		{
+			return;
+		}
+
+		// 同一批事件视为同一时点
+		execution::EventWindowList windows{};
+		windows.reserve(events.size());
+
+		for (const auto& [code, card]: events)
+		{
+			windows.push_back(
+				{
+						.source = dsl::TriggerSource{code},
+						.card = card,
+						.player = std::nullopt,
+						.amount = std::nullopt,
+				}
+			);
+		}
+
+		open_timing(windows);
+	}
+
 	auto Duel::resolve_chain() noexcept -> void
 	{
 		if (chain_.empty())
@@ -336,6 +369,192 @@ namespace cg::flow
 		return properties.contains(dsl::EffectProperty::DAMAGE_STEP);
 	}
 
+	auto Duel::find_summon_procedure(const state::CardInstance& card, const domain::SummonMethod method) const noexcept -> const dsl::SummonProcedure*
+	{
+		const auto* script = scripts_.find(card.origin_code());
+		if (script == nullptr)
+		{
+			return nullptr;
+		}
+
+		for (const auto& summon: script->summons)
+		{
+			if (method == domain::SummonMethod::SYNCHRO && std::holds_alternative<dsl::SynchroProcedure>(summon))
+			{
+				return &summon;
+			}
+			if (method == domain::SummonMethod::XYZ && std::holds_alternative<dsl::XyzProcedure>(summon))
+			{
+				return &summon;
+			}
+		}
+
+		return nullptr;
+	}
+
+	auto Duel::all_summon_materials_valid(const state::CardInstance& card, const std::span<const state::CardInstanceId> materials) const noexcept -> bool
+	{
+		const auto controller = card.controller();
+
+		for (const auto material: materials)
+		{
+			if (material == card.id() || std::ranges::count(materials, material) != 1)
+			{
+				return false;
+			}
+
+			const auto* instance = game_.find_instance(material);
+			if (instance == nullptr || instance->controller() != controller)
+			{
+				return false;
+			}
+
+			if (const auto zone = game_.zone_of(material);
+				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
+			{
+				return false;
+			}
+
+			const auto field_info = domain::field_info_of(instance->placement());
+			if (!field_info.has_value())
+			{
+				return false;
+			}
+
+			if (field_info->position != domain::Position::FACE_UP_ATTACK && field_info->position != domain::Position::FACE_UP_DEFENSE)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	auto Duel::match_summon_materials(
+		const state::CardInstance& card,
+		const dsl::Expression& predicate,
+		const std::span<const state::CardInstanceId> materials
+	) noexcept -> std::optional<execution::Group>
+	{
+		execution::Group candidates{};
+		candidates.append_range(materials);
+
+		execution::Context context{game_, selector_, card.controller(), card.id()};
+		context.card_state = &card_state_;
+
+		return interpreter_.filter(predicate, candidates, context);
+	}
+
+	auto Duel::validate_synchro_materials(
+		const state::CardInstance& card,
+		const dsl::SynchroProcedure& procedure,
+		const std::span<const state::CardInstanceId> materials
+	) noexcept -> bool
+	{
+		if (materials.size() < 2 || !all_summon_materials_valid(card, materials))
+		{
+			return false;
+		}
+
+		const auto tuners = match_summon_materials(card, procedure.tuner, materials);
+		const auto non_tuners = match_summon_materials(card, procedure.non_tuner, materials);
+		if (!tuners.has_value() || tuners->empty() || !non_tuners.has_value() || non_tuners->empty())
+		{
+			return false;
+		}
+
+		// tuner / non-tuner 必须是不同素材
+		auto has_distinct = false;
+		for (const auto tuner: *tuners)
+		{
+			for (const auto non_tuner: *non_tuners)
+			{
+				if (tuner != non_tuner)
+				{
+					has_distinct = true;
+					break;
+				}
+			}
+			if (has_distinct)
+			{
+				break;
+			}
+		}
+		if (!has_distinct)
+		{
+			return false;
+		}
+
+		// 每个素材至少命中 tuner 或 non_tuner 之一
+		for (const auto material: materials)
+		{
+			if (!std::ranges::contains(*tuners, material) && !std::ranges::contains(*non_tuners, material))
+			{
+				return false;
+			}
+		}
+
+		const auto target_level = card_state_.level(card);
+		std::underlying_type_t<domain::LevelRank> total_level{};
+		for (const auto material: materials)
+		{
+			const auto* instance = game_.find_instance(material);
+			if (instance == nullptr)
+			{
+				return false;
+			}
+			total_level += card_state_.level(*instance);
+		}
+
+		return total_level == target_level;
+	}
+
+	auto Duel::validate_xyz_materials(
+		const state::CardInstance& summon_card,
+		const dsl::XyzProcedure& procedure,
+		const std::span<const state::CardInstanceId> materials
+	) noexcept -> bool
+	{
+		if (materials.size() < 2 || !all_summon_materials_valid(summon_card, materials))
+		{
+			return false;
+		}
+
+		if (procedure.count != 0 && materials.size() != static_cast<std::size_t>(procedure.count))
+		{
+			return false;
+		}
+
+		const auto matched = match_summon_materials(summon_card, procedure.material, materials);
+		if (!matched.has_value() || matched->size() != materials.size())
+		{
+			return false;
+		}
+
+		const auto target_level = card_state_.level(summon_card);
+		std::optional<std::underlying_type_t<domain::LevelRank>> material_level{};
+		for (const auto material: materials)
+		{
+			const auto* instance = game_.find_instance(material);
+			if (instance == nullptr)
+			{
+				return false;
+			}
+
+			const auto level = card_state_.level(*instance);
+			if (!material_level.has_value())
+			{
+				material_level = level;
+			}
+			else if (*material_level != level)
+			{
+				return false;
+			}
+		}
+
+		return material_level.has_value() && *material_level == target_level;
+	}
+
 	auto Duel::summonable_instance_of(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement) noexcept -> state::CardInstance*
 	{
 		// 连锁中只能发动效果,不能进行召唤等行动
@@ -448,8 +667,14 @@ namespace cg::flow
 		}
 
 		const auto level = card_state_.level(*instance);
+		// 只有等级 5+ 才需要/允许上级召唤
+		if (level < 5)
+		{
+			return false;
+		}
+
 		// 等级 5~6 需要 1 个祭品,等级 7+ 需要 2 个
-		if (const auto required = level >= 7 ? std::size_t{2} : (level >= 5 ? std::size_t{1} : std::size_t{0});
+		if (const auto required = level >= 7 ? std::size_t{2} : std::size_t{1};
 			tributes.size() != required)
 		{
 			return false;
@@ -510,39 +735,6 @@ namespace cg::flow
 		}
 
 		return true;
-	}
-
-	auto Duel::process_pending_events() noexcept -> void
-	{
-		// 连锁中产生的事件由结算结束时统一处理
-		if (!chain_.empty())
-		{
-			return;
-		}
-
-		const auto events = interpreter_.take_events();
-		if (events.empty())
-		{
-			return;
-		}
-
-		// 同一批事件视为同一时点
-		execution::EventWindowList windows{};
-		windows.reserve(events.size());
-
-		for (const auto& [code, card]: events)
-		{
-			windows.push_back(
-				{
-						.source = dsl::TriggerSource{code},
-						.card = card,
-						.player = std::nullopt,
-						.amount = std::nullopt,
-				}
-			);
-		}
-
-		open_timing(windows);
 	}
 
 	auto Duel::usage_owner(const dsl::UsageKind kind, const state::CardInstance& card) const noexcept -> UsageKey::owner_type
@@ -1189,64 +1381,20 @@ namespace cg::flow
 			return false;
 		}
 
-		// 必须有同调素材(必须有吗?)
-		if (materials.empty())
+		// 必须存在对应的同调召唤 procedure
+		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::SYNCHRO);
+		if (procedure == nullptr)
+		{
+			return false;
+		}
+
+		const auto* synchro = std::get_if<dsl::SynchroProcedure>(procedure);
+		if (synchro == nullptr || !validate_synchro_materials(*instance, *synchro, materials))
 		{
 			return false;
 		}
 
 		const auto controller = instance->controller();
-
-		// 等级+调整 满足要求
-		const auto target_level = card_state_.level(*instance);
-		std::underlying_type_t<domain::LevelRank> total_level{};
-		auto has_tuner{false};
-		auto has_non_tuner{false};
-
-		for (const auto material: materials)
-		{
-			// 素材不能是自己且不能重复
-			if (material == card || std::ranges::count(materials, material) != 1)
-			{
-				return false;
-			}
-
-			const auto* material_instance = game_.find_instance(material);
-
-			if (material_instance == nullptr)
-			{
-				return false;
-			}
-
-			// 必须是自己控制的怪兽
-			if (const auto material_controller = material_instance->controller();
-				material_controller != controller)
-			{
-				return false;
-			}
-
-			// 必须是场上的怪兽
-			if (const auto zone = game_.zone_of(material);
-				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
-			{
-				return false;
-			}
-
-			total_level += card_state_.level(*material_instance);
-			if (card_state_.is_card_subtype(*material_instance, domain::CardSubtype::TUNER))
-			{
-				has_tuner = true;
-			}
-			else
-			{
-				has_non_tuner = true;
-			}
-		}
-
-		if (!has_tuner || !has_non_tuner || total_level != target_level)
-		{
-			return false;
-		}
 
 		// 素材送入墓地
 		for (const auto material: materials)
@@ -1308,65 +1456,20 @@ namespace cg::flow
 			return false;
 		}
 
-		// 必须有超量素材(必须有吗?)
-		if (materials.size() < 2)
+		// 必须存在对应的超量召唤 procedure
+		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::XYZ);
+		if (procedure == nullptr)
+		{
+			return false;
+		}
+
+		const auto* xyz = std::get_if<dsl::XyzProcedure>(procedure);
+		if (xyz == nullptr || !validate_xyz_materials(*instance, *xyz, materials))
 		{
 			return false;
 		}
 
 		const auto controller = instance->controller();
-
-		// 等级+数量 满足要求
-		const auto target_level = card_state_.level(*instance);
-		std::optional<std::underlying_type_t<domain::LevelRank>> material_level{};
-		std::vector<const state::CardInstance*> material_instances{};
-
-		for (const auto material: materials)
-		{
-			// 素材不能是自己且不能重复
-			if (material == card || std::ranges::count(materials, material) != 1)
-			{
-				return false;
-			}
-
-			const auto* material_instance = game_.find_instance(material);
-
-			if (material_instance == nullptr)
-			{
-				return false;
-			}
-
-			// 必须是自己控制的怪兽
-			if (const auto material_controller = material_instance->controller();
-				material_controller != controller)
-			{
-				return false;
-			}
-
-			// 必须是场上的怪兽
-			if (const auto zone = game_.zone_of(material);
-				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
-			{
-				return false;
-			}
-
-			const auto level = card_state_.level(*material_instance);
-			if (!material_level.has_value())
-			{
-				material_level = level;
-			}
-			else if (material_level != level)
-			{
-				return false;
-			}
-
-			material_instances.push_back(material_instance);
-		}
-
-		if (material_level != target_level)
-		{
-			return false;
-		}
 
 		// 先记录来的位置
 		const auto from = instance->placement();
