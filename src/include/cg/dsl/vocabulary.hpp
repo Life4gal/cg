@@ -54,8 +54,8 @@ namespace cg::dsl
 			[[nodiscard]] constexpr auto operator==(const Value&) const -> bool = default;
 		};
 
-		// 作用域参数:表达式在一个隐式元素(`$`)的作用域内求值
-		// - element = `$`的类型
+		// 作用域参数:表达式在一个 scoped 元素的作用域内求值
+		// - element = 当前元素的类型;表达式内用 candidate_card() 读取
 		// - type    = 表达式类型(过滤/条件 = bool;投影/映射 = 任意结果类型)
 		class Scoped
 		{

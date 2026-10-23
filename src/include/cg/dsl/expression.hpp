@@ -5,8 +5,6 @@
 #include <variant>
 #include <vector>
 
-#include <cg/domain/player.hpp>
-
 #include <cg/dsl/id.hpp>
 
 namespace cg::dsl
@@ -58,15 +56,6 @@ namespace cg::dsl
 		BindingId id;
 
 		[[nodiscard]] constexpr auto operator==(const BindingRef&) const -> bool = default;
-	};
-
-	// 隐式候选
-	class CandidateRef
-	{
-	public:
-		constexpr static std::string_view ref = "$";
-
-		[[nodiscard]] constexpr auto operator==(const CandidateRef&) const -> bool = default;
 	};
 
 	// 原语调用(谓词/查询类;位置参数)
@@ -170,20 +159,19 @@ namespace cg::dsl
 				Literal,
 				EnumSetConstant,
 				BindingRef,
-				CandidateRef,
 				PrimitiveCall,
 				BooleanOperation,
 				CompareOperation,
 				ArithmeticOperation
 			> {};
 
-	// 作用域表达式:在隐式元素(记号`$`)的作用域内求值
+	// 作用域表达式:在 scoped 元素(通过 `candidate_card` 引用)的作用域内求值
 	class ScopedExpression
 	{
 	public:
-		// `$` 的类型
+		// scoped 元素的类型
 		TypeId element;
-		// 表达式本身(内部可用 `$` 引用元素)
+		// 表达式本身(内部可用 `candidate_card` 引用元素)
 		Expression expression;
 
 		[[nodiscard]] constexpr auto operator==(const ScopedExpression&) const -> bool = default;

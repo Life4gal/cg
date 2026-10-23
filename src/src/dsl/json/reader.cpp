@@ -432,42 +432,9 @@ namespace cg::dsl::json
 			return read_literal_boolean_expression(json, path);
 		}
 
-		// dsl::Literal::Symbol / dsl::CandidateRef
+		// dsl::Literal::Symbol
 		if (json.is_string())
 		{
-			if (const auto& text = json.get_ref<const nlohmann::json::string_t&>();
-				text == CandidateRef::ref)
-			{
-				if (element_scopes_.empty())
-				{
-					fail(path, std::format("`{}` is only valid inside a scoped parameter", CandidateRef::ref));
-					return std::nullopt;
-				}
-
-				if (const auto candidate_type = element_scopes_.back();
-					expected.valid() && expected != candidate_type)
-				{
-					const auto type_name = [&](const TypeId id) noexcept -> std::string_view
-					{
-						const auto* def = types_.get().find(id);
-						return def != nullptr ? def->name : std::string_view{"<unknown>"};
-					};
-
-					fail(
-						path,
-						std::format(
-							"`{}` refers to a candidate of type `{}`, but `{}` is expected",
-							CandidateRef::ref,
-							type_name(candidate_type),
-							type_name(expected)
-						)
-					);
-					return std::nullopt;
-				}
-
-				return Expression{CandidateRef{}};
-			}
-
 			return read_literal_symbol_expression(json, expected, path);
 		}
 
@@ -920,11 +887,7 @@ namespace cg::dsl::json
 							},
 							[&](const ParamDef::Scoped& scoped) noexcept -> std::optional<Expression>
 							{
-								element_scopes_.push_back(scoped.element);
-								auto r = read_expression(*provided[index], scoped.type, nested_item_path);
-								element_scopes_.pop_back();
-
-								return r;
+								return read_expression(*provided[index], scoped.type, nested_item_path);
 							},
 					},
 					param.kind
@@ -1895,11 +1858,7 @@ namespace cg::dsl::json
 	{
 		LIBASSERT_DEBUG_ASSERT(types_.get().contains("bool") && types_.get().contains("card"));
 
-		element_scopes_.push_back(types_.get().find("card")->id);
-		auto result = read_expression(json, types_.get().find("bool")->id, path);
-		element_scopes_.pop_back();
-
-		return result;
+		return read_expression(json, types_.get().find("bool")->id, path);
 	}
 
 	auto Reader::read_effect_list(
@@ -2499,9 +2458,7 @@ namespace cg::dsl::json
 			return std::nullopt;
 		}
 
-		element_scopes_.push_back(types_.get().find("card")->id);
 		auto apply_to = read_expression(apply_to_it.value(), types_.get().find("bool")->id, apply_to_path);
-		element_scopes_.pop_back();
 
 		if (!apply_to.has_value())
 		{

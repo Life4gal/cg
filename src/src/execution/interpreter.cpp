@@ -332,15 +332,6 @@ namespace cg::execution
 
 						return it->second;
 					},
-					[&]([[maybe_unused]] const dsl::CandidateRef& candidate) noexcept -> std::optional<Value>
-					{
-						if (context.frame.element_scopes.empty())
-						{
-							return std::nullopt;
-						}
-
-						return Value{Card{context.frame.element_scopes.back()}};
-					},
 					[&](const dsl::PrimitiveCall& call) noexcept -> std::optional<Value>
 					{
 						return invoke(call, context);
@@ -503,6 +494,10 @@ namespace cg::execution
 		if (definition->name == "this_card")
 		{
 			return this_card(*definition, call, context);
+		}
+		if (definition->name == "candidate_card")
+		{
+			return candidate_card(*definition, call, context);
 		}
 		if (definition->name == "chain_exists")
 		{
@@ -1192,6 +1187,22 @@ namespace cg::execution
 		}
 
 		return Value{Card{context.source}};
+	}
+
+	auto Interpreter::candidate_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		if (const auto args = evaluate_arguments(definition, call, context);
+			!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		if (context.frame.element_scopes.empty())
+		{
+			return std::nullopt;
+		}
+
+		return Value{Card{context.frame.element_scopes.back()}};
 	}
 
 	auto Interpreter::chain_exists(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>

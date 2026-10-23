@@ -102,47 +102,14 @@ TEST_CASE("dsl::json::Reader reads bundled cards")
 	CHECK(count > 0);
 }
 
-TEST_CASE("dsl::json::Reader enforces element scope")
+TEST_CASE("dsl::json::Reader supports candidate_card in scoped expressions")
 {
-	SUBCASE("`$` outside a scoped parameter")
-	{
-		const auto card = make_card(R"({"call":"is_card_type","args":{"card":"$","card_type":"SPELL"}})", default_effect);
-		const auto result = read_card(card);
+	constexpr std::string_view candidate{R"({"call":"candidate_card","args":{}})"};
 
-		CHECK_FALSE(result.script.has_value());
-		CHECK(contains_message(result.diagnostics, "only valid inside a scoped parameter"));
-	}
-
-	SUBCASE("`$` inside a filter")
-	{
-		const auto card = make_card(filter_with(R"({"call":"is_card_type","args":{"card":"$","card_type":"SPELL"}})"), default_effect);
-		const auto result = read_card(card);
-
-		CHECK(result.script.has_value());
-	}
-
-	SUBCASE("`$` with a mismatched type")
-	{
-		const auto card = make_card(filter_with(R"({"call":"is_card_type","args":{"card":"$","card_type":"$"}})"), default_effect);
-		const auto result = read_card(card);
-
-		CHECK_FALSE(result.script.has_value());
-		CHECK(contains_message(result.diagnostics, "candidate of type `card`, but `card_type` is expected"));
-	}
-
-	SUBCASE("`$` as the filter itself")
-	{
-		const auto card = make_card(filter_with(R"("$")"), default_effect);
-		const auto result = read_card(card);
-
-		CHECK_FALSE(result.script.has_value());
-		CHECK(contains_message(result.diagnostics, "candidate of type `card`, but `bool` is expected"));
-	}
-
-	SUBCASE("nested predicates bind innermost")
+	SUBCASE("candidate_card inside a filter")
 	{
 		const auto card = make_card(
-			filter_with(R"({"call":"exists_matching","args":{"players":["OPPONENT"],"zones":["MONSTER"],"min":1,"filter":{"call":"is_card_type","args":{"card":"$","card_type":"MONSTER"}}}})"),
+			filter_with(std::format(R"({{"call":"is_card_type","args":{{"card":{},"card_type":"SPELL"}}}})", candidate)),
 			default_effect
 		);
 		const auto result = read_card(card);
@@ -150,9 +117,39 @@ TEST_CASE("dsl::json::Reader enforces element scope")
 		CHECK(result.script.has_value());
 	}
 
-	SUBCASE("comparison inside a filter")
+	SUBCASE("nested filters use the innermost candidate")
 	{
-		const auto card = make_card(filter_with(R"({"le":[{"call":"attack","args":{"card":"$"}},1500]})"), default_effect);
+		const auto card = make_card(
+			filter_with(
+				std::format(
+					R"({{"call":"exists_matching","args":{{"players":["OPPONENT"],"zones":["MONSTER"],"min":1,"filter":{{"call":"is_card_type","args":{{"card":{},"card_type":"MONSTER"}}}}}}}})",
+					candidate
+				)
+			),
+			default_effect
+		);
+		const auto result = read_card(card);
+
+		CHECK(result.script.has_value());
+	}
+
+	SUBCASE("candidate_card inside a comparison")
+	{
+		const auto card = make_card(
+			filter_with(std::format(R"({{"le":[{{"call":"attack","args":{{"card":{}}}}},1500]}})", candidate)),
+			default_effect
+		);
+		const auto result = read_card(card);
+
+		CHECK(result.script.has_value());
+	}
+
+	SUBCASE("candidate_card inside apply_to")
+	{
+		const auto card = nlohmann::json::parse(std::format(
+			R"({{"identity":{{"kind":"SPELL","subtypes":["FIELD"]}},"effects":[{{"type":"static","apply_to":{{"call":"is_card_type","args":{{"card":{},"card_type":"MONSTER"}}}},"modifiers":[{{"call":"add_attribute","args":{{"attribute":"DARK"}}}}]}}]}})",
+			candidate
+		));
 		const auto result = read_card(card);
 
 		CHECK(result.script.has_value());
@@ -266,7 +263,7 @@ TEST_CASE("dsl::json::Reader reads player scopes")
 	SUBCASE("pick_target accepts a scope and a filter")
 	{
 		const auto card =
-				R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"target":[{"call":"pick_target","args":{"players":["SELF","OPPONENT"],"zones":["MONSTER"],"min":1,"max":1,"filter":{"call":"is_card_type","args":{"card":"$","card_type":"MONSTER"}}},"bind":"target"}],"effect":[]}]})";
+				R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"target":[{"call":"pick_target","args":{"players":["SELF","OPPONENT"],"zones":["MONSTER"],"min":1,"max":1,"filter":{"call":"is_card_type","args":{"card":{"call":"candidate_card","args":{}},"card_type":"MONSTER"}}},"bind":"target"}],"effect":[]}]})";
 		const auto result = read_card(nlohmann::json::parse(card));
 
 		CHECK(result.script.has_value());

@@ -20,7 +20,7 @@ namespace cg::execution
 
 		// 效果帧绑定
 		bindings_type bindings;
-		// 元素作用域栈($)
+		// 元素作用域栈;candidate_card()读取最内层元素
 		scopes_type element_scopes;
 	};
 }

@@ -32,9 +32,6 @@ namespace cg::dsl::json
 		std::vector<scope_type> scopes_;
 		BindingId::value_type binding_id_;
 
-		// 元素作用域栈:栈顶 = 当前作用域元素(`$`)的类型;`$`绑定最内层作用域
-		std::vector<TypeId> element_scopes_;
-
 		auto fail(std::string path, std::string message) noexcept -> void;
 		auto fail(std::string_view path, std::string message) noexcept -> void;
 
@@ -102,7 +99,7 @@ namespace cg::dsl::json
 		[[nodiscard]] auto read_summon_ritual_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<RitualProcedure>;
 		[[nodiscard]] auto read_summon_self_special_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<SelfSpecialProcedure>;
 
-		// 素材谓词:以 `card` 作为 `$` 的作用域类型读取 bool 表达式
+		// 素材谓词:在 scoped card 作用域内读取 bool 表达式;候选用 candidate_card()
 		[[nodiscard]] auto read_summon_material_expression(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<Expression>;
 
 		// =====================================================================================

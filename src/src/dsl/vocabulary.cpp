@@ -218,6 +218,14 @@ namespace cg::dsl
 			"效果来源卡(不依赖绑定)"
 		);
 		do_register(
+			"candidate_card",
+			PrimitiveKind::QUERY,
+			all_phases,
+			{},
+			type_id("card"),
+			"当前 Scoped 参数的元素(filter/apply_to/召唤素材等)"
+		);
+		do_register(
 			"chain_exists",
 			PrimitiveKind::QUERY,
 			all_phases,
