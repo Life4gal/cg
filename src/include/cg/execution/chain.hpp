@@ -50,8 +50,7 @@ namespace cg::execution
 			const state::CardInstanceId source,
 			const dsl::ActivatedEffect* activated,
 			const dsl::Effect* effect,
-			Context context,
-			const bool mutex_inserted = false
+			Context context
 		) noexcept
 			: controller_{controller},
 			  speed_{speed},
@@ -61,7 +60,7 @@ namespace cg::execution
 			  context_{std::move(context)},
 			  activation_negated_{false},
 			  effect_negated_{false},
-			  mutex_inserted_{mutex_inserted} {}
+			  mutex_inserted_{false} {}
 
 		[[nodiscard]] auto controller() const noexcept -> domain::Player
 		{
@@ -121,6 +120,12 @@ namespace cg::execution
 		[[nodiscard]] auto mutex_inserted() const noexcept -> bool
 		{
 			return mutex_inserted_;
+		}
+
+		// 由流程层在激活成功后回填 usage/mutex 记账
+		auto set_mutex_inserted(const bool inserted) noexcept -> void
+		{
+			mutex_inserted_ = inserted;
 		}
 	};
 

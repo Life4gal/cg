@@ -64,7 +64,8 @@ namespace cg::flow
 
 				group_indices.push_back(index);
 				choices.push_back(
-					execution::TriggerChoice{
+					execution::TriggerChoice
+					{
 							.controller = entry.controller,
 							.source = entry.instance.get().id(),
 							.effect = entry.effect.get().id,
@@ -115,28 +116,15 @@ namespace cg::flow
 					continue;
 				}
 
-				auto link_context = context.make_child(entry.controller, instance.id());
-				link_context.event = entry.window;
-
-				if (!interpreter_.activate(entry.activated.get(), link_context))
+				auto link = interpreter_.make_link(entry, context);
+				if (!link.has_value())
 				{
 					continue;
 				}
 
 				const auto mutex_inserted = mark_used(entry.effect.get(), instance);
-
-				execution::ChainLink link
-				{
-						entry.controller,
-						// 诱发效果固定为速度1
-						domain::EffectSpeed::NORMAL,
-						instance.id(),
-						&entry.activated.get(),
-						&entry.effect.get(),
-						std::move(link_context),
-						mutex_inserted,
-				};
-				chain_.push_back(std::move(link));
+				link->set_mutex_inserted(mutex_inserted);
+				chain_.push_back(std::move(*link));
 
 				added = true;
 			}
@@ -1631,8 +1619,9 @@ namespace cg::flow
 				activated,
 				activated_effect,
 				std::move(context),
-				mutex_inserted
 		};
+		link.set_mutex_inserted(mutex_inserted);
+
 		chain_.push_back(std::move(link));
 
 		// 已经进入连锁,本时点关闭;发动者的对方获得优先权
@@ -1927,8 +1916,9 @@ namespace cg::flow
 				activated,
 				&effect,
 				std::move(context),
-				mutex_inserted
 		};
+		link.set_mutex_inserted(mutex_inserted);
+
 		chain_.push_back(std::move(link));
 
 		// 已经进入连锁,本时点关闭;发动者的对方获得优先权

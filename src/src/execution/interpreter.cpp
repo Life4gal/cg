@@ -1615,18 +1615,6 @@ namespace cg::execution
 		return true;
 	}
 
-	auto Interpreter::collect_triggered(const ScriptRegistry& scripts, const Context& context, const domain::Player turn_player) noexcept -> TriggeredEffectList
-	{
-		if (!context.event.has_value())
-		{
-			return {};
-		}
-
-		const EventWindow& window = *context.event;
-
-		return collect_triggered(scripts, context, {&window, 1}, turn_player);
-	}
-
 	auto Interpreter::collect_triggered(
 		const ScriptRegistry& scripts,
 		const Context& context,
@@ -1740,37 +1728,6 @@ namespace cg::execution
 		return execute_statements(effect.target, context);
 	}
 
-	auto Interpreter::build_chain(const TriggeredEffectList& triggered, const Context& context) noexcept -> Chain
-	{
-		Chain chain{};
-
-		for (const auto& entry: triggered)
-		{
-			auto link_context = context.make_child(entry.controller, entry.instance.get().id());
-			link_context.event = entry.window;
-
-			if (!activate(entry.activated.get(), link_context))
-			{
-				continue;
-			}
-
-			ChainLink link
-			{
-					entry.controller,
-					// 诱发效果固定为速度1
-					domain::EffectSpeed::NORMAL,
-					entry.instance.get().id(),
-					&entry.activated.get(),
-					&entry.effect.get(),
-					std::move(link_context)
-			};
-
-			chain.push_back(std::move(link));
-		}
-
-		return chain;
-	}
-
 	auto Interpreter::resolve(Chain& chain) noexcept -> bool
 	{
 		auto resolved = true;
@@ -1797,6 +1754,58 @@ namespace cg::execution
 		}
 
 		return resolved;
+	}
+
+	auto Interpreter::make_link(const TriggeredEffect& entry, const Context& context) noexcept -> std::optional<ChainLink>
+	{
+		auto link_context = context.make_child(entry.controller, entry.instance.get().id());
+		link_context.event = entry.window;
+
+		if (!activate(entry.activated.get(), link_context))
+		{
+			return std::nullopt;
+		}
+
+		return ChainLink
+		{
+				entry.controller,
+				// 诱发效果固定为速度1
+				domain::EffectSpeed::NORMAL,
+				entry.instance.get().id(),
+				&entry.activated.get(),
+				&entry.effect.get(),
+				std::move(link_context),
+		};
+	}
+
+	auto Interpreter::collect_triggered(const ScriptRegistry& scripts, const Context& context, const domain::Player turn_player) noexcept -> TriggeredEffectList
+	{
+		if (!context.event.has_value())
+		{
+			return {};
+		}
+
+		const EventWindow& window = *context.event;
+
+		return collect_triggered(scripts, context, {&window, 1}, turn_player);
+	}
+
+	auto Interpreter::build_chain(const TriggeredEffectList& triggered, const Context& context) noexcept -> Chain
+	{
+		Chain chain{};
+
+		for (const auto& entry: triggered)
+		{
+			auto link = make_link(entry, context);
+			if (!link.has_value())
+			{
+				continue;
+			}
+
+			chain.push_back(std::move(*link));
+		}
+
+		return chain;
 	}
 
 	auto Interpreter::execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool

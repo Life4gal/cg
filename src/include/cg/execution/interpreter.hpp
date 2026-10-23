@@ -7,6 +7,7 @@
 #include <cg/execution/value.hpp>
 #include <cg/execution/event.hpp>
 #include <cg/execution/effect.hpp>
+#include <cg/execution/chain.hpp>
 #include <cg/execution/context.hpp>
 
 namespace cg::dsl
@@ -136,6 +137,9 @@ namespace cg::execution
 		// 逆序结算整条连锁
 		[[nodiscard]] auto resolve(Chain& chain) noexcept -> bool;
 
+		// 构造单个连锁环(激活 + Context);SEGOC/选择/usage 由 Duel 负责
+		[[nodiscard]] auto make_link(const TriggeredEffect& entry, const Context& context) noexcept -> std::optional<ChainLink>;
+
 		// ================================================================
 		// 测试 / 嵌入支持
 		// - 不属于 flow 主路径;当前由 tests/interpreter.cpp 使用
@@ -144,8 +148,7 @@ namespace cg::execution
 		// 单窗口便捷重载:使用 context.event;flow 使用 span 版本
 		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, domain::Player turn_player) noexcept -> TriggeredEffectList;
 
-		// 由触发列表构建连锁(逐条激活)
-		// 注意:当前与 Duel::open_timing 的建链逻辑重复,待收敛
+		// 由触发列表构建连锁(逐条make_link)
 		[[nodiscard]] auto build_chain(const TriggeredEffectList& triggered, const Context& context) noexcept -> Chain;
 
 		// 执行一张发动类效果:condition → cost → target → resolve
