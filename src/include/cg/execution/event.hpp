@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <cg/domain/event.hpp>
+#include <cg/domain/player.hpp>
 
 #include <cg/dsl/trigger.hpp>
 
@@ -29,6 +30,11 @@ namespace cg::execution
 	public:
 		dsl::TriggerSource source;
 		std::optional<state::CardInstanceId> card;
+
+		// 事件关联玩家(如 BATTLE_DAMAGE 的受伤玩家;绝对玩家)
+		std::optional<domain::Player> player;
+		// 事件数值(如 BATTLE_DAMAGE 的伤害)
+		std::optional<std::int32_t> amount;
 	};
 
 	class EventWindowList : public std::vector<EventWindow> {};

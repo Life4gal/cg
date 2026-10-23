@@ -490,6 +490,14 @@ namespace cg::execution
 		{
 			return event_card(*definition, call, context);
 		}
+		if (definition->name == "event_amount")
+		{
+			return event_amount(*definition, call, context);
+		}
+		if (definition->name == "event_player")
+		{
+			return event_player(*definition, call, context);
+		}
 		if (definition->name == "sole_card")
 		{
 			return sole_card(*definition, call, context);
@@ -1165,6 +1173,39 @@ namespace cg::execution
 		}
 
 		return Value{Card{*context.event->card}};
+	}
+
+	auto Interpreter::event_amount(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		if (const auto args = evaluate_arguments(definition, call, context);
+			!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		if (!context.event.has_value() || !context.event->amount.has_value())
+		{
+			return std::nullopt;
+		}
+
+		return Value{Integer{*context.event->amount}};
+	}
+
+	auto Interpreter::event_player(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		if (const auto args = evaluate_arguments(definition, call, context);
+			!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		if (!context.event.has_value() || !context.event->player.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto relative = *context.event->player == context.controller ? 0 : 1;
+		return Value{Integer{relative}};
 	}
 
 	auto Interpreter::sole_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>

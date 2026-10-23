@@ -598,6 +598,126 @@ TEST_CASE("flow::Duel allows Counter Traps in the damage step")
 	std::filesystem::remove_all(directory);
 }
 
+TEST_CASE("flow::Duel emits BATTLE_DAMAGE with player and amount")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_battle_damage";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	std::ofstream attacker_stream{directory / "97000061.json", std::ios::binary};
+	attacker_stream <<
+			R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"BATTLE_DAMAGE"},"timing":"WHEN","optional":false,"condition":{"and":[{"eq":[{"call":"event_player","args":{}},1]},{"ge":[{"call":"event_amount","args":{}},200]}]}},"effect":[{"call":"recover_life","args":{"players":["SELF"],"amount":300}}]}]})";
+	attacker_stream.close();
+
+	std::ofstream watcher_stream{directory / "97000062.json", std::ios::binary};
+	watcher_stream <<
+			R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"BATTLE_DAMAGE"},"timing":"WHEN","optional":false,"condition":{"and":[{"eq":[{"call":"event_player","args":{}},0]},{"ge":[{"call":"event_amount","args":{}},200]}]}},"effect":[{"call":"recover_life","args":{"players":["SELF"],"amount":500}}]}]})";
+	watcher_stream.close();
+
+	constexpr domain::CardCode attacker_code{97000061};
+	constexpr domain::CardCode watcher_code{97000062};
+	constexpr domain::CardCode defender_code{97000063};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+	game.register_definition(watcher_code, make_monster(watcher_code, 1000, 1000));
+	game.register_definition(defender_code, make_monster(defender_code, 800, 800));
+
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto watcher = game.create_instance(watcher_code, domain::Player::FIRST);
+	REQUIRE(watcher.valid());
+	game.place(*game.find_instance_mutable(watcher), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(defender.valid());
+	game.place(*game.find_instance_mutable(defender), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker.valid());
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	CHECK(duel.declare_attack(attacker, defender));
+	resolve_attack(duel);
+
+	// FIRST 受到 200 战斗伤害,其触发回复 500;SECOND 的触发回复 300
+	CHECK(game.life_points(domain::Player::FIRST) == 8300);
+	CHECK(game.life_points(domain::Player::SECOND) == 8300);
+	CHECK(game.zone_of(defender) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(watcher) == domain::Zone::MONSTER);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel emits BATTLE_DAMAGE when the attacker's controller takes damage")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_battle_damage_controller";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	std::ofstream attacker_stream{directory / "97000071.json", std::ios::binary};
+	attacker_stream <<
+			R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":800,"defense":800}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"BATTLE_DAMAGE"},"timing":"WHEN","optional":false,"condition":{"and":[{"eq":[{"call":"event_player","args":{}},0]},{"ge":[{"call":"event_amount","args":{}},200]}]}},"effect":[{"call":"recover_life","args":{"players":["SELF"],"amount":300}}]}]})";
+	attacker_stream.close();
+
+	std::ofstream watcher_stream{directory / "97000072.json", std::ios::binary};
+	watcher_stream <<
+			R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"BATTLE_DAMAGE"},"timing":"WHEN","optional":false,"condition":{"and":[{"eq":[{"call":"event_player","args":{}},1]},{"ge":[{"call":"event_amount","args":{}},200]}]}},"effect":[{"call":"recover_life","args":{"players":["SELF"],"amount":500}}]}]})";
+	watcher_stream.close();
+
+	constexpr domain::CardCode attacker_code{97000071};
+	constexpr domain::CardCode watcher_code{97000072};
+	constexpr domain::CardCode defender_code{97000073};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(attacker_code, make_monster(attacker_code, 800, 800));
+	game.register_definition(watcher_code, make_monster(watcher_code, 1000, 1000));
+	game.register_definition(defender_code, make_monster(defender_code, 1000, 1000));
+
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto watcher = game.create_instance(watcher_code, domain::Player::FIRST);
+	REQUIRE(watcher.valid());
+	game.place(*game.find_instance_mutable(watcher), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(defender.valid());
+	game.place(*game.find_instance_mutable(defender), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_DEFENSE});
+
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker.valid());
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+
+	CHECK(duel.declare_attack(attacker, defender));
+	resolve_attack(duel);
+
+	// SECOND 受到 200 战斗伤害,其触发回复 300;FIRST 的触发回复 500
+	CHECK(game.life_points(domain::Player::FIRST) == 8500);
+	CHECK(game.life_points(domain::Player::SECOND) == 8100);
+	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(defender) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(watcher) == domain::Zone::MONSTER);
+
+	std::filesystem::remove_all(directory);
+}
+
 TEST_CASE("flow::Duel resolves a defense-position battle")
 {
 	constexpr domain::CardCode attacker_code{91000012};

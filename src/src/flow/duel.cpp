@@ -717,7 +717,7 @@ namespace cg::flow
 					return;
 				}
 				battle_.advance_damage_step(); // PERFORM → AFTER
-				open_battle_window(dsl::TriggerSource{dsl::PeriodRef{domain::DamageStep::AFTER_CALCULATION}});
+				open_after_calculation_window(attack);
 				break;
 			}
 			case domain::DamageStep::AFTER_CALCULATION:
@@ -808,8 +808,8 @@ namespace cg::flow
 		}
 
 		const auto attacker_attack = card_state_.attack(*attacker_instance);
-		const auto controller = attacker_instance->controller();
-		const auto opponent = domain::opponent_of(controller);
+		const auto controller = attack.controller;
+		const auto opponent = attack.opponent;
 
 		attack.destroy_attacker.reset();
 		attack.destroy_target.reset();
@@ -871,6 +871,49 @@ namespace cg::flow
 		}
 
 		return true;
+	}
+
+	auto Duel::open_after_calculation_window(AttackState& attack) noexcept -> void
+	{
+		std::vector<execution::EventWindow> windows{};
+
+		if (attack.damage_to_opponent != 0)
+		{
+			windows.push_back(
+				execution::EventWindow
+				{
+						.source = dsl::TriggerSource{domain::EventCode::BATTLE_DAMAGE},
+						.card = attack.attacker,
+						.player = attack.opponent,
+						.amount = attack.damage_to_opponent,
+				}
+			);
+		}
+
+		if (attack.damage_to_controller != 0)
+		{
+			windows.push_back(
+				execution::EventWindow
+				{
+						.source = dsl::TriggerSource{domain::EventCode::BATTLE_DAMAGE},
+						.card = attack.attacker,
+						.player = attack.controller,
+						.amount = attack.damage_to_controller,
+				}
+			);
+		}
+
+		windows.push_back(
+			execution::EventWindow
+			{
+					.source = dsl::TriggerSource{dsl::PeriodRef{domain::DamageStep::AFTER_CALCULATION}},
+					.card = std::nullopt,
+					.player = std::nullopt,
+					.amount = std::nullopt,
+			}
+		);
+
+		open_timing(windows);
 	}
 
 	auto Duel::finish_damage_step(AttackState& attack) noexcept -> void
@@ -1783,7 +1826,13 @@ namespace cg::flow
 		state_.attacked = true;
 		state_.entered_battle_phase = true;
 
-		attack_ = {.attacker = attacker, .target = target};
+		attack_ =
+		{
+				.attacker = attacker,
+				.target = target,
+				.controller = controller,
+				.opponent = opponent,
+		};
 
 		battle_.reset();
 		// START → BATTLE

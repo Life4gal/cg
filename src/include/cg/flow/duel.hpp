@@ -53,6 +53,9 @@ namespace cg::flow
 			state::CardInstanceId attacker;
 			// 攻击目标(空 = 直接攻击)
 			std::optional<state::CardInstanceId> target;
+			// 攻击者控制者/对方(攻击宣言时确定)
+			domain::Player controller = domain::Player::FIRST;
+			domain::Player opponent = domain::Player::SECOND;
 			// 伤害计算时目标的表示形式
 			domain::Position target_position = domain::Position::FACE_UP_ATTACK;
 			// 目标是否因攻击翻面
@@ -258,6 +261,9 @@ namespace cg::flow
 
 		// 伤害步骤结束:送墓,开翻转/战斗破坏/伤害步骤结束时点
 		auto finish_damage_step(AttackState& attack) noexcept -> void;
+
+		// 伤害计算后时点:BATTLE_DAMAGE事件 + AFTER_CALCULATION
+		auto open_after_calculation_window(AttackState& attack) noexcept -> void;
 
 	public:
 		// 必须注入底层驱动;引擎不自动决策

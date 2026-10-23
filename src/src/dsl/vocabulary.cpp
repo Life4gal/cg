@@ -218,6 +218,30 @@ namespace cg::dsl
 			"效果来源卡(上下文引用)"
 		);
 		do_register(
+			"event_card",
+			PrimitiveKind::QUERY,
+			all_phases,
+			{},
+			type_id("card"),
+			"当前事件关联卡"
+		);
+		do_register(
+			"event_amount",
+			PrimitiveKind::QUERY,
+			all_phases,
+			{},
+			type_id("int"),
+			"当前事件数值(如 BATTLE_DAMAGE 的伤害)"
+		);
+		do_register(
+			"event_player",
+			PrimitiveKind::QUERY,
+			all_phases,
+			{},
+			type_id("int"),
+			"当前事件玩家(0=效果控制者,1=对方)"
+		);
+		do_register(
 			"equipped_card",
 			PrimitiveKind::QUERY,
 			all_phases,
