@@ -181,16 +181,33 @@ namespace cg::execution
 			return result;
 		}
 
-		[[nodiscard]] auto select(const Context& context, const Group& candidates, const std::size_t min, const std::size_t max) -> Group
+		[[nodiscard]] auto select(const Context& context, const Group& candidates, const std::size_t min, const std::size_t max) -> std::optional<Group>
 		{
-			if (context.selector)
+			// 引擎不自动决策:必须由外部提供选择
+			if (!context.selector || !*context.selector || min > max || candidates.size() < min)
 			{
-				return context.selector(candidates, min, max);
+				return std::nullopt;
 			}
 
-			// 缺省:取前 min 张
-			const auto count = std::ranges::min(min, candidates.size());
-			return {candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(count)};
+			auto selected = (*context.selector)(candidates, min, max);
+			if (selected.size() < min || selected.size() > max)
+			{
+				return std::nullopt;
+			}
+
+			Group result{};
+			result.reserve(selected.size());
+			for (const auto card: selected)
+			{
+				if (!std::ranges::contains(candidates, card) || std::ranges::contains(result, card))
+				{
+					return std::nullopt;
+				}
+
+				result.push_back(card);
+			}
+
+			return result;
 		}
 	}
 
@@ -241,11 +258,11 @@ namespace cg::execution
 
 	auto Interpreter::evaluate_scoped(const dsl::Expression& expression, const state::CardInstanceId element, Context& context) noexcept -> std::optional<Value>
 	{
-		context.element_scopes.push_back(element);
+		context.frame.element_scopes.push_back(element);
 
 		auto value = evaluate(expression, context);
 
-		context.element_scopes.pop_back();
+		context.frame.element_scopes.pop_back();
 
 		return value;
 	}
@@ -288,8 +305,8 @@ namespace cg::execution
 					},
 					[&](const dsl::BindingRef& binding) noexcept -> std::optional<Value>
 					{
-						const auto it = context.bindings.find(binding.id);
-						if (it == context.bindings.end())
+						const auto it = context.frame.bindings.find(binding.id);
+						if (it == context.frame.bindings.end())
 						{
 							return std::nullopt;
 						}
@@ -298,12 +315,12 @@ namespace cg::execution
 					},
 					[&]([[maybe_unused]] const dsl::CandidateRef& candidate) noexcept -> std::optional<Value>
 					{
-						if (context.element_scopes.empty())
+						if (context.frame.element_scopes.empty())
 						{
 							return std::nullopt;
 						}
 
-						return Value{Card{context.element_scopes.back()}};
+						return Value{Card{context.frame.element_scopes.back()}};
 					},
 					[&](const dsl::PrimitiveCall& call) noexcept -> std::optional<Value>
 					{
@@ -528,7 +545,7 @@ namespace cg::execution
 
 		if (call.binding.has_value() && !std::holds_alternative<Void>(*value))
 		{
-			context.bindings.insert_or_assign(*call.binding, *std::move(value));
+			context.frame.bindings.insert_or_assign(*call.binding, *std::move(value));
 		}
 
 		return true;
@@ -605,7 +622,7 @@ namespace cg::execution
 
 							for (const auto card: *group)
 							{
-								context.bindings.insert_or_assign(for_each.binding, Value{Card{card}});
+								context.frame.bindings.insert_or_assign(for_each.binding, Value{Card{card}});
 								if (!execute_statements(for_each.body, context))
 								{
 									return false;
@@ -720,9 +737,13 @@ namespace cg::execution
 			candidates = *std::move(filtered);
 		}
 
-		auto selected = select(context, candidates, static_cast<std::size_t>(*min), static_cast<std::size_t>(*max));
+		const auto selected = select(context, candidates, static_cast<std::size_t>(*min), static_cast<std::size_t>(*max));
+		if (!selected.has_value())
+		{
+			return std::nullopt;
+		}
 
-		return Value{Group{std::move(selected)}};
+		return Value{Group{std::move(*selected)}};
 	}
 
 	auto Interpreter::destroy(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1137,12 +1158,12 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		if (!context.event_card.has_value())
+		if (!context.trigger.has_value() || !context.trigger->event_card.has_value())
 		{
 			return std::nullopt;
 		}
 
-		return Value{Card{*context.event_card}};
+		return Value{Card{*context.trigger->event_card}};
 	}
 
 	auto Interpreter::sole_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1429,12 +1450,12 @@ namespace cg::execution
 		}
 
 		// 无效对象 = 本效果直接响应的那一环
-		if (context.chain == nullptr || context.chain_link_index == 0)
+		if (!context.chain.has_value() || context.chain->link_index == 0)
 		{
 			return std::nullopt;
 		}
 
-		auto& link = context.chain->operator[](context.chain_link_index - 1);
+		auto& link = (*context.chain->chain)[context.chain->link_index - 1];
 		link.negate_activation();
 
 		return Value{Void{}};
@@ -1448,12 +1469,12 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		if (context.chain == nullptr || context.chain_link_index == 0)
+		if (!context.chain.has_value() || context.chain->link_index == 0)
 		{
 			return std::nullopt;
 		}
 
-		auto& link = context.chain->operator[](context.chain_link_index - 1);
+		auto& link = (*context.chain->chain)[context.chain->link_index - 1];
 		link.negate_effect();
 
 		return Value{Void{}};
@@ -1515,7 +1536,7 @@ namespace cg::execution
 
 	auto Interpreter::matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool
 	{
-		if (!context.trigger_source.has_value())
+		if (!context.trigger.has_value())
 		{
 			return false;
 		}
@@ -1524,7 +1545,7 @@ namespace cg::execution
 			trigger.spec.sources,
 			[&](const dsl::TriggerSource& source) noexcept -> bool
 			{
-				return source == *context.trigger_source;
+				return source == context.trigger->source;
 			}
 		);
 
@@ -1553,12 +1574,12 @@ namespace cg::execution
 
 	auto Interpreter::collect_triggered(const ScriptRegistry& scripts, const Context& context, const domain::Player turn_player) noexcept -> TriggeredEffectList
 	{
-		if (!context.trigger_source.has_value())
+		if (!context.trigger.has_value())
 		{
 			return {};
 		}
 
-		const EventWindow window{.source = *context.trigger_source, .card = context.event_card};
+		const EventWindow window{.source = context.trigger->source, .card = context.trigger->event_card};
 
 		return collect_triggered(scripts, context, {&window, 1}, turn_player);
 	}
@@ -1612,8 +1633,7 @@ namespace cg::execution
 				for (const auto& window: windows)
 				{
 					auto card_context = context.make_child(instance.controller(), instance.id());
-					card_context.trigger_source = window.source;
-					card_context.event_card = window.card;
+					card_context.trigger = {.source = window.source, .event_card = window.card};
 
 					if (!matches(*trigger, card_context))
 					{
@@ -1687,8 +1707,7 @@ namespace cg::execution
 		for (const auto& entry: triggered)
 		{
 			auto link_context = context.make_child(entry.controller, entry.instance.get().id());
-			link_context.trigger_source = entry.source;
-			link_context.event_card = entry.event_card;
+			link_context.trigger = {.source = entry.source, .event_card = entry.event_card};
 
 			if (!activate(entry.activated.get(), link_context))
 			{

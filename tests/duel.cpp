@@ -1,6 +1,8 @@
 #include <cg/flow/duel.hpp>
 
+#include <algorithm>
 #include <fstream>
+#include <numeric>
 
 #include <doctest/doctest.h>
 
@@ -56,6 +58,33 @@ namespace
 		return definition;
 	}
 
+	// 测试驱动:选择前 min 张(与旧的默认行为一致)
+	[[nodiscard]] auto select_first(const execution::Group& candidates, const std::size_t min, [[maybe_unused]] const std::size_t max) -> execution::Group
+	{
+		const auto count = std::min(min, candidates.size());
+		return {candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(count)};
+	}
+
+	// 测试驱动:必发/选发都全选,顺序保持候选顺序
+	[[nodiscard]] auto choose_all(const flow::TriggerDecision& decision) -> std::vector<std::size_t>
+	{
+		std::vector<std::size_t> indices(decision.candidates.size());
+		std::ranges::iota(indices, std::size_t{0});
+		return indices;
+	}
+
+	// 测试用决斗:注入自动驱动;引擎本身不自动决策
+	class TestDuel : public flow::Duel
+	{
+	public:
+		TestDuel() noexcept
+			: Duel{}
+		{
+			set_selector(select_first);
+			set_trigger_chooser(choose_all);
+		}
+	};
+
 	// 把待结算的连锁全部结算完(测试用)
 	auto settle(flow::Duel& duel) -> void
 	{
@@ -92,7 +121,7 @@ TEST_CASE("flow::Duel performs core actions")
 {
 	constexpr domain::CardCode monster_code{91000001};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(monster_code, make_monster(monster_code));
@@ -161,7 +190,7 @@ TEST_CASE("flow::Duel resolves an attack-position battle")
 	constexpr domain::CardCode attacker_code{91000010};
 	constexpr domain::CardCode defender_code{91000011};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
@@ -202,7 +231,7 @@ TEST_CASE("flow::Duel resolves a defense-position battle")
 	constexpr domain::CardCode attacker_code{91000012};
 	constexpr domain::CardCode defender_code{91000013};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
@@ -235,7 +264,7 @@ TEST_CASE("flow::Duel direct attack and winner")
 {
 	constexpr domain::CardCode attacker_code{91000014};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
@@ -262,7 +291,7 @@ TEST_CASE("flow::Duel flips a face-down defender before damage calculation")
 	constexpr domain::CardCode attacker_code{91000015};
 	constexpr domain::CardCode defender_code{91000016};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
@@ -295,7 +324,7 @@ TEST_CASE("flow::Duel tribute summons a level 5 monster")
 	constexpr domain::CardCode high_code{91000020};
 	constexpr domain::CardCode low_code{91000021};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(high_code, make_monster(high_code, 2000, 2000, 5));
@@ -328,7 +357,7 @@ TEST_CASE("flow::Duel requires two tributes for a level 7 monster")
 	constexpr domain::CardCode high_code{91000022};
 	constexpr domain::CardCode low_code{91000023};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(high_code, make_monster(high_code, 2500, 2500, 7));
@@ -361,7 +390,7 @@ TEST_CASE("flow::Duel requires two tributes for a level 7 monster")
 
 TEST_CASE("flow::Duel loses when drawing from an empty deck")
 {
-	flow::Duel duel{};
+	TestDuel duel{};
 
 	CHECK_FALSE(duel.draw_for_turn());
 	CHECK(duel.winner() == domain::Player::SECOND);
@@ -369,7 +398,7 @@ TEST_CASE("flow::Duel loses when drawing from an empty deck")
 
 TEST_CASE("flow::Duel requires both players to pass before advancing phase")
 {
-	flow::Duel duel{};
+	TestDuel duel{};
 
 	CHECK(duel.turn().phase() == domain::Phase::DRAW);
 
@@ -395,7 +424,7 @@ TEST_CASE("flow::Duel triggers effects from scripts")
 	constexpr domain::CardCode jar_code{33508719};
 	constexpr domain::CardCode monster_code{92000001};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(jar_code, make_monster(jar_code));
@@ -450,7 +479,7 @@ TEST_CASE("flow::Duel applies static modifiers in battle")
 	constexpr domain::CardCode dragon_code{93000001};
 	constexpr domain::CardCode warrior_code{93000002};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	state::CardDefinition mountain{};
@@ -518,7 +547,7 @@ TEST_CASE("flow::CardStateResolver feeds effective stats to scripts")
 
 	const auto run = [&](const bool with_mountain) -> std::pair<bool, std::underlying_type_t<domain::AttackDefense>>
 	{
-		flow::Duel duel{};
+		TestDuel duel{};
 		auto& game = duel.game();
 
 		game.register_definition(mountain_code, make_spell(mountain_code, {domain::CardSubtype::FIELD}));
@@ -589,7 +618,7 @@ TEST_CASE("flow::CardStateResolver applies static discrete properties")
 
 	const auto run = [&](const bool with_field) -> std::pair<bool, std::underlying_type_t<domain::AttackDefense>>
 	{
-		flow::Duel duel{};
+		TestDuel duel{};
 		auto& game = duel.game();
 
 		game.register_definition(field_code, make_spell(field_code, {domain::CardSubtype::FIELD}));
@@ -662,7 +691,7 @@ TEST_CASE("flow::Duel performs Synchro and Xyz summons")
 	constexpr domain::CardCode material_a_code{99600005};
 	constexpr domain::CardCode material_b_code{99600006};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	auto tuner = make_monster(tuner_code, 1000, 1000, 2);
@@ -747,7 +776,7 @@ TEST_CASE("flow::Duel keeps battle-protected monsters")
 	constexpr domain::CardCode defender_code{95000002};
 	constexpr domain::CardCode attacker_code{95000003};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(field_code, make_spell(field_code, {domain::CardSubtype::FIELD}));
@@ -788,7 +817,7 @@ TEST_CASE("flow::Duel fires battle destruction triggers automatically")
 	constexpr domain::CardCode attacker_code{96000001};
 	constexpr domain::CardCode recruit_code{96000002};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(rat_code, make_monster(rat_code, 1400, 1450, 4, domain::Race::BEAST));
@@ -848,7 +877,7 @@ TEST_CASE("flow::Duel processes destruction events from effects")
 	constexpr domain::CardCode victim_code{97000012};
 	constexpr domain::CardCode draw_code{97000013};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(igniter_code, make_monster(igniter_code));
@@ -902,7 +931,7 @@ TEST_CASE("flow::Duel shares usage counters within a group")
 
 	constexpr domain::CardCode card_code{99500001};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(card_code, make_monster(card_code));
@@ -950,7 +979,7 @@ TEST_CASE("flow::Duel applies mutex independently of usage counts")
 
 	constexpr domain::CardCode card_code{99500002};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(card_code, make_monster(card_code));
@@ -1019,7 +1048,7 @@ TEST_CASE("flow::Duel rejects invalid mutex links")
 
 	constexpr domain::CardCode card_code{99500003};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	duel.game().register_definition(card_code, make_monster(card_code));
 
 	// mutex 只能指向更早效果 → 加载失败
@@ -1053,7 +1082,7 @@ TEST_CASE("flow::Duel enforces triggered effect usage limits")
 	constexpr domain::CardCode victim_code{99000022};
 	constexpr domain::CardCode draw_code{99000023};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(destroyer_code, make_monster(destroyer_code));
@@ -1100,7 +1129,7 @@ TEST_CASE("flow::Duel activates traps with an event timing")
 	constexpr domain::CardCode torrential_code{53582587};
 	constexpr domain::CardCode monster_code{98000001};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(torrential_code, make_trap(torrential_code, {domain::CardSubtype::NORMAL}));
@@ -1169,7 +1198,7 @@ TEST_CASE("flow::Duel activates ignition and quick effects")
 		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})"
 	);
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(domain::CardCode{94000001}, make_monster(domain::CardCode{94000001}));
@@ -1222,7 +1251,7 @@ TEST_CASE("flow::Duel enforces per-turn usage restrictions")
 				R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","usage":{"kind":"TURN_PER_NAME","verb":"USE"},"activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})";
 	}
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(domain::CardCode{95000001}, make_monster(domain::CardCode{95000001}));
@@ -1273,7 +1302,7 @@ TEST_CASE("flow::Duel activates spell cards")
 	constexpr domain::CardCode mountain_code{50913601};
 	constexpr domain::CardCode monster_code{96000001};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(raigeki_code, make_spell(raigeki_code, {domain::CardSubtype::NORMAL}));
@@ -1326,7 +1355,7 @@ TEST_CASE("flow::Duel sets and activates a trap")
 				R"({"identity":{"kind":"TRAP","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})";
 	}
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(domain::CardCode{97000001}, make_trap(domain::CardCode{97000001}, {domain::CardSubtype::NORMAL}));
@@ -1388,7 +1417,7 @@ TEST_CASE("flow::Duel resolves a chain in reverse order and negates effects")
 	constexpr domain::CardCode attacker_code{94100001};
 	constexpr domain::CardCode negator_code{94100002};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(attacker_code, make_monster(attacker_code));
@@ -1456,7 +1485,7 @@ TEST_CASE("flow::Duel negates an activation and sends the spell to the graveyard
 	constexpr domain::CardCode spell_code{94200001};
 	constexpr domain::CardCode negator_code{94200002};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
@@ -1527,7 +1556,7 @@ TEST_CASE("flow::Duel rolls back usage for negated activations")
 
 	const auto run = [&](const domain::CardCode spell_code, const bool expect_second) -> void
 	{
-		flow::Duel duel{};
+		TestDuel duel{};
 		auto& game = duel.game();
 
 		game.register_definition(activate_code, make_spell(activate_code, {domain::CardSubtype::NORMAL}));
@@ -1604,7 +1633,7 @@ TEST_CASE("flow::Duel enforces spell speed when chaining")
 	constexpr domain::CardCode counter_code{94300002};
 	constexpr domain::CardCode second_quick_code{94300003};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(first_quick_code, make_monster(first_quick_code));
@@ -1683,7 +1712,7 @@ TEST_CASE("flow::Duel collects simultaneous triggers into one chain")
 	constexpr domain::CardCode destroyer_code{94400001};
 	constexpr domain::CardCode victim_code{94400002};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(destroyer_code, make_monster(destroyer_code));
@@ -1758,7 +1787,7 @@ TEST_CASE("flow::Duel allows different effects of one card in one chain")
 	constexpr domain::CardCode double_code{94500001};
 	constexpr domain::CardCode opponent_code{94500002};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(double_code, make_monster(double_code));
@@ -1830,7 +1859,7 @@ TEST_CASE("flow::Duel collects multiple effects of one card into one chain")
 	constexpr domain::CardCode victim_code{94600001};
 	constexpr domain::CardCode destroyer_code{94600002};
 
-	flow::Duel duel{};
+	TestDuel duel{};
 	auto& game = duel.game();
 
 	game.register_definition(victim_code, make_monster(victim_code));
@@ -1869,6 +1898,301 @@ TEST_CASE("flow::Duel collects multiple effects of one card into one chain")
 	CHECK(game.life_points(domain::Player::FIRST) == 8500);
 	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 1);
 	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::DECK) == 0);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel does not auto-activate optional triggers without a driver")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_driver_missing";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94700001.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":true},"effect":[{"call":"draw","args":{"players":["SELF"],"count":1}}]}]})"
+	);
+	write(
+		"94700002.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"destroy","args":{"cards":{"call":"find_cards","args":{"players":["SELF","OPPONENT"],"zones":["MONSTER","EXTRA_MONSTER"]}},"reason":"EFFECT"}}]}]})"
+	);
+
+	constexpr domain::CardCode victim_code{94700001};
+	constexpr domain::CardCode destroyer_code{94700002};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	game.register_definition(victim_code, make_monster(victim_code));
+	game.register_definition(destroyer_code, make_monster(destroyer_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
+	REQUIRE(destroyer.valid());
+	game.place(*game.find_instance_mutable(destroyer), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto victim = game.create_instance(victim_code, domain::Player::FIRST);
+	REQUIRE(victim.valid());
+	game.place(*game.find_instance_mutable(victim), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto deck_card = game.create_instance(victim_code, domain::Player::FIRST);
+	REQUIRE(deck_card.valid());
+	game.place(*game.find_instance_mutable(deck_card), domain::DeckPlacement{.index = 0});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_effect(destroyer, 0));
+	CHECK(duel.pass_priority());
+
+	// 没有外部驱动:选发效果不被自动发动
+	CHECK(duel.chain().empty());
+	CHECK(game.zone_of(victim) == domain::Zone::GRAVEYARD);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 0);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::DECK) == 1);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel lets the driver decline optional triggers")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_driver_decline";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94700003.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":false},"effect":[{"call":"recover_life","args":{"players":["SELF"],"amount":500}}]},{"type":"activated","activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":true},"effect":[{"call":"draw","args":{"players":["SELF"],"count":1}}]}]})"
+	);
+	write(
+		"94700004.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"destroy","args":{"cards":{"call":"find_cards","args":{"players":["SELF","OPPONENT"],"zones":["MONSTER","EXTRA_MONSTER"]}},"reason":"EFFECT"}}]}]})"
+	);
+
+	constexpr domain::CardCode victim_code{94700003};
+	constexpr domain::CardCode destroyer_code{94700004};
+
+	TestDuel duel{};
+	duel.set_trigger_chooser(
+		[](const flow::TriggerDecision& decision) -> std::vector<std::size_t>
+		{
+			std::vector<std::size_t> indices{};
+			if (!decision.optional)
+			{
+				indices.resize(decision.candidates.size());
+				std::iota(indices.begin(), indices.end(), std::size_t{0});
+			}
+			return indices;
+		}
+	);
+
+	auto& game = duel.game();
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	game.register_definition(victim_code, make_monster(victim_code));
+	game.register_definition(destroyer_code, make_monster(destroyer_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
+	REQUIRE(destroyer.valid());
+	game.place(*game.find_instance_mutable(destroyer), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto victim = game.create_instance(victim_code, domain::Player::FIRST);
+	REQUIRE(victim.valid());
+	game.place(*game.find_instance_mutable(victim), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto deck_card = game.create_instance(victim_code, domain::Player::FIRST);
+	REQUIRE(deck_card.valid());
+	game.place(*game.find_instance_mutable(deck_card), domain::DeckPlacement{.index = 0});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_effect(destroyer, 0));
+	CHECK(duel.pass_priority());
+
+	// 必发已入链,选发被驱动拒绝
+	REQUIRE(duel.chain().size() == 1);
+	CHECK(duel.chain()[0].controller() == domain::Player::FIRST);
+
+	settle(duel);
+
+	CHECK(game.life_points(domain::Player::FIRST) == 8500);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 0);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::DECK) == 1);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel lets the driver order optional triggers")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_driver_order";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94700005.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":true},"effect":[{"call":"draw","args":{"players":["SELF"],"count":1}}]},{"type":"activated","activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":true},"effect":[{"call":"recover_life","args":{"players":["SELF"],"amount":500}}]}]})"
+	);
+	write(
+		"94700006.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"destroy","args":{"cards":{"call":"find_cards","args":{"players":["SELF","OPPONENT"],"zones":["MONSTER","EXTRA_MONSTER"]}},"reason":"EFFECT"}}]}]})"
+	);
+
+	constexpr domain::CardCode victim_code{94700005};
+	constexpr domain::CardCode destroyer_code{94700006};
+
+	TestDuel duel{};
+	duel.set_trigger_chooser(
+		[](const flow::TriggerDecision& decision) -> std::vector<std::size_t>
+		{
+			std::vector<std::size_t> indices(decision.candidates.size());
+			std::iota(indices.begin(), indices.end(), std::size_t{0});
+			if (decision.optional)
+			{
+				std::ranges::reverse(indices);
+			}
+			return indices;
+		}
+	);
+
+	auto& game = duel.game();
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	game.register_definition(victim_code, make_monster(victim_code));
+	game.register_definition(destroyer_code, make_monster(destroyer_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
+	REQUIRE(destroyer.valid());
+	game.place(*game.find_instance_mutable(destroyer), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto victim = game.create_instance(victim_code, domain::Player::FIRST);
+	REQUIRE(victim.valid());
+	game.place(*game.find_instance_mutable(victim), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto deck_card = game.create_instance(victim_code, domain::Player::FIRST);
+	REQUIRE(deck_card.valid());
+	game.place(*game.find_instance_mutable(deck_card), domain::DeckPlacement{.index = 0});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	const auto* script = duel.scripts().find(victim_code);
+	REQUIRE(script != nullptr);
+
+	CHECK(duel.activate_effect(destroyer, 0));
+	CHECK(duel.pass_priority());
+
+	// 驱动返回 [1,0]:链上顺序与脚本顺序相反
+	REQUIRE(duel.chain().size() == 2);
+	CHECK(duel.chain()[0].effect() == &script->effects[1]);
+	CHECK(duel.chain()[1].effect() == &script->effects[0]);
+
+	settle(duel);
+
+	CHECK(game.life_points(domain::Player::FIRST) == 8500);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 1);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::DECK) == 0);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel requires an external selector for target choice")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_driver_target";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94700007.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"target":[{"call":"pick_target","args":{"players":["OPPONENT"],"zones":["MONSTER"],"min":1,"max":1},"bind":"target"}],"effect":[{"call":"destroy","args":{"cards":{"var":"target"},"reason":"EFFECT"}}]}]})"
+	);
+
+	constexpr domain::CardCode spell_code{94700007};
+	constexpr domain::CardCode target_code{94700008};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(target_code, make_monster(target_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto first_target = game.create_instance(target_code, domain::Player::SECOND);
+	REQUIRE(first_target.valid());
+	game.place(*game.find_instance_mutable(first_target), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto second_target = game.create_instance(target_code, domain::Player::SECOND);
+	REQUIRE(second_target.valid());
+	game.place(*game.find_instance_mutable(second_target), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	// 没有外部 selector:引擎不自动选对象,发动失败
+	CHECK_FALSE(duel.activate_card(spell));
+	CHECK(game.zone_of(spell) == domain::Zone::HAND);
+	CHECK(game.zone_of(first_target) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(second_target) == domain::Zone::MONSTER);
+
+	// 外部 selector 选择第二个对象
+	duel.set_selector(
+		[](const execution::Group& candidates, const std::size_t /*min*/, const std::size_t /*max*/) -> execution::Group
+		{
+			const auto last = candidates.begin() + static_cast<std::ptrdiff_t>(candidates.size() - 1);
+			return execution::Group{last, last + 1};
+		}
+	);
+
+	CHECK(duel.activate_card(spell));
+	settle(duel);
+
+	CHECK(game.zone_of(first_target) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(second_target) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
 
 	std::filesystem::remove_all(directory);
 }

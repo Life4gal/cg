@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -66,6 +67,15 @@ namespace
 		std::ignore = g_reader.take_diagnostics();
 		return g_reader.read_card_script(nlohmann::json::parse(buffer.str()), file);
 	}
+
+	// 测试驱动:选择前 min 张(与旧的默认行为一致)
+	[[nodiscard]] auto select_first(const execution::Group& candidates, const std::size_t min, [[maybe_unused]] const std::size_t max) -> execution::Group
+	{
+		const auto count = std::ranges::min(min, candidates.size());
+		return {candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(count)};
+	}
+
+	const execution::Context::selector_type g_select_first{select_first};
 }
 
 TEST_CASE("execution::Interpreter resolves Raigeki")
@@ -133,6 +143,7 @@ TEST_CASE("execution::Interpreter resolves Tribute to the Doomed")
 
 	execution::Interpreter interpreter{g_vocabulary};
 	execution::Context context{game, domain::Player::FIRST};
+	context.selector = &g_select_first;
 
 	CHECK(interpreter.execute(*activated, context));
 
@@ -214,6 +225,7 @@ TEST_CASE("execution::Interpreter searches a subtype from the deck")
 
 	execution::Interpreter interpreter{g_vocabulary};
 	execution::Context context{game, domain::Player::FIRST, terraforming};
+	context.selector = &g_select_first;
 
 	CHECK(interpreter.execute(*activated, context));
 
@@ -354,8 +366,7 @@ TEST_CASE("execution::Interpreter matches a FLIP trigger and resolves")
 
 	execution::Interpreter interpreter{g_vocabulary};
 	execution::Context context{game, domain::Player::FIRST, jar};
-	context.trigger_source = dsl::TriggerSource{domain::EventCode::FLIP};
-	context.event_card = jar;
+	context.trigger = execution::Context::TriggerInfo{.source = dsl::TriggerSource{domain::EventCode::FLIP}, .event_card = jar};
 
 	CHECK(interpreter.matches(*trigger, context));
 	CHECK(interpreter.execute(*activated, context));
@@ -428,8 +439,7 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 
 	execution::Interpreter interpreter{g_vocabulary};
 	execution::Context context{game, domain::Player::FIRST};
-
-	context.trigger_source = dsl::TriggerSource{domain::EventCode::FLIP};
+	context.trigger = execution::Context::TriggerInfo{.source = dsl::TriggerSource{domain::EventCode::FLIP}};
 
 	const auto triggered = interpreter.collect_triggered(scripts, context, domain::Player::FIRST);
 	REQUIRE(triggered.size() == 3);
@@ -474,8 +484,9 @@ TEST_CASE("execution::Interpreter builds and resolves a chain")
 
 	execution::Interpreter interpreter{g_vocabulary};
 	execution::Context context{game, domain::Player::FIRST};
+	context.selector = &g_select_first;
 
-	context.trigger_source = dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED};
+	context.trigger = execution::Context::TriggerInfo{.source = dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}};
 
 	const auto triggered = interpreter.collect_triggered(scripts, context, domain::Player::FIRST);
 	REQUIRE(triggered.size() == 2);

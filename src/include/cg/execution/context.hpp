@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <map>
 #include <optional>
@@ -23,13 +24,46 @@ namespace cg::execution
 	class Chain;
 
 	// 一个效果发动/结算(连锁link)的执行帧
+	// - 基础帧:game / controller / source / frame
+	// - 环境:card_state / selector(可空)
+	// - 可选子上下文:trigger(触发时点) / chain(连锁结算位置)
 	class Context
 	{
 	public:
-		using bindings_type = std::map<dsl::BindingId, Value>;
-		using scopes_type = std::vector<state::CardInstanceId>;
-		// 选择回调:从候选中选出 [min, max] 张;缺省取前 min 张
+		// 选择回调:从候选中选出 [min, max] 张
 		using selector_type = std::function<auto(const Group& candidates, std::size_t min, std::size_t max) /*noexcept*/ -> Group>;
+
+		// 执行帧局部状态
+		class Frame
+		{
+		public:
+			using bindings_type = std::map<dsl::BindingId, Value>;
+			using scopes_type = std::vector<state::CardInstanceId>;
+
+			// 效果帧绑定
+			bindings_type bindings;
+			// 元素作用域栈($)
+			scopes_type element_scopes;
+		};
+
+		// 触发时点(仅触发收集/结算时存在)
+		class TriggerInfo
+		{
+		public:
+			// 当前事件/期间
+			dsl::TriggerSource source;
+			// 事件关联卡
+			std::optional<state::CardInstanceId> event_card;
+		};
+
+		// 连锁结算位置(仅 Interpreter::resolve(Chain&) 时存在)
+		class ChainCursor
+		{
+		public:
+			Chain* chain;
+			// 当前 link 在 chain 中的下标
+			std::size_t link_index;
+		};
 
 		std::reference_wrapper<state::Game> game;
 
@@ -38,52 +72,32 @@ namespace cg::execution
 		// 效果来源卡
 		state::CardInstanceId source;
 
-		// 效果帧绑定
-		bindings_type bindings;
-		// 元素作用域栈($)
-		scopes_type element_scopes;
+		// 执行帧(绑定/作用域)
+		Frame frame;
 
-		// 选择回调(测试/UI注入)
-		selector_type selector;
-
-		// 有效值查询(为空时回退 CardInstance::origin_*)
+		// 有效值查询(为空时回退CardInstance::origin_*)
 		CardStateResolver* card_state;
+		// 选择回调;为空 = 未注入,选择类原语失败
+		const selector_type* selector;
 
-		// 结算期上下文(仅 Interpreter::resolve(Chain&) 设置)
-		// - 供无效类原语定位「上一环」;发动/激活阶段为空
-		Chain* chain;
-		// 当前 link 在 chain 中的下标
-		std::size_t chain_link_index;
-
-		// ================================================================
-		// 触发上下文
-		// ================================================================
-
-		// 当前事件/期间
-		std::optional<dsl::TriggerSource> trigger_source;
-		// 事件关联卡
-		std::optional<state::CardInstanceId> event_card;
-		// 事件玩家
-		std::optional<domain::Player> event_player;
+		// 触发时点;空 = 非触发上下文
+		std::optional<TriggerInfo> trigger;
+		// 连锁结算位置;空 = 非结算上下文
+		std::optional<ChainCursor> chain;
 
 		constexpr Context(
 			state::Game& game,
 			const domain::Player controller,
-			const state::CardInstanceId source = state::CardInstanceId{state::CardInstanceId::invalid_id},
-			selector_type selector = {}
+			const state::CardInstanceId source = state::CardInstanceId{state::CardInstanceId::invalid_id}
 		) noexcept
 			: game{game},
 			  controller{controller},
 			  source{source},
-			  bindings{},
-			  element_scopes{},
-			  selector{std::move(selector)},
+			  frame{},
 			  card_state{nullptr},
-			  chain{nullptr},
-			  chain_link_index{0},
-			  trigger_source{std::nullopt},
-			  event_card{std::nullopt},
-			  event_player{std::nullopt} {}
+			  selector{nullptr},
+			  trigger{std::nullopt},
+			  chain{std::nullopt} {}
 
 		Context(const Context&) = delete;
 		Context& operator=(const Context&) = delete;
@@ -93,7 +107,7 @@ namespace cg::execution
 
 		~Context() noexcept = default;
 
-		// 为新效果/新 link 创建子帧:共享环境,局部绑定与作用域为空
+		// 为新效果/新 link 创建子帧:共享环境,复制触发时点,局部帧为空
 		[[nodiscard]] auto make_child(
 			const domain::Player child_controller,
 			const state::CardInstanceId child_source
@@ -101,11 +115,9 @@ namespace cg::execution
 		{
 			Context child{game.get(), child_controller, child_source};
 
-			child.selector = selector;
 			child.card_state = card_state;
-			child.trigger_source = trigger_source;
-			child.event_card = event_card;
-			child.event_player = event_player;
+			child.selector = selector;
+			child.trigger = trigger;
 
 			return child;
 		}

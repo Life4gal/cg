@@ -22,47 +22,129 @@ namespace cg::flow
 
 		execution::Context context{game_, turn_.turn_player()};
 		context.card_state = &card_state_;
+		context.selector = &selector_;
 
 		const auto candidates = interpreter_.collect_triggered(scripts_, context, windows_, turn_.turn_player());
+		if (candidates.empty())
+		{
+			return false;
+		}
+
+		// 引擎不自动决策:没有外部触发选择器时不建立连锁
+		if (!trigger_chooser_)
+		{
+			return false;
+		}
 
 		auto added = false;
-		for (const auto& entry: candidates)
+
+		// SEGOC 四组:回合必发 → 对方必发 → 回合选发 → 对方选发
+		for (std::size_t group = 0; group < 4; ++group)
 		{
-			const auto& instance = entry.instance.get();
-			const auto& effect = entry.effect.get();
+			const auto optional = group >= 2;
+			const auto is_turn_player = (group % 2) == 0;
+			const auto player = is_turn_player ? turn_.turn_player() : domain::opponent_of(turn_.turn_player());
 
-			// 前一条可能已占用同卡/同名次数
-			if (!can_use(effect, instance))
+			std::vector<std::size_t> group_indices{};
+			std::vector<TriggerChoice> choices{};
+
+			for (std::size_t index = 0; index < candidates.size(); ++index)
+			{
+				const auto& entry = candidates[index];
+
+				if (entry.trigger.get().optional != optional)
+				{
+					continue;
+				}
+				if ((entry.controller == turn_.turn_player()) != is_turn_player)
+				{
+					continue;
+				}
+				// 使用次数/互斥已满的效果不作为候选
+				if (!can_use(entry.effect.get(), entry.instance.get()))
+				{
+					continue;
+				}
+
+				group_indices.push_back(index);
+				choices.push_back(
+					TriggerChoice{
+							.controller = entry.controller,
+							.source = entry.instance.get().id(),
+							.effect = entry.effect.get().id,
+							.trigger_source = entry.source,
+							.event_card = entry.event_card,
+							.optional = optional,
+					}
+				);
+			}
+
+			if (choices.empty())
 			{
 				continue;
 			}
 
-			auto link_context = context.make_child(entry.controller, instance.id());
-			link_context.trigger_source = entry.source;
-			link_context.event_card = entry.event_card;
+			const auto selected = trigger_chooser_(
+				TriggerDecision
+				{
+						.player = player,
+						.optional = optional,
+						.candidates = std::span<const TriggerChoice>{choices},
+				}
+			);
 
-			if (!interpreter_.activate(entry.activated.get(), link_context))
+			// 外部选择校验:索引合法、不重复;必发组必须全选
+			// 非法选择视为驱动错误,引擎不自动纠正
+			std::vector selected_flags(choices.size(), false);
+			for (const auto choice: selected)
 			{
-				continue;
+				if (choice >= choices.size() || selected_flags[choice])
+				{
+					return false;
+				}
+				selected_flags[choice] = true;
+			}
+			if (!optional && selected.size() != choices.size())
+			{
+				return false;
 			}
 
-			const auto mutex_inserted = mark_used(effect, instance);
-
-			execution::ChainLink link
+			for (const auto choice: selected)
 			{
-					entry.controller,
-					// 诱发效果固定为速度1
-					domain::EffectSpeed::NORMAL,
-					instance.id(),
-					&entry.activated.get(),
-					&effect,
-					std::move(link_context),
-					mutex_inserted
-			};
+				const auto& entry = candidates[group_indices[choice]];
+				const auto& instance = entry.instance.get();
 
-			chain_.push_back(std::move(link));
+				// 前面组可能已占用次数
+				if (!can_use(entry.effect.get(), instance))
+				{
+					continue;
+				}
 
-			added = true;
+				auto link_context = context.make_child(entry.controller, instance.id());
+				link_context.trigger = execution::Context::TriggerInfo{.source = entry.source, .event_card = entry.event_card};
+
+				if (!interpreter_.activate(entry.activated.get(), link_context))
+				{
+					continue;
+				}
+
+				const auto mutex_inserted = mark_used(entry.effect.get(), instance);
+
+				execution::ChainLink link
+				{
+						entry.controller,
+						// 诱发效果固定为速度1
+						domain::EffectSpeed::NORMAL,
+						instance.id(),
+						&entry.activated.get(),
+						&entry.effect.get(),
+						std::move(link_context),
+						mutex_inserted,
+				};
+				chain_.push_back(std::move(link));
+
+				added = true;
+			}
 		}
 
 		if (added)
@@ -604,6 +686,16 @@ namespace cg::flow
 	auto Duel::windows() const noexcept -> std::span<const execution::EventWindow>
 	{
 		return windows_;
+	}
+
+	auto Duel::set_selector(selector_type selector) noexcept -> void
+	{
+		selector_ = std::move(selector);
+	}
+
+	auto Duel::set_trigger_chooser(trigger_chooser_type chooser) noexcept -> void
+	{
+		trigger_chooser_ = std::move(chooser);
 	}
 
 	auto Duel::winner() const noexcept -> std::optional<domain::Player>
@@ -1148,8 +1240,8 @@ namespace cg::flow
 					{
 						execution::Context timing_context{game_, controller, card};
 						timing_context.card_state = &card_state_;
-						timing_context.trigger_source = window.source;
-						timing_context.event_card = window.card;
+						timing_context.selector = &selector_;
+						timing_context.trigger = execution::Context::TriggerInfo{.source = window.source, .event_card = window.card};
 
 						return interpreter_.matches(
 							dsl::Trigger{.spec = *card_activation->timing, .optional = false},
@@ -1200,10 +1292,10 @@ namespace cg::flow
 
 		execution::Context context{game_, controller, card};
 		context.card_state = &card_state_;
+		context.selector = &selector_;
 		if (matched_window.has_value())
 		{
-			context.trigger_source = matched_window->source;
-			context.event_card = matched_window->card;
+			context.trigger = execution::Context::TriggerInfo{.source = matched_window->source, .event_card = matched_window->card};
 		}
 
 		if (activated != nullptr && !interpreter_.activate(*activated, context))
@@ -1625,6 +1717,7 @@ namespace cg::flow
 
 		execution::Context context{game_, controller, card};
 		context.card_state = &card_state_;
+		context.selector = &selector_;
 		if (!interpreter_.activate(*activated, context))
 		{
 			return false;
