@@ -504,6 +504,14 @@ namespace cg::execution
 		{
 			return special_summon(*definition, call, context);
 		}
+		if (definition->name == "negate_activation")
+		{
+			return negate_activation(*definition, call, context);
+		}
+		if (definition->name == "negate_effect")
+		{
+			return negate_effect(*definition, call, context);
+		}
 
 		// TODO: 其余原语
 		return std::nullopt;
@@ -1412,6 +1420,45 @@ namespace cg::execution
 		return std::nullopt;
 	}
 
+	auto Interpreter::negate_activation(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		// 无效对象 = 本效果直接响应的那一环
+		if (context.chain == nullptr || context.chain_link_index == 0)
+		{
+			return std::nullopt;
+		}
+
+		auto& link = context.chain->operator[](context.chain_link_index - 1);
+		link.negate_activation();
+
+		return Value{Void{}};
+	}
+
+	auto Interpreter::negate_effect(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		if (context.chain == nullptr || context.chain_link_index == 0)
+		{
+			return std::nullopt;
+		}
+
+		auto& link = context.chain->operator[](context.chain_link_index - 1);
+		link.negate_effect();
+
+		return Value{Void{}};
+	}
+
 	auto Interpreter::filter(Context& context, const dsl::Expression& predicate, const Group& candidates) noexcept -> std::optional<Group>
 	{
 		Group result{};
@@ -1506,6 +1553,23 @@ namespace cg::execution
 
 	auto Interpreter::collect_triggered(const ScriptRegistry& scripts, const Context& context, const domain::Player turn_player) noexcept -> TriggeredEffectList
 	{
+		if (!context.trigger_source.has_value())
+		{
+			return {};
+		}
+
+		const EventWindow window{.source = *context.trigger_source, .card = context.event_card};
+
+		return collect_triggered(scripts, context, {&window, 1}, turn_player);
+	}
+
+	auto Interpreter::collect_triggered(
+		const ScriptRegistry& scripts,
+		const Context& context,
+		const std::span<const EventWindow> windows,
+		const domain::Player turn_player
+	) noexcept -> TriggeredEffectList
+	{
 		TriggeredEffectList result{};
 
 		for (const auto& game = context.game.get();
@@ -1544,13 +1608,29 @@ namespace cg::execution
 					continue;
 				}
 
-				if (auto card_context = context.make_child(instance.controller(), instance.id());
-					!matches(*trigger, card_context))
+				// 命中任一事件时点即可;同一效果只取首个命中的窗口
+				for (const auto& window: windows)
 				{
-					continue;
-				}
+					auto card_context = context.make_child(instance.controller(), instance.id());
+					card_context.trigger_source = window.source;
+					card_context.event_card = window.card;
 
-				result.emplace_back(instance.controller(), std::ref(instance), std::ref(effect), std::ref(*activated), std::ref(*trigger));
+					if (!matches(*trigger, card_context))
+					{
+						continue;
+					}
+
+					result.emplace_back(
+						instance.controller(),
+						std::ref(instance),
+						std::ref(effect),
+						std::ref(*activated),
+						std::ref(*trigger),
+						window.source,
+						window.card
+					);
+					break;
+				}
 			}
 		}
 
@@ -1566,7 +1646,24 @@ namespace cg::execution
 			}
 		);
 
-		return result;
+		// 同一张卡在一个连锁上只能发动一个效果(排序后保留优先级最高的那个)
+		TriggeredEffectList deduplicated{};
+		deduplicated.reserve(result.size());
+
+		std::vector<state::CardInstanceId> activated_cards{};
+		for (const auto& entry: result)
+		{
+			const auto id = entry.instance.get().id();
+			if (std::ranges::contains(activated_cards, id))
+			{
+				continue;
+			}
+
+			activated_cards.push_back(id);
+			deduplicated.push_back(entry);
+		}
+
+		return deduplicated;
 	}
 
 	auto Interpreter::activate(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool
@@ -1606,13 +1703,26 @@ namespace cg::execution
 		for (const auto& entry: triggered)
 		{
 			auto link_context = context.make_child(entry.controller, entry.instance.get().id());
+			link_context.trigger_source = entry.source;
+			link_context.event_card = entry.event_card;
 
 			if (!activate(entry.activated.get(), link_context))
 			{
 				continue;
 			}
 
-			chain.emplace_back(entry, std::move(link_context));
+			ChainLink link
+			{
+					entry.controller,
+					// 诱发效果固定为速度1
+					domain::EffectSpeed::NORMAL,
+					entry.instance.get().id(),
+					&entry.activated.get(),
+					&entry.effect.get(),
+					std::move(link_context)
+			};
+
+			chain.push_back(std::move(link));
 		}
 
 		return chain;
@@ -1620,15 +1730,30 @@ namespace cg::execution
 
 	auto Interpreter::resolve(Chain& chain) noexcept -> bool
 	{
-		for (auto& [effect, context]: chain | std::views::reverse)
+		auto resolved = true;
+
+		for (auto index = chain.size(); index > 0; --index)
 		{
-			if (!resolve(effect.activated.get(), context))
+			auto& link = chain[index - 1];
+
+			// 结算期上下文:供无效类原语定位"上一环"
+			link.set_chain_position(chain, index - 1);
+
+			// 发动无效 → 不结算;效果无效 → 结算但什么也不做
+			if (link.activation_negated() || link.effect_negated())
 			{
-				return false;
+				continue;
+			}
+
+			if (const auto* activated = link.activated_effect();
+				activated != nullptr && !resolve(*activated, link.context()))
+			{
+				// 单个效果处理失败不阻断更早的连锁
+				resolved = false;
 			}
 		}
 
-		return true;
+		return resolved;
 	}
 
 	auto Interpreter::execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool

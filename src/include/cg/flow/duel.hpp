@@ -9,12 +9,12 @@
 #include <cg/dsl/vocabulary.hpp>
 
 #include <cg/execution/card_state_resolver.hpp>
+#include <cg/execution/chain.hpp>
 #include <cg/execution/interpreter.hpp>
 #include <cg/execution/script_registry.hpp>
 
 #include <cg/state/game.hpp>
 
-#include <cg/flow/event.hpp>
 #include <cg/flow/battle.hpp>
 #include <cg/flow/priority.hpp>
 #include <cg/flow/turn.hpp>
@@ -58,6 +58,12 @@ namespace cg::flow
 		Turn turn_;
 		Priority priority_;
 		Battle battle_;
+
+		// 当前连锁(空 = 开放状态;下标 0 = Chain Link 1)
+		execution::Chain chain_;
+
+		// 当前事件时点(可能同时有多个事件)
+		std::vector<execution::EventWindow> windows_;
 
 		// ================================================================
 		// 回合内状态 / 胜负
@@ -144,15 +150,28 @@ namespace cg::flow
 		execution::Interpreter interpreter_;
 		execution::CardStateResolver card_state_;
 
-		// 事件队列处理中(防重入)
-		bool processing_events_;
-
-		// 当前事件窗口(卡发动时点匹配)
-		std::optional<Window> window_;
-
 		// ================================================================
 		// 内部动作
 		// ================================================================
+
+		// 开一个事件时点:收集触发 → 逐条发动入链 → 优先权交给最后发动者的对方
+		// 返回是否建立了连锁
+		auto open_timing(std::span<const execution::EventWindow> windows) noexcept -> bool;
+
+		// 结算整条连锁(LIFO)→ 回滚无效发动的次数 → 不能留场的卡送墓 → 开新时点
+		auto resolve_chain() noexcept -> void;
+
+		// 把待结算的连锁全部结算完(战斗等同步流程使用)
+		auto settle_chain() noexcept -> void;
+
+		// 发动速度(由有效卡种/副种类与激活窗口派生)
+		[[nodiscard]] auto activation_speed(const state::CardInstance& card, const dsl::ActivationKind& activation) const noexcept -> domain::EffectSpeed;
+
+		// 连锁合法性:速度 1 不能作为 Chain Link 2+;其余须 ≥ 上一环速度
+		[[nodiscard]] auto can_chain(domain::EffectSpeed speed) const noexcept -> bool;
+
+		// 结算后是否留在场上(通常魔法/陷阱送墓;永续/场地/装备留场)
+		[[nodiscard]] auto can_stay_on_field(const state::CardInstance& card) const noexcept -> bool;
 
 		// 如果当前可以召唤且指定位置为空,返回对应实例,否则返回空指针
 		// - 检查是否是合适阶段(主要阶段1或者主要阶段2)
@@ -174,12 +193,18 @@ namespace cg::flow
 		// 结算后统一处理 Interpreter 产生的事件(破坏/特召等)
 		auto process_pending_events() noexcept -> void;
 
-		// 使用次数
+		// 使用限制相关
 		[[nodiscard]] auto usage_owner(dsl::UsageKind kind, const state::CardInstance& card) const noexcept -> UsageKey::owner_type;
 		[[nodiscard]] auto make_usage_key(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> UsageKey;
 		[[nodiscard]] auto make_mutex_key(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> MutexKey;
+
+		// 检查效果能否使用
 		[[nodiscard]] auto can_use(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> bool;
-		auto mark_used(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> void;
+
+		// 返回是否由本次调用建立了新的互斥选择
+		auto mark_used(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> bool;
+		// 发动/效果被无效时回滚次数
+		auto unmark_used(const dsl::Effect& effect, const state::CardInstance& card, bool mutex_inserted) noexcept -> void;
 
 	public:
 		Duel() noexcept;
@@ -199,6 +224,12 @@ namespace cg::flow
 
 		// [[nodiscard]] auto battle() noexcept -> Battle&;
 		[[nodiscard]] auto battle() const noexcept -> const Battle&;
+
+		// 当前连锁(空 = 开放状态)
+		[[nodiscard]] auto chain() const noexcept -> const execution::Chain&;
+
+		// 当前事件时点
+		[[nodiscard]] auto windows() const noexcept -> std::span<const execution::EventWindow>;
 
 		// ================================================================
 		// 胜负
@@ -227,7 +258,10 @@ namespace cg::flow
 		// 推进阶段(需双方均已放弃优先权)
 		auto change_phase() noexcept -> bool;
 
-		// 当前优先权持有者放弃;双方均放弃时返回 true(窗口关闭)
+		// 当前优先权持有者放弃
+		// - 连锁中:结算整条连锁(返回 true)
+		// - 开放状态:双方都放弃时窗口关闭(返回 true)
+		// 返回值 = 一个窗口结束;若结算后建立了新连锁,需再次检查 chain()
 		auto pass_priority() noexcept -> bool;
 
 		// 结束回合(仅 END 阶段有效)

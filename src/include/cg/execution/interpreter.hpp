@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+
 #include <cg/domain/card.hpp>
 
 #include <cg/execution/value.hpp>
@@ -100,6 +102,10 @@ namespace cg::execution
 		[[nodiscard]] auto change_position(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 		[[nodiscard]] auto special_summon(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 
+		// 无效化:作用于当前 link 的前一环(它直接响应的那一环)
+		[[nodiscard]] auto negate_activation(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
+		[[nodiscard]] auto negate_effect(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
+
 		[[nodiscard]] auto filter(Context& context, const dsl::Expression& predicate, const Group& candidates) noexcept -> std::optional<Group>;
 
 	public:
@@ -112,7 +118,12 @@ namespace cg::execution
 		[[nodiscard]] auto matches(const dsl::Trigger& trigger, Context& context) noexcept -> bool;
 
 		// 收集当前事件触发的全部效果(SEGOC顺序:必发优先,回合玩家优先)
+		// - 单窗口重载使用 context.trigger_source / context.event_card
 		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, domain::Player turn_player) noexcept -> TriggeredEffectList;
+
+		// 收集同一时点多个事件触发的全部效果
+		// - 同一张卡的同一效果被多个事件命中只取首个;同一张卡只取一个效果
+		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, std::span<const EventWindow> windows, domain::Player turn_player) noexcept -> TriggeredEffectList;
 
 		// 激活(condition → cost → target);不执行效果处理
 		[[nodiscard]] auto activate(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;

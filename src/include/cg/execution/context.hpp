@@ -20,6 +20,7 @@ namespace cg::state
 namespace cg::execution
 {
 	class CardStateResolver;
+	class Chain;
 
 	// 一个效果发动/结算(连锁link)的执行帧
 	class Context
@@ -48,6 +49,12 @@ namespace cg::execution
 		// 有效值查询(为空时回退 CardInstance::origin_*)
 		CardStateResolver* card_state;
 
+		// 结算期上下文(仅 Interpreter::resolve(Chain&) 设置)
+		// - 供无效类原语定位「上一环」;发动/激活阶段为空
+		Chain* chain;
+		// 当前 link 在 chain 中的下标
+		std::size_t chain_link_index;
+
 		// ================================================================
 		// 触发上下文
 		// ================================================================
@@ -72,6 +79,8 @@ namespace cg::execution
 			  element_scopes{},
 			  selector{std::move(selector)},
 			  card_state{nullptr},
+			  chain{nullptr},
+			  chain_link_index{0},
 			  trigger_source{std::nullopt},
 			  event_card{std::nullopt},
 			  event_player{std::nullopt} {}

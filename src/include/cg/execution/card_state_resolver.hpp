@@ -63,19 +63,40 @@ namespace cg::execution
 			Interpreter& interpreter
 		) noexcept;
 
+		// 获取卡密 = 印刷值 + 静态修饰
 		[[nodiscard]] auto effective_code(const state::CardInstance& card) const noexcept -> domain::CardCode;
 
+		// 获取类型 = 印刷值 + 静态修饰
+		[[nodiscard]] auto card_types(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardType>;
+
+		// 获取子类型 = 印刷值 + 静态修饰
+		[[nodiscard]] auto card_subtypes(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardSubtype>;
+
+		// 检查是否包含指定类型 = 印刷值 + 静态修饰
 		[[nodiscard]] auto is_card_type(const state::CardInstance& card, domain::CardType type) const noexcept -> bool;
+
+		// 检查是否包含指定子类型 = 印刷值 + 静态修饰
 		[[nodiscard]] auto is_card_subtype(const state::CardInstance& card, domain::CardSubtype subtype) const noexcept -> bool;
+
+		// 检查是否包含指定子类型 = 印刷值 + 静态修饰
 		[[nodiscard]] auto is_card_subtype(const state::CardInstance& card, utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool;
 
+		// 获取攻击力 = 印刷值 + 静态修饰
 		[[nodiscard]] auto attack(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>;
+
+		// 获取守备力 = 印刷值 + 静态修饰
 		[[nodiscard]] auto defense(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>;
 
+		// 获取属性 = 印刷值 + 静态修饰
 		[[nodiscard]] auto attributes(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Attribute>;
+
+		// 获取种族
 		[[nodiscard]] auto race(const state::CardInstance& card) const noexcept -> domain::Race;
+
+		// 获取等级/阶级 = 印刷值 + 静态修饰
 		[[nodiscard]] auto level(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::LevelRank>;
 
+		// 获取防护能力 = 印刷值 + 静态修饰
 		[[nodiscard]] auto protections(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Protection>;
 	};
 }

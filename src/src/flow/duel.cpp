@@ -1,6 +1,7 @@
 #include <cg/flow/duel.hpp>
 
 #include <algorithm>
+#include <array>
 #include <ranges>
 
 #include <cg/execution/chain.hpp>
@@ -9,8 +10,227 @@
 
 namespace cg::flow
 {
+	auto Duel::open_timing(const std::span<const execution::EventWindow> windows) noexcept -> bool
+	{
+		if (!chain_.empty())
+		{
+			// 连锁中不能开新时点
+			return false;
+		}
+
+		windows_.assign(windows.begin(), windows.end());
+
+		execution::Context context{game_, turn_.turn_player()};
+		context.card_state = &card_state_;
+
+		const auto candidates = interpreter_.collect_triggered(scripts_, context, windows_, turn_.turn_player());
+
+		auto added = false;
+		for (const auto& entry: candidates)
+		{
+			const auto& instance = entry.instance.get();
+			const auto& effect = entry.effect.get();
+
+			// 前一条可能已占用同卡/同名次数
+			if (!can_use(effect, instance))
+			{
+				continue;
+			}
+
+			auto link_context = context.make_child(entry.controller, instance.id());
+			link_context.trigger_source = entry.source;
+			link_context.event_card = entry.event_card;
+
+			if (!interpreter_.activate(entry.activated.get(), link_context))
+			{
+				continue;
+			}
+
+			const auto mutex_inserted = mark_used(effect, instance);
+
+			execution::ChainLink link
+			{
+					entry.controller,
+					// 诱发效果固定为速度1
+					domain::EffectSpeed::NORMAL,
+					instance.id(),
+					&entry.activated.get(),
+					&effect,
+					std::move(link_context),
+					mutex_inserted
+			};
+
+			chain_.push_back(std::move(link));
+
+			added = true;
+		}
+
+		if (added)
+		{
+			// 最后发动者把优先权交给对方
+			priority_.transfer_from(chain_.back().controller(), turn_.turn_player());
+
+			// 已经进入连锁,本时点关闭
+			windows_.clear();
+		}
+
+		return added;
+	}
+
+	auto Duel::resolve_chain() noexcept -> void
+	{
+		if (chain_.empty())
+		{
+			return;
+		}
+
+		// 连锁开始结算后不能再插入发动,时点关闭
+		windows_.clear();
+
+		static_cast<void>(interpreter_.resolve(chain_));
+
+		// 无效回滚:发动无效(USE以外)/ 效果无效(APPLY)
+		for (const auto& link: chain_)
+		{
+			const auto* effect = link.effect();
+
+			if (effect == nullptr)
+			{
+				continue;
+			}
+
+			const auto source = link.source();
+			const auto* instance = game_.find_instance(source);
+			if (instance == nullptr)
+			{
+				continue;
+			}
+
+			if (link.activation_negated())
+			{
+				if (effect->usage.has_value() && effect->usage->verb != dsl::RestrictionVerb::USE)
+				{
+					unmark_used(*effect, *instance, link.mutex_inserted());
+				}
+			}
+			else if (link.effect_negated())
+			{
+				if (effect->usage.has_value() && effect->usage->verb == dsl::RestrictionVerb::APPLY)
+				{
+					unmark_used(*effect, *instance, link.mutex_inserted());
+				}
+			}
+		}
+
+		// 整条连锁结算完毕:不能留场的卡送墓(通常魔法/陷阱、被无效发动的卡)
+		for (const auto& link: chain_)
+		{
+			const auto source = link.source();
+			auto* instance = game_.find_instance_mutable(source);
+			if (instance == nullptr)
+			{
+				continue;
+			}
+
+			if (const auto zone = game_.zone_of(source);
+				zone != domain::Zone::SPELL_TRAP && zone != domain::Zone::FIELD_SPELL)
+			{
+				continue;
+			}
+
+			if (link.activation_negated() || !can_stay_on_field(*instance))
+			{
+				// 发动无效的魔陷送墓;但不视为「从场上送去墓地」
+				game_.move_to_graveyard(*instance, {domain::Reason::RULE});
+			}
+		}
+
+		chain_.clear();
+		priority_.reset();
+
+		// 结算中产生的事件:合并为下一个时点
+		process_pending_events();
+	}
+
+	auto Duel::settle_chain() noexcept -> void
+	{
+		while (!chain_.empty())
+		{
+			pass_priority();
+		}
+	}
+
+	auto Duel::activation_speed(const state::CardInstance& card, const dsl::ActivationKind& activation) const noexcept -> domain::EffectSpeed
+	{
+		const auto type = [&] noexcept -> domain::CardType
+		{
+			const auto types = card_state_.card_types(card);
+
+			// 优先怪兽
+			if (types.contains(domain::CardType::MONSTER))
+			{
+				return domain::CardType::MONSTER;
+			}
+
+			if (types.contains(domain::CardType::TRAP))
+			{
+				return domain::CardType::TRAP;
+			}
+
+			return domain::CardType::SPELL;
+		}();
+
+		return dsl::speed_of(type, card_state_.card_subtypes(card), activation);
+	}
+
+	auto Duel::can_chain(const domain::EffectSpeed speed) const noexcept -> bool
+	{
+		if (chain_.empty())
+		{
+			return true;
+		}
+
+		// 响应方须速度 2 以上
+		if (!domain::is_fast_effect(speed))
+		{
+			return false;
+		}
+
+		// 且不低于上一环
+		if (const auto& last_link = chain_.back();
+			std::to_underlying(speed) < std::to_underlying(last_link.speed()))
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	auto Duel::can_stay_on_field(const state::CardInstance& card) const noexcept -> bool
+	{
+		if (card_state_.is_card_type(card, domain::CardType::MONSTER))
+		{
+			return true;
+		}
+
+		return card_state_.is_card_subtype(
+			card,
+			{
+					domain::CardSubtype::CONTINUOUS,
+					domain::CardSubtype::FIELD,
+					domain::CardSubtype::EQUIP,
+			}
+		);
+	}
+
 	auto Duel::summonable_instance_of(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement) noexcept -> state::CardInstance*
 	{
+		// 连锁中只能发动效果,不能进行召唤等行动
+		if (!chain_.empty())
+		{
+			return nullptr;
+		}
+
 		if (const auto phase = turn_.phase();
 			phase != domain::Phase::MAIN_1 && phase != domain::Phase::MAIN_2)
 		{
@@ -181,28 +401,28 @@ namespace cg::flow
 
 	auto Duel::process_pending_events() noexcept -> void
 	{
-		if (processing_events_)
+		// 连锁中产生的事件由结算结束时统一处理
+		if (!chain_.empty())
 		{
 			return;
 		}
 
-		// TODO: 一次最多处理多少轮事件?
-		constexpr std::size_t max_pass_per_turn = 64;
-
-		processing_events_ = true;
-
-		auto events = interpreter_.take_events();
-		for (std::size_t pass = 0; pass < max_pass_per_turn && !events.empty(); ++pass)
+		const auto events = interpreter_.take_events();
+		if (events.empty())
 		{
-			for (const auto& [code, card]: events)
-			{
-				trigger_event(dsl::TriggerSource{code}, card);
-			}
-
-			events = interpreter_.take_events();
+			return;
 		}
 
-		processing_events_ = false;
+		// 同一批事件视为同一时点
+		execution::EventWindowList windows{};
+		windows.reserve(events.size());
+
+		for (const auto& [code, card]: events)
+		{
+			windows.push_back({.source = dsl::TriggerSource{code}, .card = card});
+		}
+
+		open_timing(windows);
 	}
 
 	auto Duel::usage_owner(const dsl::UsageKind kind, const state::CardInstance& card) const noexcept -> UsageKey::owner_type
@@ -266,7 +486,7 @@ namespace cg::flow
 		return true;
 	}
 
-	auto Duel::mark_used(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> void
+	auto Duel::mark_used(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> bool
 	{
 		if (effect.usage.has_value())
 		{
@@ -275,11 +495,39 @@ namespace cg::flow
 			usage_[key] += 1;
 		}
 
+		auto mutex_inserted = false;
 		if (effect.mutex.has_value())
 		{
 			const auto key = make_mutex_key(effect, card);
 
-			mutex_choices_.try_emplace(key, effect.id);
+			mutex_inserted = mutex_choices_.try_emplace(key, effect.id).second;
+		}
+
+		return mutex_inserted;
+	}
+
+	auto Duel::unmark_used(const dsl::Effect& effect, const state::CardInstance& card, const bool mutex_inserted) noexcept -> void
+	{
+		if (effect.usage.has_value())
+		{
+			const auto key = make_usage_key(effect, card);
+
+			if (const auto it = usage_.find(key);
+				it != usage_.end() && it->second > 0)
+			{
+				it->second -= 1;
+			}
+		}
+
+		if (effect.mutex.has_value() && mutex_inserted)
+		{
+			const auto key = make_mutex_key(effect, card);
+
+			if (const auto it = mutex_choices_.find(key);
+				it != mutex_choices_.end() && it->second == effect.id)
+			{
+				mutex_choices_.erase(it);
+			}
 		}
 	}
 
@@ -295,9 +543,7 @@ namespace cg::flow
 		vocabulary_{types_},
 		// scripts_{},
 		interpreter_{vocabulary_},
-		card_state_{game_, scripts_, vocabulary_, interpreter_},
-		processing_events_{false},
-		window_{std::nullopt} {}
+		card_state_{game_, scripts_, vocabulary_, interpreter_} {}
 
 	auto Duel::game() noexcept -> state::Game&
 	{
@@ -337,6 +583,16 @@ namespace cg::flow
 	auto Duel::battle() const noexcept -> const Battle&
 	{
 		return battle_;
+	}
+
+	auto Duel::chain() const noexcept -> const execution::Chain&
+	{
+		return chain_;
+	}
+
+	auto Duel::windows() const noexcept -> std::span<const execution::EventWindow>
+	{
+		return windows_;
 	}
 
 	auto Duel::winner() const noexcept -> std::optional<domain::Player>
@@ -382,6 +638,11 @@ namespace cg::flow
 
 	auto Duel::draw_for_turn() noexcept -> bool
 	{
+		if (!chain_.empty())
+		{
+			return false;
+		}
+
 		if (turn_.phase() != domain::Phase::DRAW || state_.drew_in_draw_phase)
 		{
 			return false;
@@ -405,6 +666,9 @@ namespace cg::flow
 		// 移动到手牌
 		game_.move_to_hand(*instance, {domain::Reason::DRAW}, domain::Position::FACE_DOWN_DEFENSE);
 
+		// 抽卡后旧的事件时点不再有效(抽卡本身是否开时点待补)
+		windows_.clear();
+
 		// 已抽牌
 		state_.drew_in_draw_phase = true;
 		return true;
@@ -412,7 +676,7 @@ namespace cg::flow
 
 	auto Duel::change_phase() noexcept -> bool
 	{
-		if (!priority_.both_passed())
+		if (!chain_.empty() || !priority_.both_passed())
 		{
 			return false;
 		}
@@ -423,12 +687,19 @@ namespace cg::flow
 		}
 
 		priority_.reset();
-		window_.reset();
+		windows_.clear();
 		return true;
 	}
 
 	auto Duel::pass_priority() noexcept -> bool
 	{
+		if (!chain_.empty())
+		{
+			// 连锁响应中:当前持有者放弃 → 整条连锁结算
+			resolve_chain();
+			return true;
+		}
+
 		priority_.pass();
 
 		if (!priority_.both_passed())
@@ -436,14 +707,14 @@ namespace cg::flow
 			return false;
 		}
 
-		// 双方通过后关闭事件窗口
-		window_.reset();
+		// 双方通过后关闭事件时点
+		windows_.clear();
 		return true;
 	}
 
 	auto Duel::end_turn() noexcept -> bool
 	{
-		if (turn_.phase() != domain::Phase::END)
+		if (turn_.phase() != domain::Phase::END || !chain_.empty())
 		{
 			return false;
 		}
@@ -451,8 +722,8 @@ namespace cg::flow
 		turn_.end_turn();
 		priority_.reset();
 		battle_.reset();
+		windows_.clear();
 		state_ = TurnState{};
-		window_.reset();
 
 		// 清除本回合的使用记录(DUEL范围保留)
 		std::erase_if(
@@ -746,6 +1017,12 @@ namespace cg::flow
 			return false;
 		}
 
+		// 同一张卡在一个连锁上只能发动一次(含不同效果)
+		if (std::ranges::contains(chain_, card, &execution::ChainLink::source))
+		{
+			return false;
+		}
+
 		const auto is_spell = card_state_.is_card_type(*instance, domain::CardType::SPELL);
 		const auto is_trap = card_state_.is_card_type(*instance, domain::CardType::TRAP);
 		if (!is_spell && !is_trap)
@@ -754,6 +1031,9 @@ namespace cg::flow
 		}
 
 		const auto zone = game_.zone_of(card);
+
+		// 先确定发动后的放置位置,避免支付代价后才发现位置不可用
+		std::optional<domain::Placement> target_placement;
 
 		if (zone == domain::Zone::HAND)
 		{
@@ -770,101 +1050,15 @@ namespace cg::flow
 			{
 				return false;
 			}
-		}
-		else if (zone == domain::Zone::SPELL_TRAP)
-		{
-			// 盖放当回合不可发动
-			if (const auto it = set_turns_.find(card);
-				it == set_turns_.end() || it->second >= turn_.turn_id())
-			{
-				return false;
-			}
 
-			const auto placement = instance->placement();
-
-			if (const auto* spell_trap = std::get_if<domain::SpellTrapPlacement>(&placement);
-				spell_trap == nullptr || spell_trap->position != domain::Position::FACE_DOWN_DEFENSE)
-			{
-				return false;
-			}
-		}
-		else
-		{
-			return false;
-		}
-
-		const auto code = instance->origin_code();
-
-		const auto* script = scripts_.find(code);
-		if (script == nullptr)
-		{
-			return false;
-		}
-
-		const dsl::ActivatedEffect* activated = nullptr;
-		std::size_t effect_index = 0;
-		for (const auto [index, effect]: script->effects | std::views::enumerate)
-		{
-			const auto* candidate = std::get_if<dsl::ActivatedEffect>(&effect.body);
-			if (candidate == nullptr)
-			{
-				continue;
-			}
-			const auto* card_activation = std::get_if<dsl::CardActivation>(&candidate->activation);
-			if (card_activation == nullptr)
-			{
-				continue;
-			}
-
-			// 事件型发动时点:当前窗口须匹配
-			if (card_activation->timing.has_value())
-			{
-				if (!window_.has_value())
-				{
-					return false;
-				}
-
-				execution::Context timing_context{game_, controller, card};
-				timing_context.card_state = &card_state_;
-				timing_context.trigger_source = window_->source;
-				timing_context.event_card = window_->card;
-
-				if (!interpreter_.matches(dsl::Trigger{.spec = *card_activation->timing, .optional = false}, timing_context))
-				{
-					return false;
-				}
-			}
-
-			activated = candidate;
-			effect_index = index;
-			break;
-		}
-
-		// 纯静态卡(如场地魔法)可以没有卡自身发动效果
-		if (activated != nullptr && !can_use(script->effects[effect_index], *instance))
-		{
-			return false;
-		}
-
-		execution::Context context{game_, controller, card};
-		context.card_state = &card_state_;
-		if (activated != nullptr && !interpreter_.activate(*activated, context))
-		{
-			return false;
-		}
-
-		// 放置/翻面
-		if (zone == domain::Zone::HAND)
-		{
-			if (const auto field = card_state_.is_card_subtype(*instance, domain::CardSubtype::FIELD);
-				field)
+			if (card_state_.is_card_subtype(*instance, domain::CardSubtype::FIELD))
 			{
 				if (!game_.is_zone_empty(controller, domain::Zone::FIELD_SPELL))
 				{
 					return false;
 				}
 
-				game_.place(*instance, domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK});
+				target_placement = domain::Placement{domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}};
 			}
 			else
 			{
@@ -883,49 +1077,159 @@ namespace cg::flow
 					return false;
 				}
 
-				game_.place(*instance, domain::SpellTrapPlacement{.column = *column, .position = domain::Position::FACE_UP_ATTACK});
+				target_placement = domain::Placement{domain::SpellTrapPlacement{.column = *column, .position = domain::Position::FACE_UP_ATTACK}};
 			}
 		}
-		else
+		else if (zone == domain::Zone::SPELL_TRAP)
 		{
-			// 盖放的卡:翻至表侧
+			// 盖放当回合不可发动
+			if (const auto it = set_turns_.find(card);
+				it == set_turns_.end() || it->second >= turn_.turn_id())
+			{
+				return false;
+			}
+
 			const auto placement = instance->placement();
 			const auto* spell_trap = std::get_if<domain::SpellTrapPlacement>(&placement);
 
-			if (spell_trap == nullptr)
+			if (spell_trap == nullptr || spell_trap->position != domain::Position::FACE_DOWN_DEFENSE)
 			{
 				return false;
 			}
 
-			game_.place(*instance, domain::SpellTrapPlacement{.column = spell_trap->column, .position = domain::Position::FACE_UP_ATTACK});
+			// 盖放的卡:翻至表侧
+			target_placement = domain::Placement{domain::SpellTrapPlacement{.column = spell_trap->column, .position = domain::Position::FACE_UP_ATTACK}};
+		}
+		else
+		{
+			return false;
 		}
 
-		if (activated != nullptr)
+		const auto code = instance->origin_code();
+
+		const auto* script = scripts_.find(code);
+		if (script == nullptr)
 		{
-			if (!interpreter_.resolve(*activated, context))
+			return false;
+		}
+
+		const dsl::ActivatedEffect* activated = nullptr;
+		const dsl::Effect* activated_effect = nullptr;
+		std::optional<execution::EventWindow> matched_window;
+		auto has_card_activation = false;
+
+		for (const auto& effect: script->effects)
+		{
+			const auto* candidate = std::get_if<dsl::ActivatedEffect>(&effect.body);
+			if (candidate == nullptr)
 			{
-				return false;
+				continue;
 			}
 
-			mark_used(script->effects[effect_index], *instance);
+			const auto* card_activation = std::get_if<dsl::CardActivation>(&candidate->activation);
+			if (card_activation == nullptr)
+			{
+				continue;
+			}
+
+			has_card_activation = true;
+
+			// 事件型发动时点:当前时点须有匹配的事件
+			if (card_activation->timing.has_value())
+			{
+				const auto matched = std::ranges::find_if(
+					windows_,
+					[&](const execution::EventWindow& window) noexcept -> bool
+					{
+						execution::Context timing_context{game_, controller, card};
+						timing_context.card_state = &card_state_;
+						timing_context.trigger_source = window.source;
+						timing_context.event_card = window.card;
+
+						return interpreter_.matches(
+							dsl::Trigger{.spec = *card_activation->timing, .optional = false},
+							timing_context
+						);
+					}
+				);
+
+				if (matched == windows_.end())
+				{
+					continue;
+				}
+
+				matched_window = *matched;
+			}
+
+			activated = candidate;
+			activated_effect = &effect;
+			break;
 		}
 
-		process_pending_events();
-
-		// 留场:魔法(永续/场地/装备) / 陷阱(永续);其余送墓
-		if (const auto stays = card_state_.is_card_subtype(*instance, {domain::CardSubtype::CONTINUOUS, domain::CardSubtype::FIELD, domain::CardSubtype::EQUIP});
-			!stays)
+		// 声明了卡发动效果但当前时点不匹配 → 不可作为纯静态卡发动
+		if (activated == nullptr && has_card_activation)
 		{
-			game_.move_to_graveyard(*instance, {domain::Reason::RULE});
+			return false;
 		}
 
-		priority_.reset();
+		const auto speed = activated != nullptr
+			                   ? activation_speed(*instance, activated->activation)
+			                   : activation_speed(*instance, dsl::ActivationKind{dsl::CardActivation{}});
+
+		if (!can_chain(speed))
+		{
+			return false;
+		}
+
+		// 纯静态卡(如场地魔法)可以没有卡自身发动效果
+		if (activated_effect != nullptr && !can_use(*activated_effect, *instance))
+		{
+			return false;
+		}
+
+		execution::Context context{game_, controller, card};
+		context.card_state = &card_state_;
+		if (matched_window.has_value())
+		{
+			context.trigger_source = matched_window->source;
+			context.event_card = matched_window->card;
+		}
+
+		if (activated != nullptr && !interpreter_.activate(*activated, context))
+		{
+			return false;
+		}
+
+		game_.place(*instance, *target_placement);
+
+		const auto mutex_inserted = activated_effect != nullptr && mark_used(*activated_effect, *instance);
+
+		execution::ChainLink link
+		{
+				controller,
+				speed,
+				card,
+				activated,
+				activated_effect,
+				std::move(context),
+				mutex_inserted
+		};
+		chain_.push_back(std::move(link));
+
+		// 已经进入连锁,本时点关闭;发动者的对方获得优先权
+		windows_.clear();
+		priority_.transfer_from(controller, turn_.turn_player());
 
 		return true;
 	}
 
 	auto Duel::set_spell_trap(const state::CardInstanceId card, const domain::FieldColumn column) noexcept -> bool
 	{
+		if (!chain_.empty())
+		{
+			return false;
+		}
+
 		auto* instance = game_.find_instance_mutable(card);
 		if (instance == nullptr)
 		{
@@ -967,11 +1271,19 @@ namespace cg::flow
 
 		set_turns_.insert_or_assign(card, turn_.turn_id());
 
+		// 盖放后旧的事件时点不再有效(盖放是否开时点待补)
+		windows_.clear();
+
 		return true;
 	}
 
 	auto Duel::declare_attack(const state::CardInstanceId attacker, const std::optional<state::CardInstanceId> target) noexcept -> bool
 	{
+		if (!chain_.empty())
+		{
+			return false;
+		}
+
 		if (turn_.phase() != domain::Phase::BATTLE)
 		{
 			return false;
@@ -985,6 +1297,12 @@ namespace cg::flow
 
 		const auto controller = instance->controller();
 		if (controller != turn_.turn_player())
+		{
+			return false;
+		}
+
+		// 只有当前优先权持有者可以宣言攻击
+		if (priority_.holder_player(turn_.turn_player()) != controller)
 		{
 			return false;
 		}
@@ -1043,7 +1361,7 @@ namespace cg::flow
 		}
 
 		// 攻击宣言开启新的窗口
-		window_.reset();
+		windows_.clear();
 
 		state_.attacked_monsters.push_back(attacker);
 		state_.attacked = true;
@@ -1184,18 +1502,26 @@ namespace cg::flow
 		battle_.advance_battle_step();
 
 		// 翻转效果 → 战斗破坏时点
+		// TODO(战斗时点):目前战斗仍是同步结算,先把每组触发链结算完再进入下一个事件;
+		// 完整窗口(攻击宣言/伤害计算/伤害步骤结束)待战斗流程重构时拆分。
 		if (target_flipped && target.has_value())
 		{
 			trigger_event(dsl::TriggerSource{domain::EventCode::FLIP}, *target);
+			settle_chain();
 		}
 		if (target_destroyed)
 		{
 			trigger_event(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, *destroy_target);
+			settle_chain();
 		}
 		if (attacker_destroyed)
 		{
 			trigger_event(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, attacker);
+			settle_chain();
 		}
+
+		// 战斗已同步处理完,不留下过期时点
+		windows_.clear();
 
 		return true;
 	}
@@ -1212,6 +1538,12 @@ namespace cg::flow
 
 		// 只有当前优先权持有者可以发动
 		if (priority_.holder_player(turn_.turn_player()) != controller)
+		{
+			return false;
+		}
+
+		// 同一张卡在一个连锁上只能发动一次(含不同效果)
+		if (std::ranges::contains(chain_, card, &execution::ChainLink::source))
 		{
 			return false;
 		}
@@ -1249,12 +1581,16 @@ namespace cg::flow
 		if (const auto* ignition = std::get_if<dsl::Ignition>(&activated->activation);
 			ignition != nullptr)
 		{
-			// 启动效果:回合玩家、主要阶段
+			// 启动效果:回合玩家、主要阶段、开放状态
 			if (controller != turn_.turn_player())
 			{
 				return false;
 			}
 			if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
+			{
+				return false;
+			}
+			if (!chain_.empty())
 			{
 				return false;
 			}
@@ -1265,6 +1601,12 @@ namespace cg::flow
 			return false;
 		}
 
+		const auto speed = activation_speed(*instance, activated->activation);
+		if (!can_chain(speed))
+		{
+			return false;
+		}
+
 		if (!activated->activation_zones.empty() && !activated->activation_zones.contains(game_.zone_of(card)))
 		{
 			return false;
@@ -1272,65 +1614,41 @@ namespace cg::flow
 
 		execution::Context context{game_, controller, card};
 		context.card_state = &card_state_;
-		if (!interpreter_.execute(*activated, context))
+		if (!interpreter_.activate(*activated, context))
 		{
 			return false;
 		}
 
-		mark_used(effect, *instance);
+		const auto mutex_inserted = mark_used(effect, *instance);
 
-		process_pending_events();
+		execution::ChainLink link
+		{
+				controller,
+				speed,
+				card,
+				activated,
+				&effect,
+				std::move(context),
+				mutex_inserted
+		};
+		chain_.push_back(std::move(link));
 
-		// 连锁结算后回到回合玩家的开放状态
-		priority_.reset();
+		// 已经进入连锁,本时点关闭;发动者的对方获得优先权
+		windows_.clear();
+		priority_.transfer_from(controller, turn_.turn_player());
 
 		return true;
 	}
 
 	auto Duel::trigger_event(const dsl::TriggerSource source, const std::optional<state::CardInstanceId> event_card) noexcept -> bool
 	{
-		// 记录当前事件窗口,供 CardActivation::timing 匹配
-		window_ = {.source = source, .card = event_card};
-
-		execution::Context context{game_, turn_.turn_player()};
-		context.card_state = &card_state_;
-		context.trigger_source = source;
-		context.event_card = event_card;
-
-		const auto triggered = interpreter_.collect_triggered(scripts_, context, turn_.turn_player());
-		if (triggered.empty())
+		if (!chain_.empty())
 		{
+			// 连锁中产生的事件应在连锁结算后处理
 			return false;
 		}
 
-		// 过滤使用次数已满的触发效果;同批内先占用次数,避免同名卡重复触发
-		execution::TriggeredEffectList usable{};
-		usable.reserve(triggered.size());
-
-		for (const auto& entry: triggered)
-		{
-			if (!can_use(entry.effect, entry.instance))
-			{
-				continue;
-			}
-
-			mark_used(entry.effect.get(), entry.instance);
-			usable.push_back(entry);
-		}
-
-		if (usable.empty())
-		{
-			return false;
-		}
-
-		auto chain = interpreter_.build_chain(usable, context);
-		if (chain.empty())
-		{
-			return false;
-		}
-
-		const auto resolved = interpreter_.resolve(chain);
-		process_pending_events();
-		return resolved;
+		const std::array windows{execution::EventWindow{.source = source, .card = event_card}};
+		return open_timing(windows);
 	}
 }

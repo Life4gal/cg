@@ -324,6 +324,24 @@ namespace cg::execution
 		return static_code(card, context).value_or(card.origin_code());
 	}
 
+	auto CardStateResolver::card_types(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardType>
+	{
+		Context context{game_.get(), card.controller()};
+		auto result = static_card_types(card, context);
+		result.unite_with(card.origin_kind());
+
+		return result;
+	}
+
+	auto CardStateResolver::card_subtypes(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardSubtype>
+	{
+		Context context{game_.get(), card.controller()};
+		auto result = static_card_subtypes(card, context);
+		result.unite_with(card.origin_subtypes());
+
+		return result;
+	}
+
 	auto CardStateResolver::is_card_type(const state::CardInstance& card, const domain::CardType type) const noexcept -> bool
 	{
 		if (card.origin_is_card_type(type))

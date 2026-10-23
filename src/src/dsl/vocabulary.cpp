@@ -285,6 +285,22 @@ namespace cg::dsl
 			"破坏组内全部卡"
 		);
 		do_register(
+			"negate_activation",
+			PrimitiveKind::ACTION,
+			{Phase::RESOLVE},
+			{},
+			type_id("void"),
+			"使直接响应的上一环(Chain Link N-1)的发动无效"
+		);
+		do_register(
+			"negate_effect",
+			PrimitiveKind::ACTION,
+			{Phase::RESOLVE},
+			{},
+			type_id("void"),
+			"使直接响应的上一环(Chain Link N-1)的效果无效"
+		);
+		do_register(
 			"special_summon",
 			PrimitiveKind::ACTION,
 			{Phase::RESOLVE},

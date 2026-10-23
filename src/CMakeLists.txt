@@ -152,7 +152,6 @@ target_sources(
 	# FLOW
 	# ===================================
 
-	include/cg/flow/event.hpp
 	include/cg/flow/turn.hpp
 	include/cg/flow/battle.hpp
 	include/cg/flow/priority.hpp

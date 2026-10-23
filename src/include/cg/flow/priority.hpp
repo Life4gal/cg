@@ -42,6 +42,10 @@ namespace cg::flow
 		// 如果非回合玩家放弃 → 双方都放弃,可以推进
 		auto pass() noexcept -> void;
 
+		// 发动后:把优先权交给发动者的对方
+		// 连锁由「未发动最近连锁的一方」继续响应
+		auto transfer_from(domain::Player activator, domain::Player turn_player) noexcept -> void;
+
 		// 重置优先权(新阶段/步骤开始时调用)
 		// 回合玩家重新获得优先权,放弃标记清除
 		auto reset() noexcept -> void;

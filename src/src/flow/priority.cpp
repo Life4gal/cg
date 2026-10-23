@@ -45,6 +45,12 @@ namespace cg::flow
 		passed_ = false;
 	}
 
+	auto Priority::transfer_from(const domain::Player activator, const domain::Player turn_player) noexcept -> void
+	{
+		holder_ = activator == turn_player ? Holder::NON_TURN_PLAYER : Holder::TURN_PLAYER;
+		passed_ = false;
+	}
+
 	auto Priority::holder_player(const domain::Player turn_player) const noexcept -> domain::Player
 	{
 		if (holder_ == Holder::TURN_PLAYER)

@@ -56,9 +56,19 @@ namespace
 		return definition;
 	}
 
+	// 把待结算的连锁全部结算完(测试用)
+	auto settle(flow::Duel& duel) -> void
+	{
+		while (!duel.chain().empty())
+		{
+			duel.pass_priority();
+		}
+	}
+
 	// 双方放弃优先权后推进阶段
 	auto advance_phase(flow::Duel& duel) -> bool
 	{
+		settle(duel);
 		duel.pass_priority();
 		duel.pass_priority();
 		return duel.change_phase();
@@ -423,6 +433,7 @@ TEST_CASE("flow::Duel triggers effects from scripts")
 	}
 
 	CHECK(duel.trigger_event(dsl::TriggerSource{domain::EventCode::FLIP}, jar));
+	settle(duel);
 
 	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 5);
 	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::HAND) == 5);
@@ -536,6 +547,8 @@ TEST_CASE("flow::CardStateResolver feeds effective stats to scripts")
 
 		// 印刷值仍是 1000;条件里的 attack 应读取有效值
 		const auto activated = duel.activate_effect(monster, 0);
+		settle(duel);
+
 		return {activated, game.life_points(domain::Player::SECOND)};
 	};
 
@@ -624,6 +637,8 @@ TEST_CASE("flow::CardStateResolver applies static discrete properties")
 		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
 
 		const auto activated = duel.activate_effect(card, 0);
+		settle(duel);
+
 		return {activated, game.life_points(domain::Player::SECOND)};
 	};
 
@@ -860,6 +875,7 @@ TEST_CASE("flow::Duel processes destruction events from effects")
 
 	// 效果破坏 → 结算后统一开 DESTROYED 时点
 	CHECK(duel.activate_effect(igniter, 0));
+	settle(duel);
 
 	CHECK(game.zone_of(victim) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(igniter) == domain::Zone::MONSTER);
@@ -905,6 +921,7 @@ TEST_CASE("flow::Duel shares usage counters within a group")
 
 	// 三个效果互斥:发动其一后,其余两个也被次数限制拒绝
 	CHECK(duel.activate_effect(card, 0));
+	settle(duel);
 	CHECK(duel.activate_effect(card, 1) == false);
 	CHECK(duel.activate_effect(card, 2) == false);
 
@@ -952,7 +969,9 @@ TEST_CASE("flow::Duel applies mutex independently of usage counts")
 
 	// 效果0:无usage限制;先选它后,效果1被互斥锁住
 	CHECK(duel.activate_effect(card, 0));
+	settle(duel);
 	CHECK(duel.activate_effect(card, 0));
+	settle(duel);
 	CHECK(duel.activate_effect(card, 1) == false);
 	CHECK(game.life_points(domain::Player::SECOND) == 7000);
 
@@ -971,7 +990,9 @@ TEST_CASE("flow::Duel applies mutex independently of usage counts")
 	CHECK(advance_phase(duel)); // STANDBY
 	CHECK(advance_phase(duel)); // MAIN_1
 	CHECK(duel.activate_effect(card, 1));
+	settle(duel);
 	CHECK(duel.activate_effect(card, 1));
+	settle(duel);
 	CHECK(duel.activate_effect(card, 1) == false);
 	CHECK(duel.activate_effect(card, 0) == false);
 	CHECK(game.life_points(domain::Player::SECOND) == 6800);
@@ -1066,6 +1087,7 @@ TEST_CASE("flow::Duel enforces triggered effect usage limits")
 
 	// 一次破坏两张同名卡,但「同名卡一回合一次」只允许抽1
 	CHECK(duel.activate_effect(destroyer, 0));
+	settle(duel);
 
 	CHECK(game.zone_of(victim_a) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(victim_b) == domain::Zone::GRAVEYARD);
@@ -1120,6 +1142,7 @@ TEST_CASE("flow::Duel activates traps with an event timing")
 	// 先攻放弃优先权 → 后攻可发动带 WHEN 时点的陷阱
 	CHECK_FALSE(duel.pass_priority());
 	CHECK(duel.activate_card(torrential));
+	settle(duel);
 
 	CHECK(game.zone_of(monster) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(torrential) == domain::Zone::GRAVEYARD);
@@ -1169,18 +1192,20 @@ TEST_CASE("flow::Duel activates ignition and quick effects")
 	CHECK(advance_phase(duel));
 	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
 
-	// 启动效果:回合玩家、主要阶段
+	// 启动效果:回合玩家、主要阶段 → 入连锁但尚未结算
 	CHECK(duel.activate_effect(ignition_card, 0));
-	CHECK(game.life_points(domain::Player::SECOND) == 7500);
+	CHECK(duel.chain().size() == 1);
+	CHECK(game.life_points(domain::Player::SECOND) == 8000);
 
-	// 对手的诱发即时:优先权仍在回合玩家 → 失败
-	CHECK_FALSE(duel.activate_effect(quick_card, 0));
-	CHECK(game.life_points(domain::Player::FIRST) == 8000);
-
-	// 回合玩家放弃 → 对手获得优先权 → 成功
-	CHECK_FALSE(duel.pass_priority());
+	// 发动后优先权交给对方 → 对方的诱发即时可以连锁
 	CHECK(duel.activate_effect(quick_card, 0));
+	CHECK(duel.chain().size() == 2);
+
+	// 回合玩家放弃 → 逆序结算:先 quick 再 ignition
+	CHECK(duel.pass_priority());
+	CHECK(duel.chain().empty());
 	CHECK(game.life_points(domain::Player::FIRST) == 7500);
+	CHECK(game.life_points(domain::Player::SECOND) == 7500);
 
 	std::filesystem::remove_all(directory);
 }
@@ -1216,6 +1241,7 @@ TEST_CASE("flow::Duel enforces per-turn usage restrictions")
 
 	// 本回合第一次成功,第二次被次数限制拒绝
 	CHECK(duel.activate_effect(card, 0));
+	settle(duel);
 	CHECK(duel.activate_effect(card, 0) == false);
 	CHECK(game.life_points(domain::Player::SECOND) == 7500);
 
@@ -1235,6 +1261,7 @@ TEST_CASE("flow::Duel enforces per-turn usage restrictions")
 	CHECK(advance_phase(duel)); // STANDBY
 	CHECK(advance_phase(duel)); // MAIN_1
 	CHECK(duel.activate_effect(card, 0));
+	settle(duel);
 	CHECK(game.life_points(domain::Player::SECOND) == 7000);
 
 	std::filesystem::remove_all(directory);
@@ -1274,11 +1301,13 @@ TEST_CASE("flow::Duel activates spell cards")
 
 	// 通常魔法:结算后送墓
 	CHECK(duel.activate_card(raigeki));
+	settle(duel);
 	CHECK(game.zone_of(monster) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(raigeki) == domain::Zone::GRAVEYARD);
 
 	// 场地魔法:留场
 	CHECK(duel.activate_card(mountain));
+	settle(duel);
 	CHECK(game.zone_of(mountain) == domain::Zone::FIELD_SPELL);
 
 	// 非魔法卡不可用此接口
@@ -1327,9 +1356,443 @@ TEST_CASE("flow::Duel sets and activates a trap")
 	// 对方回合:放弃优先权 → 陷阱控制者获得窗口
 	CHECK_FALSE(duel.pass_priority());
 	CHECK(duel.activate_card(trap));
+	settle(duel);
 
 	CHECK(game.life_points(domain::Player::SECOND) == 7500);
 	CHECK(game.zone_of(trap) == domain::Zone::GRAVEYARD);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel resolves a chain in reverse order and negates effects")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_chain_negate";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94100001.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})"
+	);
+	write(
+		"94100002.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"negate_effect","args":{}}]}]})"
+	);
+
+	constexpr domain::CardCode attacker_code{94100001};
+	constexpr domain::CardCode negator_code{94100002};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(attacker_code, make_monster(attacker_code));
+	game.register_definition(negator_code, make_monster(negator_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto attacker = game.create_instance(attacker_code, domain::Player::FIRST);
+	REQUIRE(attacker.valid());
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto negator = game.create_instance(negator_code, domain::Player::SECOND);
+	REQUIRE(negator.valid());
+	game.place(*game.find_instance_mutable(negator), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	// C1:回合玩家的诱发即时
+	CHECK(duel.activate_effect(attacker, 0));
+	REQUIRE(duel.chain().size() == 1);
+	CHECK(duel.chain().front().controller() == domain::Player::FIRST);
+
+	// C2:对方的诱发即时(速度 2,可连锁)
+	CHECK(duel.activate_effect(negator, 0));
+	REQUIRE(duel.chain().size() == 2);
+	CHECK(duel.chain().back().controller() == domain::Player::SECOND);
+
+	// 旧时点已关闭
+	CHECK(duel.windows().empty());
+
+	// 逆序结算:C2 先无效 C1 的效果
+	CHECK(duel.pass_priority());
+	CHECK(duel.chain().empty());
+	CHECK(game.life_points(domain::Player::FIRST) == 8000);
+	CHECK(game.life_points(domain::Player::SECOND) == 8000);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel negates an activation and sends the spell to the graveyard")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_chain_negate_activation";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94200001.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})"
+	);
+	write(
+		"94200002.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"negate_activation","args":{}}]}]})"
+	);
+
+	constexpr domain::CardCode spell_code{94200001};
+	constexpr domain::CardCode negator_code{94200002};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(negator_code, make_monster(negator_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto negator = game.create_instance(negator_code, domain::Player::SECOND);
+	REQUIRE(negator.valid());
+	game.place(*game.find_instance_mutable(negator), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	// 卡发动先放到场上,再进入连锁
+	CHECK(duel.activate_card(spell));
+	CHECK(game.zone_of(spell) == domain::Zone::SPELL_TRAP);
+
+	CHECK(duel.activate_effect(negator, 0));
+	REQUIRE(duel.chain().size() == 2);
+
+	CHECK(duel.pass_priority());
+	CHECK(duel.chain().empty());
+
+	// 发动无效:魔法卡送墓,且不造成伤害
+	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(negator) == domain::Zone::MONSTER);
+	CHECK(game.life_points(domain::Player::SECOND) == 8000);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel rolls back usage for negated activations")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_chain_usage_rollback";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94200003.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","usage":{"kind":"TURN_PER_NAME","verb":"ACTIVATE"},"activation":{"mode":"activation"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})"
+	);
+	write(
+		"94200004.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","usage":{"kind":"TURN_PER_NAME","verb":"USE"},"activation":{"mode":"activation"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})"
+	);
+	write(
+		"94200005.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"negate_activation","args":{}}]}]})"
+	);
+
+	constexpr domain::CardCode activate_code{94200003};
+	constexpr domain::CardCode use_code{94200004};
+	constexpr domain::CardCode negator_code{94200005};
+
+	const auto run = [&](const domain::CardCode spell_code, const bool expect_second) -> void
+	{
+		flow::Duel duel{};
+		auto& game = duel.game();
+
+		game.register_definition(activate_code, make_spell(activate_code, {domain::CardSubtype::NORMAL}));
+		game.register_definition(use_code, make_spell(use_code, {domain::CardSubtype::NORMAL}));
+		game.register_definition(negator_code, make_monster(negator_code));
+		REQUIRE(duel.load_scripts(directory));
+
+		game.set_life_points(domain::Player::FIRST, 8000);
+		game.set_life_points(domain::Player::SECOND, 8000);
+
+		const auto negator = game.create_instance(negator_code, domain::Player::SECOND);
+		REQUIRE(negator.valid());
+		game.place(*game.find_instance_mutable(negator), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+		const auto first = game.create_instance(spell_code, domain::Player::FIRST);
+		REQUIRE(first.valid());
+		game.place(*game.find_instance_mutable(first), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+		const auto second = game.create_instance(spell_code, domain::Player::FIRST);
+		REQUIRE(second.valid());
+		game.place(*game.find_instance_mutable(second), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+		advance_phase(duel); // STANDBY
+		advance_phase(duel); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK(duel.activate_card(first));
+		CHECK(duel.activate_effect(negator, 0));
+		CHECK(duel.pass_priority());
+
+		// ACTIVATE:发动被无效可再发动;USE:仍然算使用过
+		CHECK(duel.activate_card(second) == expect_second);
+
+		if (expect_second)
+		{
+			settle(duel);
+		}
+
+		CHECK(game.life_points(domain::Player::SECOND) == (expect_second ? 7500 : 8000));
+	};
+
+	run(activate_code, true);
+	run(use_code, false);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel enforces spell speed when chaining")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_chain_speed";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94300001.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})"
+	);
+	write(
+		"94300002.json",
+		R"({"identity":{"kind":"TRAP","subtypes":["COUNTER"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"effect":[{"call":"negate_effect","args":{}}]}]})"
+	);
+	write(
+		"94300003.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":300}}]}]})"
+	);
+
+	constexpr domain::CardCode first_quick_code{94300001};
+	constexpr domain::CardCode counter_code{94300002};
+	constexpr domain::CardCode second_quick_code{94300003};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(first_quick_code, make_monster(first_quick_code));
+	game.register_definition(counter_code, make_trap(counter_code, {domain::CardSubtype::COUNTER}));
+	game.register_definition(second_quick_code, make_monster(second_quick_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto first_quick = game.create_instance(first_quick_code, domain::Player::FIRST);
+	REQUIRE(first_quick.valid());
+	game.place(*game.find_instance_mutable(first_quick), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto second_quick = game.create_instance(second_quick_code, domain::Player::FIRST);
+	REQUIRE(second_quick.valid());
+	game.place(*game.find_instance_mutable(second_quick), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto counter = game.create_instance(counter_code, domain::Player::SECOND);
+	REQUIRE(counter.valid());
+	game.place(*game.find_instance_mutable(counter), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	// 先攻空过
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	advance_phase(duel); // END
+	REQUIRE(duel.end_turn());
+
+	// 后攻盖放反击陷阱
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.set_spell_trap(counter, domain::FieldColumn::C1));
+	advance_phase(duel); // BATTLE
+	advance_phase(duel); // MAIN_2
+	advance_phase(duel); // END
+	REQUIRE(duel.end_turn());
+
+	// 先攻回合:速度 2 → 速度 3 → 速度 2 不能继续
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	CHECK(duel.activate_effect(first_quick, 0));
+	CHECK(duel.activate_card(counter));
+	REQUIRE(duel.chain().size() == 2);
+	CHECK(duel.chain().back().speed() == domain::EffectSpeed::COUNTER);
+	CHECK_FALSE(duel.activate_effect(second_quick, 0));
+
+	CHECK(duel.pass_priority());
+	CHECK(duel.chain().empty());
+	CHECK(game.life_points(domain::Player::SECOND) == 8000);
+	CHECK(game.zone_of(counter) == domain::Zone::GRAVEYARD);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel collects simultaneous triggers into one chain")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_chain_segoc";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94400001.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"destroy","args":{"cards":{"call":"find_cards","args":{"players":["SELF","OPPONENT"],"zones":["MONSTER","EXTRA_MONSTER"]}},"reason":"EFFECT"}}]}]})"
+	);
+	write(
+		"94400002.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"DESTROYED"},"timing":"WHEN","optional":false},"effect":[{"call":"draw","args":{"players":["SELF"],"count":1}}]}]})"
+	);
+
+	constexpr domain::CardCode destroyer_code{94400001};
+	constexpr domain::CardCode victim_code{94400002};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(destroyer_code, make_monster(destroyer_code));
+	game.register_definition(victim_code, make_monster(victim_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
+	REQUIRE(destroyer.valid());
+	game.place(*game.find_instance_mutable(destroyer), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto first_victim = game.create_instance(victim_code, domain::Player::FIRST);
+	REQUIRE(first_victim.valid());
+	game.place(*game.find_instance_mutable(first_victim), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto second_victim = game.create_instance(victim_code, domain::Player::SECOND);
+	REQUIRE(second_victim.valid());
+	game.place(*game.find_instance_mutable(second_victim), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto first_deck = game.create_instance(victim_code, domain::Player::FIRST);
+	REQUIRE(first_deck.valid());
+	game.place(*game.find_instance_mutable(first_deck), domain::DeckPlacement{.index = 0});
+
+	const auto second_deck = game.create_instance(victim_code, domain::Player::SECOND);
+	REQUIRE(second_deck.valid());
+	game.place(*game.find_instance_mutable(second_deck), domain::DeckPlacement{.index = 0});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_effect(destroyer, 0));
+	REQUIRE(duel.chain().size() == 1);
+
+	// 一组破坏链结算后,两个 DESTROYED 事件应组成同一组连锁
+	CHECK(duel.pass_priority());
+	REQUIRE(duel.chain().size() == 2);
+	CHECK(duel.chain()[0].controller() == domain::Player::FIRST);
+	CHECK(duel.chain()[1].controller() == domain::Player::SECOND);
+
+	settle(duel);
+
+	CHECK(game.zone_of(destroyer) == domain::Zone::GRAVEYARD);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 1);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::HAND) == 1);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::DECK) == 0);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::DECK) == 0);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel allows only one effect per card per chain")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_chain_one_card";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"94500001.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":100}}]},{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":200}}]}]})"
+	);
+	write(
+		"94500002.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":300}}]}]})"
+	);
+
+	constexpr domain::CardCode double_code{94500001};
+	constexpr domain::CardCode opponent_code{94500002};
+
+	flow::Duel duel{};
+	auto& game = duel.game();
+
+	game.register_definition(double_code, make_monster(double_code));
+	game.register_definition(opponent_code, make_monster(opponent_code));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto double_card = game.create_instance(double_code, domain::Player::FIRST);
+	REQUIRE(double_card.valid());
+	game.place(*game.find_instance_mutable(double_card), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto opponent_card = game.create_instance(opponent_code, domain::Player::SECOND);
+	REQUIRE(opponent_card.valid());
+	game.place(*game.find_instance_mutable(opponent_card), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	// C1:同一张卡的效果0
+	CHECK(duel.activate_effect(double_card, 0));
+
+	// C2:对方连锁;之后优先权回到回合玩家
+	CHECK(duel.activate_effect(opponent_card, 0));
+
+	// 同一张卡在同一连锁上不能再发动效果1
+	CHECK_FALSE(duel.activate_effect(double_card, 1));
+	REQUIRE(duel.chain().size() == 2);
+
+	CHECK(duel.pass_priority());
+	CHECK(game.life_points(domain::Player::FIRST) == 7700);
+	CHECK(game.life_points(domain::Player::SECOND) == 7900);
 
 	std::filesystem::remove_all(directory);
 }
