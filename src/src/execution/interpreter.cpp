@@ -504,6 +504,10 @@ namespace cg::execution
 		{
 			return this_card(*definition, call, context);
 		}
+		if (definition->name == "chain_exists")
+		{
+			return chain_exists(*definition, call, context);
+		}
 		if (definition->name == "event_card")
 		{
 			return event_card(*definition, call, context);
@@ -540,6 +544,10 @@ namespace cg::execution
 		{
 			return recover_life(*definition, call, context);
 		}
+		if (definition->name == "pay_half_life")
+		{
+			return pay_half_life(*definition, call, context);
+		}
 		if (definition->name == "change_position")
 		{
 			return change_position(*definition, call, context);
@@ -551,6 +559,10 @@ namespace cg::execution
 		if (definition->name == "negate_activation")
 		{
 			return negate_activation(*definition, call, context);
+		}
+		if (definition->name == "negate_activation_and_destroy")
+		{
+			return negate_activation_and_destroy(*definition, call, context);
 		}
 		if (definition->name == "negate_effect")
 		{
@@ -1182,6 +1194,22 @@ namespace cg::execution
 		return Value{Card{context.source}};
 	}
 
+	auto Interpreter::chain_exists(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		if (const auto args = evaluate_arguments(definition, call, context);
+			!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		if (!context.chain.has_value())
+		{
+			return Value{Boolean{false}};
+		}
+
+		return Value{Boolean{!context.chain->chain.get().empty()}};
+	}
+
 	auto Interpreter::event_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
 		if (const auto args = evaluate_arguments(definition, call, context);
@@ -1401,6 +1429,23 @@ namespace cg::execution
 		return Value{Void{}};
 	}
 
+	auto Interpreter::pay_half_life(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		if (const auto args = evaluate_arguments(definition, call, context);
+			!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		auto& game = context.game.get();
+		const auto life = game.life_points(context.controller);
+		// 规则:一半生命值,出现小数时向上取整
+		const auto amount = (life + 1) / 2;
+		game.change_life_points(context.controller, -amount);
+
+		return Value{Void{}};
+	}
+
 	auto Interpreter::change_position(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
 		const auto args = evaluate_arguments(definition, call, context);
@@ -1524,6 +1569,38 @@ namespace cg::execution
 		auto& link = chain[context.chain->link_index - 1];
 
 		link.negate_activation();
+
+		return Value{Void{}};
+	}
+
+	auto Interpreter::negate_activation_and_destroy(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		if (!context.chain.has_value() || context.chain->link_index == 0)
+		{
+			return std::nullopt;
+		}
+
+		auto& chain = context.chain->chain.get();
+		auto& link = chain[context.chain->link_index - 1];
+		const auto source = link.source();
+
+		link.negate_activation();
+
+		auto* instance = context.game.get().find_instance_mutable(source);
+		if (instance == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		context.game.get().move_to_graveyard(*instance, {domain::Reason::EFFECT, domain::Reason::DESTROY});
+		pending_events_.emplace_back(domain::EventCode::DESTROYED, source);
+		pending_events_.emplace_back(domain::EventCode::EFFECT_DESTROYED, source);
 
 		return Value{Void{}};
 	}

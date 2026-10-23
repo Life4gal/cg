@@ -71,6 +71,22 @@ namespace cg::flow
 			std::underlying_type_t<domain::AttackDefense> damage_to_controller = 0;
 		};
 
+		// 宣言中的召唤(尚未成功/无效)
+		class SummonState
+		{
+		public:
+			// 控制者
+			domain::Player controller;
+			// 目标位置
+			domain::AnyMonsterPlacement placement;
+			// 召唤方式
+			domain::SummonMethod method;
+			// 召唤的卡
+			std::reference_wrapper<state::CardInstance> card;
+			// 祭品/素材(已在宣言前处理)
+			std::vector<std::reference_wrapper<state::CardInstance>> materials;
+		};
+
 		// ================================================================
 		// 游戏状态
 		// ================================================================
@@ -87,6 +103,12 @@ namespace cg::flow
 
 		// 当前攻击(空 = 无攻击进行中)
 		std::optional<AttackState> attack_;
+
+		// 当前宣言中的召唤(空 = 无)
+		std::optional<SummonState> summon_;
+
+		// 本次召唤宣言链是否无效了召唤
+		bool summon_negated_{false};
 
 		// 当前连锁(空 = 开放状态;下标 0 = Chain Link 1)
 		execution::Chain chain_;
@@ -263,6 +285,18 @@ namespace cg::flow
 		// 不检查是否满足召唤条件   -- 额外特招点需要检查是否满足素材要求
 		[[nodiscard]] auto summonable_instance_of(state::CardInstanceId card, domain::AnyMonsterPlacement placement) noexcept -> state::CardInstance*;
 
+		// 召唤宣言:保存待结算状态并打开 DECLARED 时点
+		auto begin_summon(SummonState summon, domain::EventCode declared) noexcept -> bool;
+
+		// 宣言时点/连锁关闭后:成功或无效
+		auto resolve_summon() noexcept -> void;
+
+		// 召唤成功:放置/记录/成功时点
+		auto complete_summon(SummonState& summon) noexcept -> bool;
+
+		// 召唤无效:卡与未处理素材送墓,打开 NEGATED 时点
+		auto negate_pending_summon(SummonState& summon) noexcept -> void;
+
 		auto perform_normal_summon(state::CardInstanceId card, domain::MonsterPlacement placement) noexcept -> bool;
 		auto perform_tribute_summon(state::CardInstanceId card, domain::MonsterPlacement placement, std::span<const state::CardInstanceId> tributes) noexcept -> bool;
 
@@ -339,6 +373,9 @@ namespace cg::flow
 
 		// 是否有攻击正在进行
 		[[nodiscard]] auto pending_attack() const noexcept -> bool;
+
+		// 是否有召唤正在宣言/等待结算
+		[[nodiscard]] auto pending_summon() const noexcept -> bool;
 
 		// 当前连锁(空 = 开放状态)
 		[[nodiscard]] auto chain() const noexcept -> const execution::Chain&;

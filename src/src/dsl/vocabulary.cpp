@@ -215,7 +215,15 @@ namespace cg::dsl
 			all_phases,
 			{},
 			type_id("card"),
-			"效果来源卡(上下文引用)"
+			"效果来源卡(不依赖绑定)"
+		);
+		do_register(
+			"chain_exists",
+			PrimitiveKind::QUERY,
+			all_phases,
+			{},
+			type_id("bool"),
+			"当前是否已有连锁(含正在响应的上一环)"
 		);
 		do_register(
 			"event_card",
@@ -317,6 +325,14 @@ namespace cg::dsl
 			"使直接响应的上一环(Chain Link N-1)的发动无效"
 		);
 		do_register(
+			"negate_activation_and_destroy",
+			PrimitiveKind::ACTION,
+			{Phase::RESOLVE},
+			{},
+			type_id("void"),
+			"使直接响应的上一环(Chain Link N-1)的发动无效并破坏该卡"
+		);
+		do_register(
 			"negate_effect",
 			PrimitiveKind::ACTION,
 			{Phase::RESOLVE},
@@ -365,6 +381,14 @@ namespace cg::dsl
 			},
 			type_id("void"),
 			"支付生命值"
+		);
+		do_register(
+			"pay_half_life",
+			PrimitiveKind::ACTION,
+			{Phase::COST},
+			{},
+			type_id("void"),
+			"支付一半生命值(向上取整)"
 		);
 		do_register(
 			"send_to_graveyard",

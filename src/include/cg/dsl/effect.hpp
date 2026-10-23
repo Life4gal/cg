@@ -118,6 +118,8 @@ namespace cg::dsl
 		ATK_DEF_CHANGE,
 		// 无效卡片/效果的发动(伤害步骤内任意窗口)
 		ACTIVATION_NEGATE,
+		// 无效召唤(仅在召唤宣言时点)
+		SUMMON_NEGATE,
 	};
 
 	// ===========================================

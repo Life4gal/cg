@@ -79,6 +79,15 @@ namespace
 		}
 	}
 
+	// 推进并结算当前召唤,直到成功/无效时点打开
+	auto resolve_summon(flow::Duel& duel) -> void
+	{
+		while (duel.pending_summon())
+		{
+			duel.pass_priority();
+		}
+	}
+
 	// 推进到指定伤害步骤(测试无触发/连锁的战斗)
 	auto advance_to_damage_step(flow::Duel& duel, const domain::DamageStep step) -> void
 	{
@@ -145,6 +154,7 @@ TEST_CASE("flow::Duel performs core actions")
 
 	// 通常召唤
 	CHECK(duel.normal_summon(hand_card, domain::FieldColumn::C1));
+	resolve_summon(duel);
 	CHECK(game.zone_of(hand_card) == domain::Zone::MONSTER);
 
 	// 一回合一次
@@ -848,6 +858,7 @@ TEST_CASE("flow::Duel tribute summons a level 5 monster")
 
 	const std::array tributes{tribute};
 	CHECK(duel.tribute_summon(high, domain::FieldColumn::C2, tributes));
+	resolve_summon(duel);
 
 	CHECK(game.zone_of(tribute) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(high) == domain::Zone::MONSTER);
@@ -883,6 +894,7 @@ TEST_CASE("flow::Duel requires two tributes for a level 7 monster")
 
 	const std::array two{first, second};
 	CHECK(duel.tribute_summon(high, domain::FieldColumn::C3, two));
+	resolve_summon(duel);
 
 	CHECK(game.zone_of(first) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(second) == domain::Zone::GRAVEYARD);
@@ -1298,6 +1310,7 @@ TEST_CASE("flow::Duel validates Synchro and Xyz summon procedures")
 	CHECK_FALSE(duel.synchro_summon(synchro_card, domain::MonsterPlacement{.column = domain::FieldColumn::C5, .position = domain::Position::FACE_UP_ATTACK}, invalid_synchro_materials));
 
 	CHECK(duel.synchro_summon(synchro_card, domain::MonsterPlacement{.column = domain::FieldColumn::C5, .position = domain::Position::FACE_UP_ATTACK}, synchro_materials));
+	resolve_summon(duel);
 	CHECK(game.zone_of(synchro_card) == domain::Zone::MONSTER);
 	CHECK(game.zone_of(tuner_card) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(non_tuner_card) == domain::Zone::GRAVEYARD);
@@ -1310,11 +1323,273 @@ TEST_CASE("flow::Duel validates Synchro and Xyz summon procedures")
 	CHECK_FALSE(duel.xyz_summon(xyz_card, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, one_material));
 
 	CHECK(duel.xyz_summon(xyz_card, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, xyz_materials));
+	resolve_summon(duel);
 	CHECK(game.zone_of(xyz_card) == domain::Zone::EXTRA_MONSTER);
 	CHECK(game.zone_of(material_a_card) == domain::Zone::NOT_EXIST);
 	CHECK(game.zone_of(material_b_card) == domain::Zone::NOT_EXIST);
 	CHECK(game.find_instance(xyz_card)->overlays().size() == 2);
 	CHECK(game.find_instance(xyz_card)->summon_record().method == domain::SummonMethod::XYZ);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel: Solemn Judgment negates a Normal Summon")
+{
+	constexpr domain::CardCode solemn_code{41420027};
+	constexpr domain::CardCode monster_code{97000092};
+	constexpr domain::CardCode second_code{97000093};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+	game.register_definition(monster_code, make_monster(monster_code));
+	game.register_definition(second_code, make_monster(second_code));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto solemn = game.create_instance(solemn_code, domain::Player::FIRST);
+	REQUIRE(solemn.valid());
+	game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto monster = game.create_instance(monster_code, domain::Player::SECOND);
+	REQUIRE(monster.valid());
+	game.place(*game.find_instance_mutable(monster), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto second = game.create_instance(second_code, domain::Player::SECOND);
+	REQUIRE(second.valid());
+	game.place(*game.find_instance_mutable(second), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.set_spell_trap(solemn, domain::FieldColumn::C1));
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+
+	CHECK(duel.normal_summon(monster, domain::FieldColumn::C1));
+	CHECK(duel.pending_summon());
+	CHECK_FALSE(duel.pass_priority());
+
+	CHECK(duel.activate_card(solemn));
+	CHECK(game.life_points(domain::Player::FIRST) == 4000);
+	resolve_summon(duel);
+
+	CHECK_FALSE(duel.pending_summon());
+	CHECK(game.zone_of(monster) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(solemn) == domain::Zone::GRAVEYARD);
+	CHECK(game.life_points(domain::Player::FIRST) == 4000);
+
+	// 被无效的通常召唤仍消耗本回合的通招
+	CHECK_FALSE(duel.normal_summon(second, domain::FieldColumn::C1));
+	CHECK(game.zone_of(second) == domain::Zone::HAND);
+}
+
+TEST_CASE("flow::Duel: Solemn Judgment negates an Xyz Summon")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_solemn_xyz";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"97000095.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["XYZ"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"xyz","material":{"call":"is_card_type","args":{"card":"$","card_type":"MONSTER"}},"count":2}]})"
+	);
+
+	constexpr domain::CardCode solemn_code{41420027};
+	constexpr domain::CardCode xyz_code{97000095};
+	constexpr domain::CardCode material_a_code{97000096};
+	constexpr domain::CardCode material_b_code{97000097};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+	auto xyz_definition = make_monster(xyz_code, 2000, 2000, 4);
+	xyz_definition.subtypes = {domain::CardSubtype::XYZ};
+	game.register_definition(xyz_code, xyz_definition);
+	game.register_definition(material_a_code, make_monster(material_a_code, 1000, 1000, 4));
+	game.register_definition(material_b_code, make_monster(material_b_code, 1000, 1000, 4));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto solemn = game.create_instance(solemn_code, domain::Player::FIRST);
+	REQUIRE(solemn.valid());
+	game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto xyz_card = game.create_instance(xyz_code, domain::Player::SECOND);
+	REQUIRE(xyz_card.valid());
+	game.place(*game.find_instance_mutable(xyz_card), domain::ExtraDeckPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto material_a = game.create_instance(material_a_code, domain::Player::SECOND);
+	REQUIRE(material_a.valid());
+	game.place(*game.find_instance_mutable(material_a), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+	const auto material_b = game.create_instance(material_b_code, domain::Player::SECOND);
+	REQUIRE(material_b.valid());
+	game.place(*game.find_instance_mutable(material_b), domain::MonsterPlacement{.column = domain::FieldColumn::C3, .position = domain::Position::FACE_UP_ATTACK});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.set_spell_trap(solemn, domain::FieldColumn::C1));
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+
+	const std::array materials{material_a, material_b};
+	CHECK(duel.xyz_summon(xyz_card, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, materials));
+	CHECK(duel.pending_summon());
+
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.activate_card(solemn));
+	CHECK(game.life_points(domain::Player::FIRST) == 4000);
+	resolve_summon(duel);
+
+	CHECK_FALSE(duel.pending_summon());
+	CHECK(game.zone_of(xyz_card) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(material_a) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(material_b) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(solemn) == domain::Zone::GRAVEYARD);
+	CHECK(game.find_instance(xyz_card)->overlays().empty());
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel: Solemn Judgment negates and destroys a Spell activation")
+{
+	constexpr domain::CardCode solemn_code{41420027};
+	constexpr domain::CardCode raigeki_code{12580477};
+	constexpr domain::CardCode monster_code{97000092};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+	game.register_definition(raigeki_code, make_spell(raigeki_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(monster_code, make_monster(monster_code));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto solemn = game.create_instance(solemn_code, domain::Player::FIRST);
+	REQUIRE(solemn.valid());
+	game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(monster.valid());
+	game.place(*game.find_instance_mutable(monster), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto raigeki = game.create_instance(raigeki_code, domain::Player::SECOND);
+	REQUIRE(raigeki.valid());
+	game.place(*game.find_instance_mutable(raigeki), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.set_spell_trap(solemn, domain::FieldColumn::C1));
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+
+	CHECK(duel.activate_card(raigeki));
+	CHECK(duel.chain().size() == 1);
+	CHECK(game.zone_of(raigeki) == domain::Zone::SPELL_TRAP);
+
+	CHECK(duel.activate_card(solemn));
+	CHECK(duel.chain().size() == 2);
+	CHECK(game.life_points(domain::Player::FIRST) == 4000);
+
+	settle(duel);
+
+	CHECK(game.zone_of(raigeki) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(solemn) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(monster) == domain::Zone::MONSTER);
+	CHECK(game.life_points(domain::Player::FIRST) == 4000);
+	CHECK(game.life_points(domain::Player::SECOND) == 8000);
+}
+
+TEST_CASE("flow::Duel: Solemn Judgment negates and destroys a monster effect")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_solemn_monster_effect";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"97000099.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":500}}]}]})"
+	);
+
+	constexpr domain::CardCode solemn_code{41420027};
+	constexpr domain::CardCode monster_code{97000099};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+	game.register_definition(monster_code, make_monster(monster_code));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto solemn = game.create_instance(solemn_code, domain::Player::FIRST);
+	REQUIRE(solemn.valid());
+	game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto monster = game.create_instance(monster_code, domain::Player::SECOND);
+	REQUIRE(monster.valid());
+	game.place(*game.find_instance_mutable(monster), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.set_spell_trap(solemn, domain::FieldColumn::C1));
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+
+	CHECK(duel.activate_effect(monster, 0));
+	CHECK(duel.chain().size() == 1);
+
+	CHECK(duel.activate_card(solemn));
+	CHECK(duel.chain().size() == 2);
+	CHECK(game.life_points(domain::Player::FIRST) == 4000);
+
+	settle(duel);
+
+	// 无效发动并破坏来源怪兽;不是仅仅无效效果
+	CHECK(game.zone_of(monster) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(solemn) == domain::Zone::GRAVEYARD);
+	CHECK(game.life_points(domain::Player::FIRST) == 4000);
+	CHECK(game.life_points(domain::Player::SECOND) == 8000);
 
 	std::filesystem::remove_all(directory);
 }
@@ -1746,6 +2021,7 @@ TEST_CASE("flow::Duel activates traps with an event timing")
 	advance_phase(duel); // STANDBY
 	advance_phase(duel); // MAIN_1
 	REQUIRE(duel.normal_summon(monster, domain::FieldColumn::C1));
+	resolve_summon(duel);
 
 	// 先攻放弃优先权 → 后攻可发动带 WHEN 时点的陷阱
 	CHECK_FALSE(duel.pass_priority());

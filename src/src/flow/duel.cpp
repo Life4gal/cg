@@ -61,6 +61,11 @@ namespace cg::flow
 				{
 					continue;
 				}
+				// 召唤宣言窗口的第一环必须是召唤无效效果
+				if (summon_.has_value() && !entry.effect.get().properties.contains(dsl::EffectProperty::SUMMON_NEGATE))
+				{
+					continue;
+				}
 
 				group_indices.push_back(index);
 				choices.push_back(
@@ -112,6 +117,10 @@ namespace cg::flow
 
 				// 前面组可能已占用次数
 				if (!can_use(entry.effect.get(), instance))
+				{
+					continue;
+				}
+				if (summon_.has_value() && !entry.effect.get().properties.contains(dsl::EffectProperty::SUMMON_NEGATE))
 				{
 					continue;
 				}
@@ -241,6 +250,17 @@ namespace cg::flow
 				// 发动无效的魔陷送墓;但不视为「从场上送去墓地」
 				game_.move_to_graveyard(*instance, {domain::Reason::RULE});
 			}
+		}
+
+		// 召唤宣言链:仅 Chain Link 1 可以无效召唤;由 flow 消费 SUMMON_NEGATE
+		if (summon_.has_value() && !chain_.empty())
+		{
+			const auto& first = chain_.front();
+			const auto* effect = first.effect();
+			summon_negated_ = effect != nullptr
+			                  && effect->properties.contains(dsl::EffectProperty::SUMMON_NEGATE)
+			                  && !first.activation_negated()
+			                  && !first.effect_negated();
 		}
 
 		chain_.clear();
@@ -600,10 +620,121 @@ namespace cg::flow
 		return instance;
 	}
 
+	auto Duel::begin_summon(SummonState summon, const domain::EventCode declared) noexcept -> bool
+	{
+		if (summon_.has_value())
+		{
+			return false;
+		}
+
+		// 清掉上一次可能残留的标记
+		summon_negated_ = false;
+
+		const auto card = summon.card.get().id();
+		summon_ = std::move(summon);
+
+		const execution::EventWindow window
+		{
+				.source = dsl::TriggerSource{declared},
+				.card = card,
+				.player = std::nullopt,
+				.amount = std::nullopt,
+		};
+		open_timing({&window, 1});
+
+		return true;
+	}
+
+	auto Duel::complete_summon(SummonState& summon) noexcept -> bool
+	{
+		auto& instance = summon.card.get();
+
+		if (summon.method == domain::SummonMethod::NORMAL || summon.method == domain::SummonMethod::TRIBUTE)
+		{
+			game_.place(instance, domain::placement_of(summon.placement));
+			trigger_event(dsl::TriggerSource{domain::EventCode::NORMAL_SUMMON_SUCCESS}, instance.id());
+			return true;
+		}
+
+		const auto from = instance.placement();
+		game_.place(instance, domain::placement_of(summon.placement));
+
+		auto materials = summon.materials | std::views::transform(&state::CardInstance::id) | std::ranges::to<std::vector<state::CardInstanceId>>();
+		game_.set_summon_record(
+			instance,
+			{
+					.player = summon.controller,
+					.method = summon.method,
+					.from = from,
+					.materials = std::move(materials),
+			}
+		);
+
+		if (summon.method == domain::SummonMethod::XYZ)
+		{
+			for (const auto& material: summon.materials | std::views::transform(&std::reference_wrapper<state::CardInstance>::get))
+			{
+				game_.add_overlay(instance, material);
+			}
+		}
+
+		priority_.reset();
+		trigger_event(dsl::TriggerSource{domain::EventCode::SPECIAL_SUMMON_SUCCESS}, instance.id());
+
+		return true;
+	}
+
+	auto Duel::negate_pending_summon(SummonState& summon) noexcept -> void
+	{
+		auto& instance = summon.card.get();
+		game_.move_to_graveyard(instance, {domain::Reason::RULE});
+
+		for (auto& material: summon.materials | std::views::transform(&std::reference_wrapper<state::CardInstance>::get))
+		{
+			// 同调/祭品素材已在宣言前送墓;仅超量素材仍处于NOT_EXIST
+			if (game_.zone_of(material.id()) == domain::Zone::NOT_EXIST)
+			{
+				game_.move_to_graveyard(material, {domain::Reason::RULE});
+			}
+		}
+
+		const auto event = (summon.method == domain::SummonMethod::NORMAL || summon.method == domain::SummonMethod::TRIBUTE)
+			                   ? domain::EventCode::NORMAL_SUMMON_NEGATED
+			                   : domain::EventCode::SPECIAL_SUMMON_NEGATED;
+		const execution::EventWindow window
+		{
+				.source = dsl::TriggerSource{event},
+				.card = instance.id(),
+				.player = std::nullopt,
+				.amount = std::nullopt,
+		};
+		open_timing({&window, 1});
+	}
+
+	auto Duel::resolve_summon() noexcept -> void
+	{
+		if (!summon_.has_value())
+		{
+			return;
+		}
+
+		auto summon = std::move(*summon_);
+		summon_.reset();
+
+		if (const auto negated = std::exchange(summon_negated_, false);
+			negated)
+		{
+			negate_pending_summon(summon);
+			return;
+		}
+
+		std::ignore = complete_summon(summon);
+	}
+
 	auto Duel::perform_normal_summon(const state::CardInstanceId card, const domain::MonsterPlacement placement) noexcept -> bool
 	{
-		// 如果已通招则召唤失败
-		if (state_.normal_summoned)
+		// 如果已通招或已有召唤尚未结算则失败
+		if (summon_.has_value() || state_.normal_summoned)
 		{
 			return false;
 		}
@@ -627,29 +758,34 @@ namespace cg::flow
 			return false;
 		}
 
-		// 放置到场上
-		game_.place(*instance, {placement});
-
-		// 已通常召唤
+		// 已通常召唤(即使召唤被无效也计入次数)
 		state_.normal_summoned = true;
 
-		// 召唤/盖放的成功时点
-		if (placement.position == domain::Position::FACE_UP_ATTACK)
+		// 盖放不是召唤,直接成功
+		if (placement.position == domain::Position::FACE_DOWN_DEFENSE)
 		{
-			trigger_event(dsl::TriggerSource{domain::EventCode::NORMAL_SUMMON_SUCCESS}, card);
-		}
-		else
-		{
+			game_.place(*instance, {placement});
 			trigger_event(dsl::TriggerSource{domain::EventCode::MONSTER_SET}, card);
+			return true;
 		}
 
-		return true;
+		return begin_summon(
+			SummonState
+			{
+					.controller = instance->controller(),
+					.placement = domain::AnyMonsterPlacement{placement},
+					.method = domain::SummonMethod::NORMAL,
+					.card = std::ref(*instance),
+					.materials = {},
+			},
+			domain::EventCode::NORMAL_SUMMON_DECLARED
+		);
 	}
 
 	auto Duel::perform_tribute_summon(const state::CardInstanceId card, const domain::MonsterPlacement placement, const std::span<const state::CardInstanceId> tributes) noexcept -> bool
 	{
-		// 如果已通招则召唤失败
-		if (state_.normal_summoned)
+		// 如果已通招或已有召唤尚未结算则失败
+		if (summon_.has_value() || state_.normal_summoned)
 		{
 			return false;
 		}
@@ -711,30 +847,40 @@ namespace cg::flow
 			}
 		}
 
-		// 解放祭品
+		// 解放祭品(即使召唤被无效也不返还)
+		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
+		summon_materials.reserve(tributes.size());
 		for (const auto tribute: tributes)
 		{
 			auto* tribute_instance = game_.find_instance_mutable(tribute);
+			LIBASSERT_DEBUG_ASSERT(tribute_instance != nullptr);
 			game_.move_to_graveyard(*tribute_instance, {domain::Reason::RELEASE});
+
+			summon_materials.push_back(std::ref(*tribute_instance));
 		}
 
-		// 放置到场上
-		game_.place(*instance, {placement});
-
-		// 已通常召唤
+		// 已通常召唤(即使召唤被无效也计入次数)
 		state_.normal_summoned = true;
 
-		// 祭品召唤/盖放的成功时点
-		if (placement.position == domain::Position::FACE_UP_ATTACK)
+		// 盖放不是召唤,直接成功
+		if (placement.position == domain::Position::FACE_DOWN_DEFENSE)
 		{
-			trigger_event(dsl::TriggerSource{domain::EventCode::NORMAL_SUMMON_SUCCESS}, card);
-		}
-		else
-		{
+			game_.place(*instance, {placement});
 			trigger_event(dsl::TriggerSource{domain::EventCode::MONSTER_SET}, card);
+			return true;
 		}
 
-		return true;
+		return begin_summon(
+			SummonState
+			{
+					.controller = controller,
+					.placement = domain::AnyMonsterPlacement{placement},
+					.method = domain::SummonMethod::TRIBUTE,
+					.card = std::ref(*instance),
+					.materials = std::move(summon_materials),
+			},
+			domain::EventCode::NORMAL_SUMMON_DECLARED
+		);
 	}
 
 	auto Duel::usage_owner(const dsl::UsageKind kind, const state::CardInstance& card) const noexcept -> UsageKey::owner_type
@@ -1185,6 +1331,11 @@ namespace cg::flow
 		return attack_.has_value();
 	}
 
+	auto Duel::pending_summon() const noexcept -> bool
+	{
+		return summon_.has_value();
+	}
+
 	auto Duel::chain() const noexcept -> const execution::Chain&
 	{
 		return chain_;
@@ -1256,7 +1407,7 @@ namespace cg::flow
 
 	auto Duel::change_phase() noexcept -> bool
 	{
-		if (!chain_.empty() || attack_.has_value() || !priority_.both_passed())
+		if (!chain_.empty() || summon_.has_value() || attack_.has_value() || !priority_.both_passed())
 		{
 			return false;
 		}
@@ -1297,6 +1448,13 @@ namespace cg::flow
 		// 双方通过后关闭事件时点
 		windows_.clear();
 
+		// 召唤宣言时点关闭:结算召唤
+		if (summon_.has_value())
+		{
+			resolve_summon();
+			return true;
+		}
+
 		// 战斗中:当前战斗/伤害步骤时点关闭 → 进入下一步骤
 		if (attack_.has_value())
 		{
@@ -1308,7 +1466,7 @@ namespace cg::flow
 
 	auto Duel::end_turn() noexcept -> bool
 	{
-		if (turn_.phase() != domain::Phase::END || !chain_.empty() || attack_.has_value())
+		if (turn_.phase() != domain::Phase::END || !chain_.empty() || summon_.has_value() || attack_.has_value())
 		{
 			return false;
 		}
@@ -1356,6 +1514,11 @@ namespace cg::flow
 
 	auto Duel::synchro_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
+		if (summon_.has_value())
+		{
+			return false;
+		}
+
 		// 必须是表侧攻击/守备表示
 		if (const auto position = domain::position_of(placement);
 			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
@@ -1394,43 +1557,38 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto controller = instance->controller();
-
-		// 素材送入墓地
+		// 素材在宣言前送入墓地(召唤被无效也不返还)
+		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
+		summon_materials.reserve(materials.size());
 		for (const auto material: materials)
 		{
 			auto* material_instance = game_.find_instance_mutable(material);
 			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
 			game_.move_to_graveyard(*material_instance, {domain::Reason::SYNCHRO});
+
+			summon_materials.push_back(std::ref(*material_instance));
 		}
 
-		// 先记录来的位置
-		const auto from = instance->placement();
-
-		// 放置到场上
-		game_.place(*instance, domain::placement_of(placement));
-
-		// 记录召唤信息
-		game_.set_summon_record(
-			*instance,
+		return begin_summon(
+			SummonState
 			{
-					.player = controller,
+					.controller = instance->controller(),
+					.placement = placement,
 					.method = domain::SummonMethod::SYNCHRO,
-					.from = from,
-					.materials = {materials.begin(), materials.end()},
-			}
+					.card = std::ref(*instance),
+					.materials = std::move(summon_materials),
+			},
+			domain::EventCode::SPECIAL_SUMMON_DECLARED
 		);
-
-		priority_.reset();
-
-		// 特殊召唤的成功时点
-		trigger_event(dsl::TriggerSource{domain::EventCode::SPECIAL_SUMMON_SUCCESS}, card);
-
-		return true;
 	}
 
 	auto Duel::xyz_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
+		if (summon_.has_value())
+		{
+			return false;
+		}
+
 		// 必须是表侧攻击/守备表示
 		if (const auto position = domain::position_of(placement);
 			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
@@ -1469,43 +1627,29 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto controller = instance->controller();
-
-		// 先记录来的位置
-		const auto from = instance->placement();
-
-		// 放置到场上
-		game_.place(*instance, domain::placement_of(placement));
-
-		// 记录召唤信息
-		game_.set_summon_record(
-			*instance,
-			{
-					.player = controller,
-					.method = domain::SummonMethod::XYZ,
-					.from = from,
-					.materials = std::vector<state::CardInstanceId>{materials.begin(), materials.end()},
-			}
-		);
-
-		// 将素材叠放
+		// 素材在宣言前视为已使用(送入NOT_EXIST;召唤被无效时再送墓)
+		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
+		summon_materials.reserve(materials.size());
 		for (const auto material: materials)
 		{
-			// 素材送入未知区域(超量素材)
 			auto* material_instance = game_.find_instance_mutable(material);
 			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
 			game_.place(*material_instance, {domain::NotExistPlacement{}});
 
-			// 添加超量素材
-			game_.add_overlay(*instance, *material_instance);
+			summon_materials.push_back(std::ref(*material_instance));
 		}
 
-		priority_.reset();
-
-		// 特殊召唤的成功时点
-		trigger_event(dsl::TriggerSource{domain::EventCode::SPECIAL_SUMMON_SUCCESS}, card);
-
-		return true;
+		return begin_summon(
+			SummonState
+			{
+					.controller = instance->controller(),
+					.placement = placement,
+					.method = domain::SummonMethod::XYZ,
+					.card = std::ref(*instance),
+					.materials = std::move(summon_materials),
+			},
+			domain::EventCode::SPECIAL_SUMMON_DECLARED
+		);
 	}
 
 	auto Duel::activate_card(const state::CardInstanceId card) noexcept -> bool
@@ -1671,6 +1815,16 @@ namespace cg::flow
 			return false;
 		}
 
+		// 召唤宣言窗口的第一环必须是召唤无效效果
+		if (
+			summon_.has_value() &&
+			chain_.empty() &&
+			(activated_effect == nullptr || !activated_effect->properties.contains(dsl::EffectProperty::SUMMON_NEGATE))
+		)
+		{
+			return false;
+		}
+
 		if (!can_activate_in_damage_step(*instance, activated_effect))
 		{
 			// 伤害步骤内该卡/效果不属于可发动类别
@@ -1700,6 +1854,7 @@ namespace cg::flow
 
 		execution::Context context{game_, selector_, controller, card};
 		context.card_state = &card_state_;
+		context.chain = {.chain = std::ref(chain_), .link_index = chain_.size()};
 		if (matched_window.has_value())
 		{
 			context.event = *matched_window;
@@ -1985,6 +2140,12 @@ namespace cg::flow
 			return false;
 		}
 
+		// 召唤宣言窗口的第一环必须是召唤无效效果
+		if (summon_.has_value() && chain_.empty() && !effect.properties.contains(dsl::EffectProperty::SUMMON_NEGATE))
+		{
+			return false;
+		}
+
 		if (!can_activate_in_damage_step(*instance, &effect))
 		{
 			// 伤害步骤内该效果不属于可发动类别
@@ -2004,6 +2165,7 @@ namespace cg::flow
 
 		execution::Context context{game_, selector_, controller, card};
 		context.card_state = &card_state_;
+		context.chain = {.chain = std::ref(chain_), .link_index = chain_.size()};
 		if (!interpreter_.activate(*activated, context))
 		{
 			return false;

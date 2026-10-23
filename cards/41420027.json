@@ -1,0 +1,35 @@
+{
+	"identity": {
+		"kind": "TRAP",
+		"subtypes": ["COUNTER"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {
+				"mode": "activation",
+				"source": [
+					{"event": "NORMAL_SUMMON_DECLARED"},
+					{"event": "SPECIAL_SUMMON_DECLARED"}
+				],
+				"timing": "WHEN"
+			},
+			"properties": ["SUMMON_NEGATE"],
+			"cost": [
+				{"call": "pay_half_life", "args": {}}
+			],
+			"effect": []
+		},
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"condition": {"call": "chain_exists", "args": {}},
+			"cost": [
+				{"call": "pay_half_life", "args": {}}
+			],
+			"effect": [
+				{"call": "negate_activation_and_destroy", "args": {}}
+			]
+		}
+	]
+}

@@ -27,12 +27,14 @@ namespace cg::execution
 	class Context
 	{
 	public:
-		// 连锁结算位置(仅 Interpreter::resolve(Chain&) 时存在)
+		// 连锁位置
+		// - 激活时:chain指向已有连锁,link_index = 追加位置(chain.size())
+		// - 结算时:Interpreter::resolve设置当前link的真实下标
 		class ChainCursor
 		{
 		public:
 			std::reference_wrapper<Chain> chain;
-			// 当前 link 在 chain 中的下标
+			// 激活时是追加位置;结算时是当前link下标
 			std::size_t link_index;
 		};
 
@@ -53,7 +55,7 @@ namespace cg::execution
 
 		// 事件快照;condition / activation / resolution 均可查询 event_*
 		std::optional<EventWindow> event;
-		// 连锁结算位置;仅 Interpreter::resolve(Chain&) 设置
+		// 连锁位置;Duel在激活前设置,Interpreter::resolve在结算时覆盖为真实下标
 		std::optional<ChainCursor> chain;
 
 		constexpr Context(
