@@ -76,6 +76,9 @@ namespace cg::execution
 		// 获取卡密 = 印刷值 + 静态修饰
 		[[nodiscard]] auto effective_code(const state::CardInstance& card) const noexcept -> domain::CardCode;
 
+		// 检查包含卡密 = 印刷值 + 静态修饰
+		[[nodiscard]] auto has_code(const state::CardInstance& card, domain::CardCode code) const noexcept -> bool;
+
 		// 获取类型 = 印刷值 + 静态修饰
 		[[nodiscard]] auto card_types(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardType>;
 

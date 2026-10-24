@@ -3255,6 +3255,51 @@ TEST_CASE("flow::Duel takes control with an effect Special Summon from the oppon
 	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::GRAVEYARD) == 1);
 }
 
+TEST_CASE("flow::Duel matches Fusion materials by code_list")
+{
+	constexpr domain::CardCode fusion_code{97000137};
+	constexpr domain::CardCode alias_material_code{97000136};
+	constexpr domain::CardCode plain_material_code{97000138};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	auto fusion = make_monster(fusion_code, 2000, 2000, 4);
+	fusion.subtypes = {domain::CardSubtype::FUSION};
+	game.register_definition(fusion_code, fusion);
+	game.register_definition(alias_material_code, make_monster(alias_material_code, 1000, 1000, 4));
+	game.register_definition(plain_material_code, make_monster(plain_material_code, 1000, 1000, 4));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto fusion_card = game.create_instance(fusion_code, domain::Player::FIRST);
+	REQUIRE(fusion_card.valid());
+	const auto plain_material = game.create_instance(plain_material_code, domain::Player::FIRST);
+	REQUIRE(plain_material.valid());
+	const auto alias_material = game.create_instance(alias_material_code, domain::Player::FIRST);
+	REQUIRE(alias_material.valid());
+
+	game.place(*game.find_instance_mutable(fusion_card), domain::ExtraDeckPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(plain_material), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(alias_material), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	const std::array plain_materials{plain_material};
+	CHECK_FALSE(duel.fusion_summon(fusion_card, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, plain_materials));
+
+	const std::array alias_materials{alias_material};
+	CHECK(duel.fusion_summon(fusion_card, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, alias_materials));
+	resolve_summon(duel);
+
+	CHECK(game.zone_of(fusion_card) == domain::Zone::EXTRA_MONSTER);
+	CHECK(game.zone_of(alias_material) == domain::Zone::GRAVEYARD);
+	CHECK(game.find_instance(fusion_card)->summon_record().method == domain::SummonMethod::FUSION);
+}
+
 TEST_CASE("flow::Duel sets and activates a trap")
 {
 	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_trap";

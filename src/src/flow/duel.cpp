@@ -537,7 +537,7 @@ namespace cg::flow
 				{
 						[&](const domain::CardCode code) noexcept -> bool
 						{
-							return instance->origin_code() == code;
+							return interpreter_.state_resolver().has_code(*instance, code);
 						},
 						[&](const dsl::Expression& expression) noexcept -> bool
 						{

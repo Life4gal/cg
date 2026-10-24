@@ -732,7 +732,7 @@ namespace cg::execution
 		const auto expected = static_cast<domain::CardCode>(
 			static_cast<std::underlying_type_t<domain::CardCode>>(*code)
 		);
-		return Value{Boolean{state_resolver_.effective_code(*instance) == expected}};
+		return Value{Boolean{state_resolver_.has_code(*instance, expected)}};
 	}
 
 	auto Interpreter::is_card_subtype(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>

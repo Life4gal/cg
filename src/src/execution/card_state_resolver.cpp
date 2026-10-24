@@ -367,6 +367,17 @@ namespace cg::execution
 		return code.value_or(card.origin_code());
 	}
 
+	auto CardStateResolver::has_code(const state::CardInstance& card, const domain::CardCode code) const noexcept -> bool
+	{
+		if (effective_code(card) == code)
+		{
+			return true;
+		}
+
+		const auto* script = scripts_.get().find(card.origin_code());
+		return script != nullptr && std::ranges::contains(script->identity.code_list, code);
+	}
+
 	auto CardStateResolver::card_types(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardType>
 	{
 		Context context{card.controller(), card.id()};

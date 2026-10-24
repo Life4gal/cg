@@ -1,0 +1,14 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["NORMAL"],
+		"monster": {
+			"attribute": "EARTH",
+			"race": "DRAGON",
+			"level": 4,
+			"attack": 1000,
+			"defense": 1000
+		},
+		"code_list": [97000130]
+	}
+}

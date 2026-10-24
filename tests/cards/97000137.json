@@ -1,0 +1,19 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["FUSION"],
+		"monster": {
+			"attribute": "EARTH",
+			"race": "DRAGON",
+			"level": 4,
+			"attack": 2000,
+			"defense": 2000
+		}
+	},
+	"summons": [
+		{
+			"method": "fusion",
+			"materials": [{"card": 97000130}]
+		}
+	]
+}
