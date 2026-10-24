@@ -1314,13 +1314,20 @@ namespace cg::execution
 		}
 
 		auto* instance = game.find_instance_mutable(*card);
-
-		// TODO: 记录召唤方式(method)
-		std::ignore = method;
+		if (instance == nullptr)
+		{
+			return std::nullopt;
+		}
 
 		const auto value = static_cast<domain::Position>(static_cast<std::underlying_type_t<domain::Position>>(*position));
+		if (value != domain::Position::FACE_UP_ATTACK && value != domain::Position::FACE_UP_DEFENSE)
+		{
+			return std::nullopt;
+		}
 
-		// TODO: 指定召唤位置
+		const auto method_value = static_cast<domain::SummonMethod>(static_cast<std::underlying_type_t<domain::SummonMethod>>(*method));
+		const auto from = instance->placement();
+
 		for (const auto column: domain::field_columns)
 		{
 			if (const auto location = domain::MonsterLocation{.column = column};
@@ -1330,6 +1337,16 @@ namespace cg::execution
 			}
 
 			game.move_to_monster(*instance, {domain::Reason::EFFECT}, domain::MonsterPlacement{.column = column, .position = value});
+			game.set_summon_record(
+				*instance,
+				state::CardInstance::SummonRecord
+				{
+						.player = context.controller,
+						.method = method_value,
+						.from = from,
+						.materials = {},
+				}
+			);
 
 			pending_events_.emplace_back(domain::EventCode::SPECIAL_SUMMON_SUCCESS, *card);
 
