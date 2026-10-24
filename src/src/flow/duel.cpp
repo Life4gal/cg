@@ -387,6 +387,32 @@ namespace cg::flow
 		return properties.contains(dsl::EffectProperty::DAMAGE_STEP);
 	}
 
+	auto Duel::push_chain_link(
+		const domain::Player controller,
+		const domain::EffectSpeed speed,
+		const state::CardInstanceId source,
+		const dsl::ActivatedEffect* activated,
+		const dsl::Effect* effect,
+		execution::Context context,
+		const bool mutex_inserted
+	) noexcept -> void
+	{
+		execution::ChainLink link
+		{
+				controller,
+				speed,
+				source,
+				activated,
+				effect,
+				std::move(context),
+		};
+		link.set_mutex_inserted(mutex_inserted);
+
+		chain_.push_back(std::move(link));
+		windows_.clear();
+		priority_.transfer_from(controller, turn_.turn_player());
+	}
+
 	auto Duel::find_summon_procedure(const state::CardInstance& card, const domain::SummonMethod method) const noexcept -> const dsl::SummonProcedure*
 	{
 		const auto* script = interpreter_.find_script(card.origin_code());
@@ -833,6 +859,105 @@ namespace cg::flow
 		return summon_.has_value() || pendulum_summon_.has_value();
 	}
 
+	auto Duel::summonable_procedure_instance(
+		const state::CardInstanceId card,
+		const domain::AnyMonsterPlacement placement,
+		const domain::CardSubtype subtype,
+		const domain::Zone source_zone,
+		const bool allow_face_up_defense
+	) noexcept -> state::CardInstance*
+	{
+		if (has_pending_summon())
+		{
+			return nullptr;
+		}
+
+		const auto position = domain::position_of(placement);
+		if (
+			position != domain::Position::FACE_UP_ATTACK &&
+			(!allow_face_up_defense || position != domain::Position::FACE_UP_DEFENSE)
+		)
+		{
+			return nullptr;
+		}
+
+		auto* instance = summonable_instance_of(card, placement);
+		if (instance == nullptr || game_.zone_of(card) != source_zone)
+		{
+			return nullptr;
+		}
+
+		if (!interpreter_.state_resolver().contains_card_subtype(*instance, subtype))
+		{
+			return nullptr;
+		}
+
+		return instance;
+	}
+
+	auto Duel::release_summon_materials(const std::span<const state::CardInstanceId> materials, const domain::Reason reason) noexcept -> std::vector<std::reference_wrapper<state::CardInstance>>
+	{
+		std::vector<std::reference_wrapper<state::CardInstance>> result{};
+		result.reserve(materials.size());
+
+		for (const auto material: materials)
+		{
+			auto* instance = game_.find_instance_mutable(material);
+			LIBASSERT_DEBUG_ASSERT(instance != nullptr);
+			game_.move_to_graveyard(*instance, {reason});
+
+			result.push_back(std::ref(*instance));
+		}
+
+		return result;
+	}
+
+	auto Duel::detach_summon_materials(const std::span<const state::CardInstanceId> materials) noexcept -> std::vector<std::reference_wrapper<state::CardInstance>>
+	{
+		std::vector<std::reference_wrapper<state::CardInstance>> result{};
+		result.reserve(materials.size());
+
+		for (const auto material: materials)
+		{
+			auto* instance = game_.find_instance_mutable(material);
+			LIBASSERT_DEBUG_ASSERT(instance != nullptr);
+			game_.place(*instance, {domain::NotExistPlacement{}});
+
+			result.push_back(std::ref(*instance));
+		}
+
+		return result;
+	}
+
+	auto Duel::place_and_record_summon(
+		state::CardInstance& instance,
+		const domain::AnyMonsterPlacement placement,
+		const domain::Player controller,
+		const domain::SummonMethod method,
+		const std::span<const std::reference_wrapper<state::CardInstance>> materials
+	) noexcept -> void
+	{
+		const auto from = instance.placement();
+		game_.place(instance, placement);
+
+		std::vector<state::CardInstanceId> material_ids{};
+		material_ids.reserve(materials.size());
+		for (const auto& material: materials)
+		{
+			material_ids.push_back(material.get().id());
+		}
+
+		game_.set_summon_record(
+			instance,
+			{
+					.player = controller,
+					.method = method,
+					.from = from,
+					.materials = std::move(material_ids),
+			}
+		);
+	}
+
 	auto Duel::begin_summon(SummonState summon, const domain::EventCode declared) noexcept -> bool
 	{
 		if (has_pending_summon())
@@ -909,19 +1034,14 @@ namespace cg::flow
 			return true;
 		}
 
-		const auto from = instance.placement();
-
 		if (summon.method == domain::SummonMethod::FLIP)
 		{
-			game_.place(instance, domain::placement_of(summon.placement));
-			game_.set_summon_record(
+			place_and_record_summon(
 				instance,
-				{
-						.player = summon.controller,
-						.method = domain::SummonMethod::FLIP,
-						.from = from,
-						.materials = {},
-				}
+				summon.placement,
+				summon.controller,
+				domain::SummonMethod::FLIP,
+				{}
 			);
 
 			priority_.reset();
@@ -947,17 +1067,12 @@ namespace cg::flow
 			return true;
 		}
 
-		game_.place(instance, domain::placement_of(summon.placement));
-
-		auto materials = summon.materials | std::views::transform(&state::CardInstance::id) | std::ranges::to<std::vector<state::CardInstanceId>>();
-		game_.set_summon_record(
+		place_and_record_summon(
 			instance,
-			{
-					.player = summon.controller,
-					.method = summon.method,
-					.from = from,
-					.materials = std::move(materials),
-			}
+			summon.placement,
+			summon.controller,
+			summon.method,
+			summon.materials
 		);
 
 		if (summon.method == domain::SummonMethod::XYZ)
@@ -986,17 +1101,12 @@ namespace cg::flow
 
 		for (auto& [card, placement]: summon.pendulum_cards)
 		{
-			const auto from = card.get().placement();
-
-			game_.place(card, placement);
-			game_.set_summon_record(
+			place_and_record_summon(
 				card,
-				{
-						.player = summon.controller,
-						.method = domain::SummonMethod::PENDULUM,
-						.from = from,
-						.materials = {},
-				}
+				placement,
+				summon.controller,
+				domain::SummonMethod::PENDULUM,
+				{}
 			);
 
 			windows.emplace_back(dsl::TriggerSource{domain::EventCode::SPECIAL_SUMMON_SUCCESS}, card.get().id());
@@ -1140,7 +1250,7 @@ namespace cg::flow
 			SummonState
 			{
 					.controller = instance->controller(),
-					.placement = domain::AnyMonsterPlacement{placement},
+					.placement = {placement},
 					.method = domain::SummonMethod::NORMAL,
 					.card = std::ref(*instance),
 					.materials = {},
@@ -1215,16 +1325,7 @@ namespace cg::flow
 		}
 
 		// 解放祭品(即使召唤被无效也不返还)
-		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
-		summon_materials.reserve(tributes.size());
-		for (const auto tribute: tributes)
-		{
-			auto* tribute_instance = game_.find_instance_mutable(tribute);
-			LIBASSERT_DEBUG_ASSERT(tribute_instance != nullptr);
-			game_.move_to_graveyard(*tribute_instance, {domain::Reason::RELEASE});
-
-			summon_materials.push_back(std::ref(*tribute_instance));
-		}
+		auto summon_materials = release_summon_materials(tributes, domain::Reason::RELEASE);
 
 		// 已通常召唤(即使召唤被无效也计入次数)
 		state_.normal_summoned = true;
@@ -1241,8 +1342,8 @@ namespace cg::flow
 		return begin_summon(
 			SummonState
 			{
-					.controller = controller,
-					.placement = domain::AnyMonsterPlacement{placement},
+					.controller = instance->controller(),
+					.placement = {placement},
 					.method = domain::SummonMethod::TRIBUTE,
 					.card = std::ref(*instance),
 					.materials = std::move(summon_materials),
@@ -1361,6 +1462,35 @@ namespace cg::flow
 	{
 		const auto zone = game_.zone_of(card);
 		return zone == domain::Zone::MONSTER || zone == domain::Zone::EXTRA_MONSTER;
+	}
+
+	auto Duel::is_valid_attack_target(const domain::Player opponent, const std::optional<state::CardInstanceId> target) const noexcept -> bool
+	{
+		if (!target.has_value())
+		{
+			return game_.is_zones_empty(opponent, {domain::Zone::MONSTER, domain::Zone::EXTRA_MONSTER});
+		}
+
+		if (const auto* target_instance = game_.find_instance(*target);
+			target_instance == nullptr || target_instance->controller() != opponent)
+		{
+			return false;
+		}
+
+		const auto zone = game_.zone_of(*target);
+		return zone == domain::Zone::MONSTER || zone == domain::Zone::EXTRA_MONSTER;
+	}
+
+	auto Duel::open_attack_declared(const state::CardInstanceId attacker) noexcept -> void
+	{
+		const execution::EventWindow window
+		{
+				.source = dsl::TriggerSource{domain::EventCode::ATTACK_DECLARED},
+				.card = attacker,
+				.player = std::nullopt,
+				.amount = std::nullopt,
+		};
+		open_timing({&window, 1});
 	}
 
 	auto Duel::advance_battle() noexcept -> void
@@ -1952,7 +2082,7 @@ namespace cg::flow
 			SummonState
 			{
 					.controller = controller,
-					.placement = domain::AnyMonsterPlacement{domain::MonsterPlacement{.column = monster_placement->column, .position = domain::Position::FACE_UP_ATTACK}},
+					.placement = {domain::MonsterPlacement{.column = monster_placement->column, .position = domain::Position::FACE_UP_ATTACK}},
 					.method = domain::SummonMethod::FLIP,
 					.card = std::ref(*instance),
 					.materials = {},
@@ -1978,37 +2108,18 @@ namespace cg::flow
 
 	auto Duel::synchro_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
-		if (has_pending_summon())
-		{
-			return false;
-		}
-
-		// 必须是表侧攻击/守备表示
-		if (const auto position = domain::position_of(placement);
-			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
-		{
-			return false;
-		}
-
-		auto* instance = summonable_instance_of(card, placement);
+		auto* instance = summonable_procedure_instance(
+			card,
+			placement,
+			domain::CardSubtype::SYNCHRO,
+			domain::Zone::EXTRA_DECK,
+			true
+		);
 		if (instance == nullptr)
 		{
 			return false;
 		}
 
-		if (const auto zone = game_.zone_of(card);
-			zone != domain::Zone::EXTRA_DECK)
-		{
-			return false;
-		}
-
-		// 必须是同调子类型
-		if (!interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::SYNCHRO))
-		{
-			return false;
-		}
-
-		// 必须存在对应的同调召唤 procedure
 		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::SYNCHRO);
 		if (procedure == nullptr)
 		{
@@ -2022,16 +2133,7 @@ namespace cg::flow
 		}
 
 		// 素材在宣言前送入墓地(召唤被无效也不返还)
-		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
-		summon_materials.reserve(materials.size());
-		for (const auto material: materials)
-		{
-			auto* material_instance = game_.find_instance_mutable(material);
-			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
-			game_.move_to_graveyard(*material_instance, {domain::Reason::SYNCHRO});
-
-			summon_materials.push_back(std::ref(*material_instance));
-		}
+		auto summon_materials = release_summon_materials(materials, domain::Reason::SYNCHRO);
 
 		return begin_summon(
 			SummonState
@@ -2048,37 +2150,18 @@ namespace cg::flow
 
 	auto Duel::xyz_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
-		if (has_pending_summon())
-		{
-			return false;
-		}
-
-		// 必须是表侧攻击/守备表示
-		if (const auto position = domain::position_of(placement);
-			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
-		{
-			return false;
-		}
-
-		auto* instance = summonable_instance_of(card, placement);
+		auto* instance = summonable_procedure_instance(
+			card,
+			placement,
+			domain::CardSubtype::XYZ,
+			domain::Zone::EXTRA_DECK,
+			true
+		);
 		if (instance == nullptr)
 		{
 			return false;
 		}
 
-		if (const auto zone = game_.zone_of(card);
-			zone != domain::Zone::EXTRA_DECK)
-		{
-			return false;
-		}
-
-		// 必须是超量子类型
-		if (!interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::XYZ))
-		{
-			return false;
-		}
-
-		// 必须存在对应的超量召唤 procedure
 		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::XYZ);
 		if (procedure == nullptr)
 		{
@@ -2092,16 +2175,7 @@ namespace cg::flow
 		}
 
 		// 素材在宣言前视为已使用(送入NOT_EXIST;召唤被无效时再送墓)
-		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
-		summon_materials.reserve(materials.size());
-		for (const auto material: materials)
-		{
-			auto* material_instance = game_.find_instance_mutable(material);
-			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
-			game_.place(*material_instance, {domain::NotExistPlacement{}});
-
-			summon_materials.push_back(std::ref(*material_instance));
-		}
+		auto summon_materials = detach_summon_materials(materials);
 
 		return begin_summon(
 			SummonState
@@ -2118,31 +2192,18 @@ namespace cg::flow
 
 	auto Duel::fusion_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
-		if (has_pending_summon())
+		auto* instance = summonable_procedure_instance(
+			card,
+			placement,
+			domain::CardSubtype::FUSION,
+			domain::Zone::EXTRA_DECK,
+			true
+		);
+		if (instance == nullptr)
 		{
 			return false;
 		}
 
-		// 必须是表侧攻击/守备表示
-		if (const auto position = domain::position_of(placement);
-			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
-		{
-			return false;
-		}
-
-		auto* instance = summonable_instance_of(card, placement);
-		if (instance == nullptr || game_.zone_of(card) != domain::Zone::EXTRA_DECK)
-		{
-			return false;
-		}
-
-		// 必须是融合子类型
-		if (!interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::FUSION))
-		{
-			return false;
-		}
-
-		// 必须存在对应的融合召唤 procedure
 		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::FUSION);
 		if (procedure == nullptr)
 		{
@@ -2156,16 +2217,7 @@ namespace cg::flow
 		}
 
 		// 素材在宣言前送入墓地(召唤被无效也不返还)
-		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
-		summon_materials.reserve(materials.size());
-		for (const auto material: materials)
-		{
-			auto* material_instance = game_.find_instance_mutable(material);
-			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
-			game_.move_to_graveyard(*material_instance, {domain::Reason::FUSION});
-
-			summon_materials.push_back(std::ref(*material_instance));
-		}
+		auto summon_materials = release_summon_materials(materials, domain::Reason::FUSION);
 
 		return begin_summon(
 			SummonState
@@ -2182,37 +2234,18 @@ namespace cg::flow
 
 	auto Duel::link_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
-		if (has_pending_summon())
-		{
-			return false;
-		}
-
-		// 必须是表侧攻击
-		if (const auto position = domain::position_of(placement);
-			position != domain::Position::FACE_UP_ATTACK)
-		{
-			return false;
-		}
-
-		auto* instance = summonable_instance_of(card, placement);
+		auto* instance = summonable_procedure_instance(
+			card,
+			placement,
+			domain::CardSubtype::LINK,
+			domain::Zone::EXTRA_DECK,
+			false
+		);
 		if (instance == nullptr)
 		{
 			return false;
 		}
 
-		if (const auto zone = game_.zone_of(card);
-			zone != domain::Zone::EXTRA_DECK)
-		{
-			return false;
-		}
-
-		// 必须是连接子类型
-		if (!interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::LINK))
-		{
-			return false;
-		}
-
-		// 必须存在对应的连接召唤 procedure
 		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::LINK);
 		if (procedure == nullptr)
 		{
@@ -2226,16 +2259,7 @@ namespace cg::flow
 		}
 
 		// 素材在宣言前送入墓地(召唤被无效也不返还)
-		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
-		summon_materials.reserve(materials.size());
-		for (const auto material: materials)
-		{
-			auto* material_instance = game_.find_instance_mutable(material);
-			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
-			game_.move_to_graveyard(*material_instance, {domain::Reason::LINK});
-
-			summon_materials.push_back(std::ref(*material_instance));
-		}
+		auto summon_materials = release_summon_materials(materials, domain::Reason::LINK);
 
 		return begin_summon(
 			SummonState
@@ -2252,37 +2276,18 @@ namespace cg::flow
 
 	auto Duel::ritual_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
-		if (has_pending_summon())
-		{
-			return false;
-		}
-
-		// 必须是表侧攻击/守备表示
-		if (const auto position = domain::position_of(placement);
-			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
-		{
-			return false;
-		}
-
-		auto* instance = summonable_instance_of(card, placement);
+		auto* instance = summonable_procedure_instance(
+			card,
+			placement,
+			domain::CardSubtype::RITUAL,
+			domain::Zone::HAND,
+			true
+		);
 		if (instance == nullptr)
 		{
 			return false;
 		}
 
-		if (const auto zone = game_.zone_of(card);
-			zone != domain::Zone::HAND)
-		{
-			return false;
-		}
-
-		// 必须是仪式子类型
-		if (!interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::RITUAL))
-		{
-			return false;
-		}
-
-		// 必须存在对应的仪式召唤 procedure
 		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::RITUAL);
 		if (procedure == nullptr)
 		{
@@ -2296,16 +2301,7 @@ namespace cg::flow
 		}
 
 		// 素材在宣言前送入墓地(召唤被无效也不返还)
-		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
-		summon_materials.reserve(materials.size());
-		for (const auto material: materials)
-		{
-			auto* material_instance = game_.find_instance_mutable(material);
-			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
-			game_.move_to_graveyard(*material_instance, {domain::Reason::RITUAL});
-
-			summon_materials.push_back(std::ref(*material_instance));
-		}
+		auto summon_materials = release_summon_materials(materials, domain::Reason::RITUAL);
 
 		return begin_summon(
 			SummonState
@@ -2761,22 +2757,15 @@ namespace cg::flow
 
 		const auto mutex_inserted = activated_effect != nullptr && mark_used(*activated_effect, *instance);
 
-		execution::ChainLink link
-		{
-				controller,
-				speed,
-				card,
-				activated,
-				activated_effect,
-				std::move(context),
-		};
-		link.set_mutex_inserted(mutex_inserted);
-
-		chain_.push_back(std::move(link));
-
-		// 已经进入连锁,本时点关闭;发动者的对方获得优先权
-		windows_.clear();
-		priority_.transfer_from(controller, turn_.turn_player());
+		push_chain_link(
+			controller,
+			speed,
+			card,
+			activated,
+			activated_effect,
+			std::move(context),
+			mutex_inserted
+		);
 
 		return true;
 	}
@@ -2897,29 +2886,8 @@ namespace cg::flow
 
 		const auto opponent = domain::opponent_of(controller);
 
-		if (target.has_value())
+		if (!is_valid_attack_target(opponent, target))
 		{
-			const auto* target_instance = game_.find_instance(*target);
-			if (target_instance == nullptr)
-			{
-				return false;
-			}
-
-			if (const auto target_controller = target_instance->controller();
-				target_controller != opponent)
-			{
-				return false;
-			}
-
-			if (const auto target_zone = game_.zone_of(*target);
-				target_zone != domain::Zone::MONSTER && target_zone != domain::Zone::EXTRA_MONSTER)
-			{
-				return false;
-			}
-		}
-		else if (!game_.is_zones_empty(opponent, {domain::Zone::MONSTER, domain::Zone::EXTRA_MONSTER}))
-		{
-			// 对方场上有怪兽时不能直接攻击
 			return false;
 		}
 
@@ -2942,17 +2910,7 @@ namespace cg::flow
 		// START → BATTLE
 		battle_.advance_battle_step();
 
-		const std::array windows
-		{
-				execution::EventWindow
-				{
-						.source = dsl::TriggerSource{domain::EventCode::ATTACK_DECLARED},
-						.card = attacker,
-						.player = std::nullopt,
-						.amount = std::nullopt,
-				},
-		};
-		open_timing(windows);
+		open_attack_declared(attacker);
 
 		return true;
 	}
@@ -2981,20 +2939,7 @@ namespace cg::flow
 			return false;
 		}
 
-		if (target.has_value())
-		{
-			const auto* target_instance = game_.find_instance(*target);
-			if (target_instance == nullptr || target_instance->controller() != attack_->opponent)
-			{
-				return false;
-			}
-
-			if (const auto zone = game_.zone_of(*target); zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
-			{
-				return false;
-			}
-		}
-		else if (!game_.is_zones_empty(attack_->opponent, {domain::Zone::MONSTER, domain::Zone::EXTRA_MONSTER}))
+		if (!is_valid_attack_target(attack_->opponent, target))
 		{
 			return false;
 		}
@@ -3011,17 +2956,7 @@ namespace cg::flow
 		battle_.reset();
 		battle_.advance_battle_step();
 
-		const std::array windows
-		{
-				execution::EventWindow
-				{
-						.source = dsl::TriggerSource{domain::EventCode::ATTACK_DECLARED},
-						.card = attack_->attacker,
-						.player = std::nullopt,
-						.amount = std::nullopt,
-				},
-		};
-		open_timing(windows);
+		open_attack_declared(attack_->attacker);
 
 		return true;
 	}
@@ -3136,22 +3071,15 @@ namespace cg::flow
 
 		const auto mutex_inserted = mark_used(effect, *instance);
 
-		execution::ChainLink link
-		{
-				controller,
-				speed,
-				card,
-				activated,
-				&effect,
-				std::move(context),
-		};
-		link.set_mutex_inserted(mutex_inserted);
-
-		chain_.push_back(std::move(link));
-
-		// 已经进入连锁,本时点关闭;发动者的对方获得优先权
-		windows_.clear();
-		priority_.transfer_from(controller, turn_.turn_player());
+		push_chain_link(
+			controller,
+			speed,
+			card,
+			activated,
+			&effect,
+			std::move(context),
+			mutex_inserted
+		);
 
 		return true;
 	}

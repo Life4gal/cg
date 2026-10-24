@@ -260,6 +260,17 @@ namespace cg::flow
 		// 伤害步骤内是否允许手动发动该效果(不含自动收集的诱发效果)
 		[[nodiscard]] auto can_activate_in_damage_step(const state::CardInstance& card, const dsl::Effect* effect) const noexcept -> bool;
 
+		// 将已成功激活的效果接入连锁并转移优先权
+		auto push_chain_link(
+			domain::Player controller,
+			domain::EffectSpeed speed,
+			state::CardInstanceId source,
+			const dsl::ActivatedEffect* activated,
+			const dsl::Effect* effect,
+			execution::Context context,
+			bool mutex_inserted
+		) noexcept -> void;
+
 		// ================================================================
 		// 召唤校验
 		// ================================================================
@@ -338,6 +349,30 @@ namespace cg::flow
 
 		[[nodiscard]] auto has_pending_summon() const noexcept -> bool;
 
+		// 额外卡组/仪式召唤的通用前置校验
+		// - 无待处理召唤、目标位置为表侧表示
+		// - 卡牌位于指定区域且具备指定子类型
+		[[nodiscard]] auto summonable_procedure_instance(
+			state::CardInstanceId card,
+			domain::AnyMonsterPlacement placement,
+			domain::CardSubtype subtype,
+			domain::Zone source_zone,
+			bool allow_face_up_defense
+		) noexcept -> state::CardInstance*;
+
+		// 将召唤素材送墓/移出场地
+		[[nodiscard]] auto release_summon_materials(std::span<const state::CardInstanceId> materials, domain::Reason reason) noexcept -> std::vector<std::reference_wrapper<state::CardInstance>>;
+		[[nodiscard]] auto detach_summon_materials(std::span<const state::CardInstanceId> materials) noexcept -> std::vector<std::reference_wrapper<state::CardInstance>>;
+
+		// 放置召唤成功卡牌并写入召唤记录
+		auto place_and_record_summon(
+			state::CardInstance& instance,
+			domain::AnyMonsterPlacement placement,
+			domain::Player controller,
+			domain::SummonMethod method,
+			std::span<const std::reference_wrapper<state::CardInstance>> materials
+		) noexcept -> void;
+
 		// 召唤宣言:保存待结算状态并打开 DECLARED 时点
 		auto begin_summon(SummonState summon, domain::EventCode declared) noexcept -> bool;
 		auto begin_summon(PendulumSummonState summon, domain::EventCode declared) noexcept -> bool;
@@ -379,6 +414,12 @@ namespace cg::flow
 
 		// 卡是否仍在怪兽区(攻击者/目标可用性)
 		[[nodiscard]] auto is_on_field(state::CardInstanceId card) const noexcept -> bool;
+
+		// 目标是否可作为对手的攻击对象(空目标表示直接攻击)
+		[[nodiscard]] auto is_valid_attack_target(domain::Player opponent,std::optional<state::CardInstanceId> target) const noexcept -> bool;
+
+		// 打开 ATTACK_DECLARED 时点
+		auto open_attack_declared(state::CardInstanceId attacker) noexcept -> void;
 
 		// 推进当前攻击到下一个战斗/伤害步骤,并开启对应时点
 		// - 攻击宣言窗口关闭 → 伤害步骤开始
