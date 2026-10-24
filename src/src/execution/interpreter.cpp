@@ -1355,7 +1355,7 @@ namespace cg::execution
 				continue;
 			}
 
-			game.move_to_monster(*instance, {domain::Reason::EFFECT}, domain::MonsterPlacement{.column = column, .position = value});
+			game.move_to_monster(*instance, context.controller, {domain::Reason::EFFECT}, domain::MonsterPlacement{.column = column, .position = value});
 			game.set_summon_record(
 				*instance,
 				state::CardInstance::SummonRecord

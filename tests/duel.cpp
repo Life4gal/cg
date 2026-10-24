@@ -3160,6 +3160,44 @@ TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck mon
 	CHECK_FALSE(game.find_instance(fusion)->properly_summoned());
 }
 
+TEST_CASE("flow::Duel takes control with an effect Special Summon from the opponent's Graveyard")
+{
+	constexpr domain::CardCode spell_code{97000154};
+	constexpr domain::CardCode monster_code{97000151};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	const auto monster = game.create_instance(monster_code, domain::Player::SECOND);
+	REQUIRE(monster.valid());
+
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(monster), domain::GraveyardPlacement{.index = 0});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+	settle(duel);
+
+	CHECK_FALSE(duel.pending_summon());
+	CHECK(game.zone_of(monster) == domain::Zone::MONSTER);
+	CHECK(game.find_instance(monster)->controller() == domain::Player::FIRST);
+	CHECK(game.find_instance(monster)->owner() == domain::Player::SECOND);
+	CHECK(game.find_instance(monster)->summon_record().player == domain::Player::FIRST);
+	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+}
+
 TEST_CASE("flow::Duel sets and activates a trap")
 {
 	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_trap";

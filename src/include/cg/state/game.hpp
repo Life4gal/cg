@@ -180,7 +180,18 @@ namespace cg::state
 		// 卡牌实例
 		// =========================================================================================================
 
-		// 将卡放入其持有者的指定位置(自动从原位置移除)
+		// 将卡放置到指定控制者的指定位置(自动从原位置移除)
+		template<typename P>
+			requires(utility::variant_index_v<P, domain::Placement> != utility::invalid_variant_index)
+		auto place(CardInstance& card, const domain::Player controller, const P placement) noexcept -> void
+		{
+			this->place(card, controller, placement);
+		}
+
+		// 将卡放置到指定控制者的指定位置(自动从原位置移除)
+		auto place(CardInstance& card, domain::Player controller, domain::Placement placement) noexcept -> void;
+
+		// 将卡放置到其控制者的指定位置(自动从原位置移除)
 		template<typename P>
 			requires(utility::variant_index_v<P, domain::Placement> != utility::invalid_variant_index)
 		auto place(CardInstance& card, const P placement) noexcept -> void
@@ -188,37 +199,39 @@ namespace cg::state
 			this->place(card, domain::Placement{placement});
 		}
 
-		// 将卡放入其持有者的指定位置(自动从原位置移除)
+		// 将卡放置到其控制者的指定位置(自动从原位置移除)
 		auto place(CardInstance& card, domain::Placement placement) noexcept -> void;
 
 	private:
 		template<typename P>
 			requires(utility::variant_index_v<P, domain::Placement> != utility::invalid_variant_index)
-		auto move_to(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const P placement) noexcept -> void
+		auto move_to(CardInstance& card, const domain::Player controller, const utility::EnumMask<domain::Reason> reason, const P placement) noexcept -> void
 		{
-			this->move_to(card, reason, domain::Placement{placement});
+			this->move_to(card, controller, reason, {placement});
 		}
 
-		auto move_to(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::Placement placement) noexcept -> void;
+		auto move_to(CardInstance& card, domain::Player controller, utility::EnumMask<domain::Reason> reason, domain::Placement placement) noexcept -> void;
 
 	public:
-		// 将卡送入其持有者的指定位置
+		// 将卡移动到其控制者的指定位置
 		auto move_to_deck(CardInstance& card, utility::EnumMask<domain::Reason> reason) noexcept -> void;
-		// 将卡送入其持有者的指定位置
+		// 将卡移动到其控制者的指定位置
 		auto move_to_extra_deck(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::Position position = domain::Position::FACE_DOWN_DEFENSE) noexcept -> void;
-		// 将卡送入其持有者的指定位置
+		// 将卡移动到其控制者的指定位置
 		auto move_to_hand(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::Position position = domain::Position::FACE_DOWN_DEFENSE) noexcept -> void;
-		// 将卡送入其持有者的指定位置
+		// 将卡移动到其控制者的指定位置
 		auto move_to_graveyard(CardInstance& card, utility::EnumMask<domain::Reason> reason) noexcept -> void;
-		// 将卡送入其持有者的指定位置
+		// 将卡移动到其控制者的指定位置
 		auto move_to_banished(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::Position position = domain::Position::FACE_UP_ATTACK) noexcept -> void;
-		// 将卡送入其持有者的指定位置
+		// 将卡移动到其控制者的指定位置
 		auto move_to_monster(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::MonsterPlacement placement) noexcept -> void;
-		// 将卡送入其持有者的指定位置
+		// 将卡移动到指定控制者的指定位置
+		auto move_to_monster(CardInstance& card, domain::Player controller, utility::EnumMask<domain::Reason> reason, domain::MonsterPlacement placement) noexcept -> void;
+		// 将卡移动到其控制者的指定位置
 		auto move_to_extra_monster(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::ExtraMonsterPlacement placement) noexcept -> void;
-		// 将卡送入其持有者的指定位置
+		// 将卡移动到其控制者的指定位置
 		auto move_to_spell_trap(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::SpellTrapPlacement placement) noexcept -> void;
-		// 将卡送入其持有者的指定位置
+		// 将卡移动到其控制者的指定位置
 		auto move_to_field_spell(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::FieldSpellPlacement placement) noexcept -> void;
 
 		// 记录召唤信息
