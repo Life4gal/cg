@@ -46,6 +46,13 @@ namespace cg::domain
 	};
 	constexpr auto total_extra_columns = extra_columns.size();
 
+	constexpr std::array pendulum_columns
+	{
+			FieldColumn::PENDULUM_LEFT,
+			FieldColumn::PENDULUM_RIGHT,
+	};
+	constexpr auto total_pendulum_columns = pendulum_columns.size();
+
 	// 指定列对应的对方列(同一绝对列)
 	[[nodiscard]] constexpr auto opponent_column(const FieldColumn column) noexcept -> FieldColumn
 	{

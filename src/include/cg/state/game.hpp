@@ -155,26 +155,77 @@ namespace cg::state
 		// 指定位置的卡牌实例
 		// ================================================================
 
+		template<typename L>
+			requires(
+				// Location子类型
+				utility::variant_index_v<L, domain::Location> != utility::invalid_variant_index ||
+				// AnyFieldLocation
+				std::is_same_v<L, domain::AnyFieldLocation> ||
+				// AnyMonsterLocation
+				std::is_same_v<L, domain::AnyMonsterLocation>
+			)
+		[[nodiscard]] auto is_location_empty(const domain::Player player, const L l) const noexcept -> bool
+		{
+			if constexpr (utility::variant_index_v<L, domain::Location> != utility::invalid_variant_index)
+			{
+				return this->is_location_empty(player, domain::Location{l});
+			}
+			else
+			{
+				return this->is_location_empty(player, domain::location_of(l));
+			}
+		}
+
 		// 检查某个位置是否为空(不存在卡牌实例) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律返回false
 		[[nodiscard]] auto is_location_empty(domain::Player player, domain::Location location) const noexcept -> bool;
-		// 检查某个位置是否为空(不存在卡牌实例)
-		[[nodiscard]] auto is_location_empty(domain::Player player, domain::AnyFieldLocation location) const noexcept -> bool;
-		// 检查某个位置是否为空(不存在卡牌实例)
-		[[nodiscard]] auto is_location_empty(domain::Player player, domain::AnyMonsterLocation location) const noexcept -> bool;
+
+		template<typename L>
+			requires(
+				// Location子类型
+				utility::variant_index_v<L, domain::Location> != utility::invalid_variant_index ||
+				// AnyFieldLocation
+				std::is_same_v<L, domain::AnyFieldLocation> ||
+				// AnyMonsterLocation
+				std::is_same_v<L, domain::AnyMonsterLocation>
+			)
+		[[nodiscard]] auto is_location_empty(const L l) const noexcept -> bool
+		{
+			if constexpr (utility::variant_index_v<L, domain::Location> != utility::invalid_variant_index)
+			{
+				return this->is_location_empty(domain::Location{l});
+			}
+			else
+			{
+				return this->is_location_empty(domain::location_of(l));
+			}
+		}
 
 		// 检查双方玩家某个位置是否为空(不存在卡牌实例) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义
 		[[nodiscard]] auto is_location_empty(domain::Location location) const noexcept -> bool;
-		// 检查双方玩家某个位置是否为空(不存在卡牌实例)
-		[[nodiscard]] auto is_location_empty(domain::AnyFieldLocation location) const noexcept -> bool;
-		// 检查双方玩家某个位置是否为空(不存在卡牌实例)
-		[[nodiscard]] auto is_location_empty(domain::AnyMonsterLocation location) const noexcept -> bool;
+
+		template<typename L>
+			requires(
+				// Location子类型
+				utility::variant_index_v<L, domain::Location> != utility::invalid_variant_index ||
+				// AnyFieldLocation
+				std::is_same_v<L, domain::AnyFieldLocation> ||
+				// AnyMonsterLocation
+				std::is_same_v<L, domain::AnyMonsterLocation>
+			)
+		[[nodiscard]] auto select_location_card(const domain::Player player, const L l) const noexcept -> CardInstanceId
+		{
+			if constexpr (utility::variant_index_v<L, domain::Location> != utility::invalid_variant_index)
+			{
+				return this->select_location_card(domain::Location{l});
+			}
+			else
+			{
+				return this->select_location_card(domain::location_of(l));
+			}
+		}
 
 		// 获取指定位置的卡牌实例,如果目标位置不存在卡牌实例则返回无效ID
 		[[nodiscard]] auto select_location_card(domain::Player player, domain::Location location) const noexcept -> CardInstanceId;
-		// 获取指定位置的卡牌实例,如果目标位置不存在卡牌实例则返回无效ID
-		[[nodiscard]] auto select_location_card(domain::Player player, domain::AnyFieldLocation location) const noexcept -> CardInstanceId;
-		// 获取指定位置的卡牌实例,如果目标位置不存在卡牌实例则返回无效ID
-		[[nodiscard]] auto select_location_card(domain::Player player, domain::AnyMonsterLocation location) const noexcept -> CardInstanceId;
 
 		// =========================================================================================================
 		// 卡牌实例
@@ -182,10 +233,24 @@ namespace cg::state
 
 		// 将卡放置到指定控制者的指定位置(自动从原位置移除)
 		template<typename P>
-			requires(utility::variant_index_v<P, domain::Placement> != utility::invalid_variant_index)
+			requires(
+				// Placement子类型
+				utility::variant_index_v<P, domain::Placement> != utility::invalid_variant_index ||
+				// AnyFieldPlacement
+				std::is_same_v<P, domain::AnyFieldPlacement> ||
+				// AnyMonsterPlacement
+				std::is_same_v<P, domain::AnyMonsterPlacement>
+			)
 		auto place(CardInstance& card, const domain::Player controller, const P placement) noexcept -> void
 		{
-			this->place(card, controller, placement);
+			if constexpr (utility::variant_index_v<P, domain::Placement> != utility::invalid_variant_index)
+			{
+				return this->place(card, controller, domain::Placement{placement});
+			}
+			else
+			{
+				return this->place(card, controller, domain::placement_of(placement));
+			}
 		}
 
 		// 将卡放置到指定控制者的指定位置(自动从原位置移除)
@@ -193,10 +258,24 @@ namespace cg::state
 
 		// 将卡放置到其控制者的指定位置(自动从原位置移除)
 		template<typename P>
-			requires(utility::variant_index_v<P, domain::Placement> != utility::invalid_variant_index)
+			requires(
+				// Placement子类型
+				utility::variant_index_v<P, domain::Placement> != utility::invalid_variant_index ||
+				// AnyFieldPlacement
+				std::is_same_v<P, domain::AnyFieldPlacement> ||
+				// AnyMonsterPlacement
+				std::is_same_v<P, domain::AnyMonsterPlacement>
+			)
 		auto place(CardInstance& card, const P placement) noexcept -> void
 		{
-			this->place(card, domain::Placement{placement});
+			if constexpr (utility::variant_index_v<P, domain::Placement> != utility::invalid_variant_index)
+			{
+				return this->place(card, domain::Placement{placement});
+			}
+			else
+			{
+				return this->place(card, domain::placement_of(placement));
+			}
 		}
 
 		// 将卡放置到其控制者的指定位置(自动从原位置移除)

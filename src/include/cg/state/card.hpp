@@ -167,6 +167,7 @@ namespace cg::state
 
 		// 灵摆刻度 -- 假定是灵摆怪兽
 		[[nodiscard]] auto origin_pendulum_scale() const noexcept -> CardDefinition::Monster::PendulumScale;
+		[[nodiscard]] auto origin_has_pendulum_scale() const noexcept -> bool;
 		[[nodiscard]] auto origin_is_pendulum_scale(domain::PendulumSide side, std::underlying_type_t<domain::PendulumScale> scale) const noexcept -> bool;
 
 		// 连接标记 -- 假定是连接怪兽

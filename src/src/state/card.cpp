@@ -230,6 +230,13 @@ namespace cg::state
 		return *definition_.get().monster->pendulum_scale; // NOLINT(bugprone-unchecked-optional-access)
 	}
 
+	auto CardInstance::origin_has_pendulum_scale() const noexcept -> bool
+	{
+		const auto& definition = definition_.get();
+
+		return definition.monster.has_value() && definition.monster->pendulum_scale.has_value();
+	}
+
 	auto CardInstance::origin_is_pendulum_scale(const domain::PendulumSide side, const std::underlying_type_t<domain::PendulumScale> scale) const noexcept -> bool
 	{
 		const auto [left, right] = origin_pendulum_scale();

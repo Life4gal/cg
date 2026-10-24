@@ -252,24 +252,6 @@ namespace cg::state
 		);
 	}
 
-	auto Game::is_location_empty(const domain::Player player, const domain::AnyFieldLocation location) const noexcept -> bool
-	{
-		return field_invoke(
-			static_cast<auto(Field::*)(domain::Player player, domain::AnyFieldLocation location) const noexcept -> bool>(&Field::is_location_empty),
-			player,
-			location
-		);
-	}
-
-	auto Game::is_location_empty(const domain::Player player, const domain::AnyMonsterLocation location) const noexcept -> bool
-	{
-		return field_invoke(
-			static_cast<auto(Field::*)(domain::Player player, domain::AnyMonsterLocation location) const noexcept -> bool>(&Field::is_location_empty),
-			player,
-			location
-		);
-	}
-
 	auto Game::is_location_empty(const domain::Location location) const noexcept -> bool
 	{
 		return field_invoke(
@@ -278,44 +260,10 @@ namespace cg::state
 		);
 	}
 
-	auto Game::is_location_empty(const domain::AnyFieldLocation location) const noexcept -> bool
-	{
-		return field_invoke(
-			static_cast<auto(Field::*)(domain::AnyFieldLocation location) const noexcept -> bool>(&Field::is_location_empty),
-			location
-		);
-	}
-
-	auto Game::is_location_empty(const domain::AnyMonsterLocation location) const noexcept -> bool
-	{
-		return field_invoke(
-			static_cast<bool(Field::*)(domain::AnyMonsterLocation) const noexcept>(&Field::is_location_empty),
-			location
-		);
-	}
-
 	auto Game::select_location_card(const domain::Player player, const domain::Location location) const noexcept -> CardInstanceId
 	{
 		return field_invoke(
-			static_cast<auto (Field::*)(domain::Player player, domain::Location location) const noexcept -> CardInstanceId>(&Field::select_location_card),
-			player,
-			location
-		);
-	}
-
-	auto Game::select_location_card(const domain::Player player, const domain::AnyFieldLocation location) const noexcept -> CardInstanceId
-	{
-		return field_invoke(
-			static_cast<auto(Field::*)(domain::Player player, domain::AnyFieldLocation location) const noexcept -> CardInstanceId>(&Field::select_location_card),
-			player,
-			location
-		);
-	}
-
-	auto Game::select_location_card(const domain::Player player, const domain::AnyMonsterLocation location) const noexcept -> CardInstanceId
-	{
-		return field_invoke(
-			static_cast<auto(Field::*)(domain::Player player, domain::AnyMonsterLocation location) const noexcept -> CardInstanceId>(&Field::select_location_card),
+			&Field::select_location_card,
 			player,
 			location
 		);

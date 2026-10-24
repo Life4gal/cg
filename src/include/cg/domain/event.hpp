@@ -29,14 +29,14 @@ namespace cg::domain
 		// 特殊召唤成功
 		SPECIAL_SUMMON_SUCCESS,
 
-		// 翻转召唤宣言
+		// 反转召唤宣言
 		FLIP_SUMMON_DECLARED,
-		// 翻转召唤被无效
+		// 反转召唤被无效
 		FLIP_SUMMON_NEGATED,
-		// 翻转召唤成功
+		// 反转召唤成功
 		FLIP_SUMMON_SUCCESS,
 
-		// 翻转(被翻面;Flip效果触发)
+		// 反转(被翻面;Flip效果触发)
 		FLIP,
 
 		// ========================================

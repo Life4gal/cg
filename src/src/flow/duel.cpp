@@ -60,7 +60,7 @@ namespace cg::flow
 					continue;
 				}
 				// 召唤宣言窗口的第一环必须是召唤无效效果
-				if (summon_.has_value() && !entry.effect.get().properties.contains(dsl::EffectProperty::SUMMON_NEGATE))
+				if (has_pending_summon() && !entry.effect.get().properties.contains(dsl::EffectProperty::SUMMON_NEGATE))
 				{
 					continue;
 				}
@@ -118,7 +118,7 @@ namespace cg::flow
 				{
 					continue;
 				}
-				if (summon_.has_value() && !entry.effect.get().properties.contains(dsl::EffectProperty::SUMMON_NEGATE))
+				if (has_pending_summon() && !entry.effect.get().properties.contains(dsl::EffectProperty::SUMMON_NEGATE))
 				{
 					continue;
 				}
@@ -251,7 +251,7 @@ namespace cg::flow
 		}
 
 		// 召唤宣言链:仅 Chain Link 1 可以无效召唤;由 flow 消费 SUMMON_NEGATE
-		if (summon_.has_value() && !chain_.empty())
+		if (has_pending_summon() && !chain_.empty())
 		{
 			const auto& first = chain_.front();
 			const auto* effect = first.effect();
@@ -828,9 +828,14 @@ namespace cg::flow
 		return instance;
 	}
 
+	auto Duel::has_pending_summon() const noexcept -> bool
+	{
+		return summon_.has_value() || pendulum_summon_.has_value();
+	}
+
 	auto Duel::begin_summon(SummonState summon, const domain::EventCode declared) noexcept -> bool
 	{
-		if (summon_.has_value())
+		if (has_pending_summon())
 		{
 			return false;
 		}
@@ -838,8 +843,8 @@ namespace cg::flow
 		// 清掉上一次可能残留的标记
 		summon_negated_ = false;
 
-		const auto card = summon.card.get().id();
 		summon_ = std::move(summon);
+		const auto card = summon_->card.get().id();
 
 		const execution::EventWindow window
 		{
@@ -849,6 +854,46 @@ namespace cg::flow
 				.amount = std::nullopt,
 		};
 		open_timing({&window, 1});
+
+		return true;
+	}
+
+	auto Duel::begin_summon(PendulumSummonState summon, domain::EventCode declared) noexcept -> bool
+	{
+		if (has_pending_summon())
+		{
+			return false;
+		}
+
+		if (summon.pendulum_cards.empty())
+		{
+			return false;
+		}
+
+		// 清掉上一次可能残留的标记
+		summon_negated_ = false;
+
+		pendulum_summon_ = std::move(summon);
+
+		execution::EventWindowList windows{};
+		windows.reserve(pendulum_summon_->pendulum_cards.size());
+
+		std::ranges::transform(
+			pendulum_summon_->pendulum_cards,
+			std::back_inserter(windows),
+			[&](const PendulumSummonState::Entry& entry) noexcept -> execution::EventWindow
+			{
+				return
+				{
+						.source = dsl::TriggerSource{declared},
+						.card = entry.card.get().id(),
+						.player = std::nullopt,
+						.amount = std::nullopt
+				};
+			}
+		);
+
+		open_timing(windows);
 
 		return true;
 	}
@@ -898,8 +943,10 @@ namespace cg::flow
 					},
 			};
 			open_timing(windows);
+
 			return true;
 		}
+
 		game_.place(instance, domain::placement_of(summon.placement));
 
 		auto materials = summon.materials | std::views::transform(&state::CardInstance::id) | std::ranges::to<std::vector<state::CardInstanceId>>();
@@ -927,9 +974,44 @@ namespace cg::flow
 		return true;
 	}
 
+	auto Duel::complete_summon(PendulumSummonState& summon) noexcept -> bool
+	{
+		if (summon.pendulum_cards.empty())
+		{
+			return false;
+		}
+
+		execution::EventWindowList windows{};
+		windows.reserve(summon.pendulum_cards.size());
+
+		for (auto& [card, placement]: summon.pendulum_cards)
+		{
+			const auto from = card.get().placement();
+
+			game_.place(card, placement);
+			game_.set_summon_record(
+				card,
+				{
+						.player = summon.controller,
+						.method = domain::SummonMethod::PENDULUM,
+						.from = from,
+						.materials = {},
+				}
+			);
+
+			windows.emplace_back(dsl::TriggerSource{domain::EventCode::SPECIAL_SUMMON_SUCCESS}, card.get().id());
+		}
+
+		priority_.reset();
+		open_timing(windows);
+
+		return true;
+	}
+
 	auto Duel::negate_pending_summon(SummonState& summon) noexcept -> void
 	{
 		auto& instance = summon.card.get();
+
 		game_.move_to_graveyard(instance, {domain::Reason::RULE});
 
 		for (auto& material: summon.materials | std::views::transform(&std::reference_wrapper<state::CardInstance>::get))
@@ -956,30 +1038,69 @@ namespace cg::flow
 		open_timing({&window, 1});
 	}
 
+	auto Duel::negate_pending_summon(PendulumSummonState& summon) noexcept -> void
+	{
+		if (summon.pendulum_cards.empty())
+		{
+			return;
+		}
+
+		for (auto& card: summon.pendulum_cards | std::views::transform(&PendulumSummonState::Entry::card) | std::views::transform(&std::reference_wrapper<state::CardInstance>::get))
+		{
+			game_.move_to_graveyard(card, {domain::Reason::RULE});
+		}
+
+		const auto& first_card = summon.pendulum_cards.front().card.get();
+		const execution::EventWindow window
+		{
+				.source = dsl::TriggerSource{domain::EventCode::SPECIAL_SUMMON_NEGATED},
+				.card = first_card.id(),
+				.player = std::nullopt,
+				.amount = std::nullopt,
+		};
+		open_timing({&window, 1});
+	}
+
 	auto Duel::resolve_summon() noexcept -> void
 	{
-		if (!summon_.has_value())
+		LIBASSERT_DEBUG_ASSERT(!(summon_.has_value() && pendulum_summon_.has_value()));
+
+		if (summon_.has_value())
 		{
+			auto summon = *std::move(summon_);
+			summon_.reset();
+
+			if (const auto negated = std::exchange(summon_negated_, false);
+				negated)
+			{
+				negate_pending_summon(summon);
+				return;
+			}
+
+			std::ignore = complete_summon(summon);
 			return;
 		}
 
-		auto summon = std::move(*summon_);
-		summon_.reset();
-
-		if (const auto negated = std::exchange(summon_negated_, false);
-			negated)
+		if (pendulum_summon_.has_value())
 		{
-			negate_pending_summon(summon);
-			return;
-		}
+			auto summon = *std::move(pendulum_summon_);
+			pendulum_summon_.reset();
 
-		std::ignore = complete_summon(summon);
+			if (const auto negated = std::exchange(summon_negated_, false);
+				negated)
+			{
+				negate_pending_summon(summon);
+				return;
+			}
+
+			std::ignore = complete_summon(summon);
+		}
 	}
 
 	auto Duel::perform_normal_summon(const state::CardInstanceId card, const domain::MonsterPlacement placement) noexcept -> bool
 	{
 		// 如果已通招或已有召唤尚未结算则失败
-		if (summon_.has_value() || state_.normal_summoned)
+		if (state_.normal_summoned || has_pending_summon())
 		{
 			return false;
 		}
@@ -1031,7 +1152,7 @@ namespace cg::flow
 	auto Duel::perform_tribute_summon(const state::CardInstanceId card, const domain::MonsterPlacement placement, const std::span<const state::CardInstanceId> tributes) noexcept -> bool
 	{
 		// 如果已通招或已有召唤尚未结算则失败
-		if (summon_.has_value() || state_.normal_summoned)
+		if (state_.normal_summoned || has_pending_summon())
 		{
 			return false;
 		}
@@ -1622,7 +1743,7 @@ namespace cg::flow
 
 	auto Duel::pending_summon() const noexcept -> bool
 	{
-		return summon_.has_value();
+		return has_pending_summon();
 	}
 
 	auto Duel::chain() const noexcept -> const execution::Chain&
@@ -1696,7 +1817,7 @@ namespace cg::flow
 
 	auto Duel::change_phase() noexcept -> bool
 	{
-		if (!chain_.empty() || summon_.has_value() || attack_.has_value() || !priority_.both_passed())
+		if (!chain_.empty() || has_pending_summon() || attack_.has_value() || !priority_.both_passed())
 		{
 			return false;
 		}
@@ -1738,7 +1859,7 @@ namespace cg::flow
 		windows_.clear();
 
 		// 召唤宣言时点关闭:结算召唤
-		if (summon_.has_value())
+		if (has_pending_summon())
 		{
 			resolve_summon();
 			return true;
@@ -1755,7 +1876,7 @@ namespace cg::flow
 
 	auto Duel::end_turn() noexcept -> bool
 	{
-		if (turn_.phase() != domain::Phase::END || !chain_.empty() || summon_.has_value() || attack_.has_value())
+		if (turn_.phase() != domain::Phase::END || !chain_.empty() || has_pending_summon() || attack_.has_value())
 		{
 			return false;
 		}
@@ -1788,7 +1909,7 @@ namespace cg::flow
 
 	auto Duel::flip_summon(const state::CardInstanceId card) noexcept -> bool
 	{
-		if (summon_.has_value() || !chain_.empty())
+		if (has_pending_summon() || !chain_.empty())
 		{
 			return false;
 		}
@@ -1857,7 +1978,7 @@ namespace cg::flow
 
 	auto Duel::synchro_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
-		if (summon_.has_value())
+		if (has_pending_summon())
 		{
 			return false;
 		}
@@ -1927,7 +2048,7 @@ namespace cg::flow
 
 	auto Duel::xyz_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
-		if (summon_.has_value())
+		if (has_pending_summon())
 		{
 			return false;
 		}
@@ -1997,7 +2118,7 @@ namespace cg::flow
 
 	auto Duel::fusion_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
-		if (summon_.has_value())
+		if (has_pending_summon())
 		{
 			return false;
 		}
@@ -2061,7 +2182,7 @@ namespace cg::flow
 
 	auto Duel::link_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
-		if (summon_.has_value())
+		if (has_pending_summon())
 		{
 			return false;
 		}
@@ -2131,7 +2252,7 @@ namespace cg::flow
 
 	auto Duel::ritual_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
 	{
-		if (summon_.has_value())
+		if (has_pending_summon())
 		{
 			return false;
 		}
@@ -2201,7 +2322,7 @@ namespace cg::flow
 
 	auto Duel::self_special_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement) noexcept -> bool
 	{
-		if (summon_.has_value())
+		if (has_pending_summon())
 		{
 			return false;
 		}
@@ -2277,6 +2398,154 @@ namespace cg::flow
 			},
 			domain::EventCode::SPECIAL_SUMMON_DECLARED
 		);
+	}
+
+	auto Duel::pendulum_summon(const std::span<const state::CardInstanceId> cards) noexcept -> bool
+	{
+		if (state_.pendulum_summoned || has_pending_summon() || !chain_.empty() || cards.empty())
+		{
+			return false;
+		}
+
+		if (const auto phase = turn_.phase(); phase != domain::Phase::MAIN_1 && phase != domain::Phase::MAIN_2)
+		{
+			return false;
+		}
+
+		const auto controller = turn_.turn_player();
+		if (priority_.holder_player(controller) != controller)
+		{
+			return false;
+		}
+
+		const auto left = game_.select_location_card(controller, domain::Location{domain::SpellTrapLocation{.column = domain::FieldColumn::PENDULUM_LEFT}});
+		const auto right = game_.select_location_card(controller, domain::Location{domain::SpellTrapLocation{.column = domain::FieldColumn::PENDULUM_RIGHT}});
+		const auto* left_instance = game_.find_instance(left);
+		const auto* right_instance = game_.find_instance(right);
+		if (
+			left_instance == nullptr ||
+			right_instance == nullptr ||
+			!left_instance->origin_has_pendulum_scale() ||
+			!right_instance->origin_has_pendulum_scale()
+		)
+		{
+			return false;
+		}
+
+		const auto left_scale = left_instance->origin_pendulum_scale().left;
+		const auto right_scale = right_instance->origin_pendulum_scale().right;
+		if (left_scale >= right_scale)
+		{
+			return false;
+		}
+
+		std::vector<PendulumSummonState::Entry> entries{};
+		entries.reserve(cards.size());
+
+		std::vector<domain::FieldColumn> used_columns{};
+		std::vector<state::CardInstanceId> seen_cards{};
+		for (const auto card: cards)
+		{
+			auto* instance = game_.find_instance_mutable(card);
+			if (instance == nullptr || instance->controller() != controller || game_.zone_of(card) != domain::Zone::HAND)
+			{
+				return false;
+			}
+
+			if (std::ranges::contains(seen_cards, card) || !interpreter_.state_resolver().contains_card_type(*instance, domain::CardType::MONSTER))
+			{
+				return false;
+			}
+
+			seen_cards.push_back(card);
+
+			const auto level = interpreter_.state_resolver().level(*instance);
+			if (level <= left_scale || level >= right_scale)
+			{
+				return false;
+			}
+
+			std::optional<domain::FieldColumn> column = std::nullopt;
+			for (const auto candidate: domain::field_columns)
+			{
+				if (std::ranges::contains(used_columns, candidate))
+				{
+					continue;
+				}
+
+				if (game_.is_location_empty(controller, domain::MonsterLocation{.column = candidate}))
+				{
+					column = candidate;
+					break;
+				}
+			}
+
+			if (!column.has_value())
+			{
+				return false;
+			}
+
+			used_columns.push_back(*column);
+			entries.emplace_back(std::ref(*instance), domain::AnyMonsterPlacement{domain::MonsterPlacement{.column = *column, .position = domain::Position::FACE_UP_ATTACK}});
+		}
+
+		const auto started = begin_summon(
+			PendulumSummonState
+			{
+					.controller = controller,
+					.pendulum_cards = std::move(entries),
+			},
+			domain::EventCode::SPECIAL_SUMMON_DECLARED
+		);
+
+		if (started)
+		{
+			state_.pendulum_summoned = true;
+		}
+
+		return started;
+	}
+
+	auto Duel::set_pendulum(const state::CardInstanceId card, const domain::PendulumSide side) noexcept -> bool
+	{
+		if (has_pending_summon() || !chain_.empty())
+		{
+			return false;
+		}
+
+		if (const auto phase = turn_.phase(); phase != domain::Phase::MAIN_1 && phase != domain::Phase::MAIN_2)
+		{
+			return false;
+		}
+
+		auto* instance = game_.find_instance_mutable(card);
+		if (instance == nullptr || instance->controller() != turn_.turn_player())
+		{
+			return false;
+		}
+
+		if (priority_.holder_player(turn_.turn_player()) != instance->controller() || game_.zone_of(card) != domain::Zone::HAND)
+		{
+			return false;
+		}
+
+		if (!instance->origin_has_pendulum_scale())
+		{
+			return false;
+		}
+
+		const auto column = side == domain::PendulumSide::LEFT ? domain::FieldColumn::PENDULUM_LEFT : domain::FieldColumn::PENDULUM_RIGHT;
+		if (!game_.is_location_empty(instance->controller(), domain::Location{domain::SpellTrapLocation{.column = column}}))
+		{
+			return false;
+		}
+
+		game_.place(*instance, domain::SpellTrapPlacement{.column = column, .position = domain::Position::FACE_UP_ATTACK});
+
+		// 放置灵摆刻度不是需要开启时点的动作,关闭上一个动作残留的时点
+		windows_.clear();
+
+		return true;
 	}
 
 	auto Duel::activate_card(const state::CardInstanceId card) noexcept -> bool
@@ -2442,7 +2711,7 @@ namespace cg::flow
 
 		// 召唤宣言窗口的第一环必须是召唤无效效果
 		if (
-			summon_.has_value() &&
+			has_pending_summon() &&
 			chain_.empty() &&
 			(activated_effect == nullptr || !activated_effect->properties.contains(dsl::EffectProperty::SUMMON_NEGATE))
 		)
@@ -2695,7 +2964,7 @@ namespace cg::flow
 			return false;
 		}
 
-		if (turn_.phase() != domain::Phase::BATTLE || !chain_.empty() || summon_.has_value())
+		if (turn_.phase() != domain::Phase::BATTLE || !chain_.empty() || has_pending_summon())
 		{
 			return false;
 		}
@@ -2833,7 +3102,11 @@ namespace cg::flow
 		}
 
 		// 召唤宣言窗口的第一环必须是召唤无效效果
-		if (summon_.has_value() && chain_.empty() && !effect.properties.contains(dsl::EffectProperty::SUMMON_NEGATE))
+		if (
+			has_pending_summon() &&
+			chain_.empty() &&
+			!effect.properties.contains(dsl::EffectProperty::SUMMON_NEGATE)
+		)
 		{
 			return false;
 		}

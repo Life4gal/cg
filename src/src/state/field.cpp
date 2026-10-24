@@ -645,29 +645,7 @@ namespace cg::state
 		return !card.valid();
 	}
 
-	auto Field::is_location_empty(const domain::Player player, const domain::AnyFieldLocation location) const noexcept -> bool
-	{
-		const auto card = select_location_card(player, location);
-		return !card.valid();
-	}
-
-	auto Field::is_location_empty(const domain::Player player, const domain::AnyMonsterLocation location) const noexcept -> bool
-	{
-		const auto card = select_location_card(player, location);
-		return !card.valid();
-	}
-
 	auto Field::is_location_empty(const domain::Location location) const noexcept -> bool
-	{
-		return is_location_empty(domain::Player::FIRST, location) && is_location_empty(domain::Player::SECOND, location);
-	}
-
-	auto Field::is_location_empty(const domain::AnyFieldLocation location) const noexcept -> bool
-	{
-		return is_location_empty(domain::Player::FIRST, location) && is_location_empty(domain::Player::SECOND, location);
-	}
-
-	auto Field::is_location_empty(const domain::AnyMonsterLocation location) const noexcept -> bool
 	{
 		return is_location_empty(domain::Player::FIRST, location) && is_location_empty(domain::Player::SECOND, location);
 	}
@@ -709,71 +687,6 @@ namespace cg::state
 					[]([[maybe_unused]] const auto& unhandled) noexcept -> CardInstanceId
 					{
 						return CardInstanceId{CardInstanceId::invalid_id};
-					},
-			},
-			location
-		);
-	}
-
-	auto Field::select_location_card(const domain::Player player, const domain::AnyFieldLocation location) const noexcept -> CardInstanceId
-	{
-		const auto& player_zone = player_zone_of(player);
-
-		return std::visit(
-			utility::Overloaded
-			{
-					[&](const domain::MonsterLocation& l) noexcept -> CardInstanceId
-					{
-						LIBASSERT_DEBUG_ASSERT(std::to_underlying(l.column) < player_zone.monster_zones.size());
-						const auto card = player_zone.monster_zones[std::to_underlying(l.column)];
-
-						return card;
-					},
-					[&](const domain::ExtraMonsterLocation& l) noexcept -> CardInstanceId
-					{
-						LIBASSERT_DEBUG_ASSERT(std::to_underlying(l.column) < extra_monster_zones_.size());
-						const auto card = extra_monster_zones_[std::to_underlying(l.column)];
-
-						return card;
-					},
-					[&](const domain::SpellTrapLocation& l) noexcept -> CardInstanceId
-					{
-						LIBASSERT_DEBUG_ASSERT(std::to_underlying(l.column) < player_zone.spell_trap_zones.size());
-						const auto card = player_zone.spell_trap_zones[std::to_underlying(l.column)];
-
-						return card;
-					},
-					[&]([[maybe_unused]] const domain::FieldSpellLocation& l) noexcept -> CardInstanceId
-					{
-						const auto card = player_zone.field_spell_zone;
-
-						return card;
-					},
-			},
-			location
-		);
-	}
-
-	auto Field::select_location_card(const domain::Player player, const domain::AnyMonsterLocation location) const noexcept -> CardInstanceId
-	{
-		const auto& player_zone = player_zone_of(player);
-
-		return std::visit(
-			utility::Overloaded
-			{
-					[&](const domain::MonsterLocation& l) noexcept -> CardInstanceId
-					{
-						LIBASSERT_DEBUG_ASSERT(std::to_underlying(l.column) < player_zone.monster_zones.size());
-						const auto card = player_zone.monster_zones[std::to_underlying(l.column)];
-
-						return card;
-					},
-					[&](const domain::ExtraMonsterLocation& l) noexcept -> CardInstanceId
-					{
-						LIBASSERT_DEBUG_ASSERT(std::to_underlying(l.column) < extra_monster_zones_.size());
-						const auto card = extra_monster_zones_[std::to_underlying(l.column)];
-
-						return card;
 					},
 			},
 			location
@@ -841,70 +754,6 @@ namespace cg::state
 					[](const domain::NotExistLocation&) noexcept -> bool
 					{
 						return false;
-					},
-			},
-			location
-		);
-	}
-
-	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::AnyFieldLocation location) noexcept -> bool
-	{
-		auto& player_zone = player_zone_of(player);
-
-		return std::visit(
-			utility::Overloaded
-			{
-					[&](const domain::MonsterLocation& l) noexcept -> bool
-					{
-						LIBASSERT_DEBUG_ASSERT(std::to_underlying(l.column) < player_zone.monster_zones.size());
-
-						const auto prev = std::exchange(player_zone.monster_zones[std::to_underlying(l.column)], card);
-						return prev.valid();
-					},
-					[&](const domain::ExtraMonsterLocation& l) noexcept -> bool
-					{
-						LIBASSERT_DEBUG_ASSERT(std::to_underlying(l.column) < extra_monster_zones_.size());
-
-						const auto prev = std::exchange(extra_monster_zones_[std::to_underlying(l.column)], card);
-						return prev.valid();
-					},
-					[&](const domain::SpellTrapLocation& l) noexcept -> bool
-					{
-						LIBASSERT_DEBUG_ASSERT(std::to_underlying(l.column) < player_zone.spell_trap_zones.size());
-
-						const auto prev = std::exchange(player_zone.spell_trap_zones[std::to_underlying(l.column)], card);
-						return prev.valid();
-					},
-					[&]([[maybe_unused]] const domain::FieldSpellLocation& l) noexcept -> bool
-					{
-						const auto prev = std::exchange(player_zone.field_spell_zone, card);
-						return prev.valid();
-					},
-			},
-			location
-		);
-	}
-
-	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::AnyMonsterLocation location) noexcept -> bool
-	{
-		auto& player_zone = player_zone_of(player);
-
-		return std::visit(
-			utility::Overloaded
-			{
-					[&](const domain::MonsterLocation& l) noexcept -> bool
-					{
-						LIBASSERT_DEBUG_ASSERT(std::to_underlying(l.column) < player_zone.monster_zones.size());
-
-						const auto prev = std::exchange(player_zone.monster_zones[std::to_underlying(l.column)], card);
-						return prev.valid();
-					},
-					[&](const domain::ExtraMonsterLocation& l) noexcept -> bool
-					{
-						LIBASSERT_DEBUG_ASSERT(std::to_underlying(l.column) < extra_monster_zones_.size());
-
-						const auto prev = std::exchange(extra_monster_zones_[std::to_underlying(l.column)], card);
-						return prev.valid();
 					},
 			},
 			location
@@ -989,86 +838,13 @@ namespace cg::state
 		);
 	}
 
-	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::AnyFieldLocation location) noexcept -> bool
-	{
-		auto& player_zone = player_zone_of(player);
-
-		return std::visit(
-			utility::Overloaded
-			{
-					[&](const domain::MonsterLocation& l) noexcept -> bool
-					{
-						return erase_field_zones(player_zone.monster_zones, l.column);
-					},
-					[&](const domain::ExtraMonsterLocation& l) noexcept -> bool
-					{
-						return erase_field_zones(extra_monster_zones_, l.column);
-					},
-					[&](const domain::SpellTrapLocation& l) noexcept -> bool
-					{
-						return erase_field_zones(player_zone.spell_trap_zones, l.column);
-					},
-					[&]([[maybe_unused]] const domain::FieldSpellLocation& l) noexcept -> bool
-					{
-						const auto prev = std::exchange(player_zone.field_spell_zone, CardInstanceId{CardInstanceId::invalid_id});
-						return prev.valid();
-					},
-			},
-			location
-		);
-	}
-
-	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::AnyMonsterLocation location) noexcept -> bool
-	{
-		auto& player_zone = player_zone_of(player);
-
-		return std::visit(
-			utility::Overloaded
-			{
-					[&](const domain::MonsterLocation& l) noexcept -> bool
-					{
-						return erase_field_zones(player_zone.monster_zones, l.column);
-					},
-					[&](const domain::ExtraMonsterLocation& l) noexcept -> bool
-					{
-						return erase_field_zones(extra_monster_zones_, l.column);
-					},
-			},
-			location
-		);
-	}
-
 	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::Placement placement) noexcept -> bool
 	{
 		const auto location = domain::location_of(placement);
 		return place(player, card, location);
 	}
 
-	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::AnyFieldPlacement placement) noexcept -> bool
-	{
-		const auto location = domain::location_of(placement);
-		return place(player, card, location);
-	}
-
-	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::AnyMonsterPlacement placement) noexcept -> bool
-	{
-		const auto location = domain::location_of(placement);
-		return place(player, card, location);
-	}
-
 	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::Placement placement) noexcept -> bool
-	{
-		const auto location = domain::location_of(placement);
-		return remove(player, card, location);
-	}
-
-	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::AnyFieldPlacement placement) noexcept -> bool
-	{
-		const auto location = domain::location_of(placement);
-		return remove(player, card, location);
-	}
-
-	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::AnyMonsterPlacement placement) noexcept -> bool
 	{
 		const auto location = domain::location_of(placement);
 		return remove(player, card, location);

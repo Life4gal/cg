@@ -93,6 +93,24 @@ namespace cg::flow
 			std::vector<std::reference_wrapper<state::CardInstance>> materials;
 		};
 
+		// 宣言中的灵摆召唤(尚未成功/无效)
+		class PendulumSummonState
+		{
+		public:
+			// 控制者
+			domain::Player controller;
+
+			class Entry
+			{
+			public:
+				std::reference_wrapper<state::CardInstance> card;
+				domain::AnyMonsterPlacement placement;
+			};
+
+			// 灵摆召唤使用:多张卡及各自目标区域
+			std::vector<Entry> pendulum_cards;
+		};
+
 		// ================================================================
 		// 游戏状态
 		// ================================================================
@@ -112,6 +130,8 @@ namespace cg::flow
 
 		// 当前宣言中的召唤(空 = 无)
 		std::optional<SummonState> summon_;
+		// 当前宣言中的灵摆召唤(空 = 无)
+		std::optional<PendulumSummonState> pendulum_summon_;
 
 		// 本次召唤宣言链是否无效了召唤
 		bool summon_negated_{false};
@@ -316,17 +336,22 @@ namespace cg::flow
 		// 不检查是否满足召唤条件   -- 额外特招点需要检查是否满足素材要求
 		[[nodiscard]] auto summonable_instance_of(state::CardInstanceId card, domain::AnyMonsterPlacement placement) noexcept -> state::CardInstance*;
 
+		[[nodiscard]] auto has_pending_summon() const noexcept -> bool;
+
 		// 召唤宣言:保存待结算状态并打开 DECLARED 时点
 		auto begin_summon(SummonState summon, domain::EventCode declared) noexcept -> bool;
-
-		// 宣言时点/连锁关闭后:成功或无效
-		auto resolve_summon() noexcept -> void;
+		auto begin_summon(PendulumSummonState summon, domain::EventCode declared) noexcept -> bool;
 
 		// 召唤成功:放置/记录/成功时点
 		auto complete_summon(SummonState& summon) noexcept -> bool;
+		auto complete_summon(PendulumSummonState& summon) noexcept -> bool;
 
 		// 召唤无效:卡与未处理素材送墓,打开 NEGATED 时点
 		auto negate_pending_summon(SummonState& summon) noexcept -> void;
+		auto negate_pending_summon(PendulumSummonState& summon) noexcept -> void;
+
+		// 宣言时点/连锁关闭后:成功或无效
+		auto resolve_summon() noexcept -> void;
 
 		auto perform_normal_summon(state::CardInstanceId card, domain::MonsterPlacement placement) noexcept -> bool;
 		auto perform_tribute_summon(state::CardInstanceId card, domain::MonsterPlacement placement, std::span<const state::CardInstanceId> tributes) noexcept -> bool;
@@ -515,9 +540,15 @@ namespace cg::flow
 
 		auto self_special_summon(state::CardInstanceId card, domain::AnyMonsterPlacement placement) noexcept -> bool;
 
+		// 灵摆召唤:召唤列表中的怪兽
+		auto pendulum_summon(std::span<const state::CardInstanceId> cards) noexcept -> bool;
+
 		// ================================================================
 		// 驱动动作: 卡牌发动(魔法/陷阱)
 		// ================================================================
+
+		// 将灵摆怪兽放置到自己的灵摆区域
+		auto set_pendulum(state::CardInstanceId card, domain::PendulumSide side) noexcept -> bool;
 
 		// 发动魔法卡(当前仅手牌;场地/永续/装备留场,其余结算后送墓)
 		auto activate_card(state::CardInstanceId card) noexcept -> bool;

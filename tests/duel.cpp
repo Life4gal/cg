@@ -287,6 +287,148 @@ TEST_CASE("flow::Duel aborts an attack when the attacker leaves attack position"
 	CHECK(game.life_points(domain::Player::SECOND) == 8000);
 }
 
+TEST_CASE("flow::Duel performs a Pendulum Summon")
+{
+	constexpr domain::CardCode left_scale_code{91200001};
+	constexpr domain::CardCode right_scale_code{91200002};
+	constexpr domain::CardCode low_code{91200003};
+	constexpr domain::CardCode high_code{91200004};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	auto left_scale = make_monster(left_scale_code, 1000, 1000, 4);
+	left_scale.subtypes = {domain::CardSubtype::PENDULUM};
+	left_scale.monster->pendulum_scale = state::CardDefinition::Monster::PendulumScale{.left = 1, .right = 1};
+	auto right_scale = make_monster(right_scale_code, 1000, 1000, 4);
+	right_scale.subtypes = {domain::CardSubtype::PENDULUM};
+	right_scale.monster->pendulum_scale = state::CardDefinition::Monster::PendulumScale{.left = 8, .right = 8};
+	game.register_definition(left_scale_code, left_scale);
+	game.register_definition(right_scale_code, right_scale);
+	game.register_definition(low_code, make_monster(low_code, 1000, 1000, 4));
+	game.register_definition(high_code, make_monster(high_code, 1000, 1000, 6));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto left = game.create_instance(left_scale_code, domain::Player::FIRST);
+	REQUIRE(left.valid());
+	const auto right = game.create_instance(right_scale_code, domain::Player::FIRST);
+	REQUIRE(right.valid());
+	const auto low = game.create_instance(low_code, domain::Player::FIRST);
+	REQUIRE(low.valid());
+	const auto high = game.create_instance(high_code, domain::Player::FIRST);
+	REQUIRE(high.valid());
+
+	game.place(*game.find_instance_mutable(left), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(right), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(low), domain::HandPlacement{.index = 2, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(high), domain::HandPlacement{.index = 3, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.set_pendulum(left, domain::PendulumSide::LEFT));
+	CHECK(duel.set_pendulum(right, domain::PendulumSide::RIGHT));
+	CHECK(game.zone_of(left) == domain::Zone::SPELL_TRAP);
+	CHECK(game.zone_of(right) == domain::Zone::SPELL_TRAP);
+
+	const std::array monsters{low, high};
+	CHECK(duel.pendulum_summon(monsters));
+	CHECK(duel.pending_summon());
+	CHECK(game.zone_of(low) == domain::Zone::HAND);
+	CHECK(game.zone_of(high) == domain::Zone::HAND);
+	resolve_summon(duel);
+
+	CHECK(game.zone_of(low) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(high) == domain::Zone::MONSTER);
+	CHECK(game.find_instance(low)->summon_record().method == domain::SummonMethod::PENDULUM);
+	CHECK(game.find_instance(high)->summon_record().method == domain::SummonMethod::PENDULUM);
+	CHECK(game.zone_of(left) == domain::Zone::SPELL_TRAP);
+	CHECK(game.zone_of(right) == domain::Zone::SPELL_TRAP);
+}
+
+TEST_CASE("flow::Duel: Solemn Judgment negates a Pendulum Summon")
+{
+	constexpr domain::CardCode solemn_code{41420027};
+	constexpr domain::CardCode left_scale_code{91200011};
+	constexpr domain::CardCode right_scale_code{91200012};
+	constexpr domain::CardCode low_code{91200013};
+	constexpr domain::CardCode high_code{91200014};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+
+	auto left_scale = make_monster(left_scale_code, 1000, 1000, 4);
+	left_scale.subtypes = {domain::CardSubtype::PENDULUM};
+	left_scale.monster->pendulum_scale = state::CardDefinition::Monster::PendulumScale{.left = 1, .right = 1};
+	auto right_scale = make_monster(right_scale_code, 1000, 1000, 4);
+	right_scale.subtypes = {domain::CardSubtype::PENDULUM};
+	right_scale.monster->pendulum_scale = state::CardDefinition::Monster::PendulumScale{.left = 8, .right = 8};
+	game.register_definition(left_scale_code, left_scale);
+	game.register_definition(right_scale_code, right_scale);
+	game.register_definition(low_code, make_monster(low_code, 1000, 1000, 4));
+	game.register_definition(high_code, make_monster(high_code, 1000, 1000, 6));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto solemn = game.create_instance(solemn_code, domain::Player::FIRST);
+	REQUIRE(solemn.valid());
+	const auto left = game.create_instance(left_scale_code, domain::Player::SECOND);
+	REQUIRE(left.valid());
+	const auto right = game.create_instance(right_scale_code, domain::Player::SECOND);
+	REQUIRE(right.valid());
+	const auto low = game.create_instance(low_code, domain::Player::SECOND);
+	REQUIRE(low.valid());
+	const auto high = game.create_instance(high_code, domain::Player::SECOND);
+	REQUIRE(high.valid());
+
+	game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(left), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(right), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(low), domain::HandPlacement{.index = 2, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(high), domain::HandPlacement{.index = 3, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.set_spell_trap(solemn, domain::FieldColumn::C1));
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.set_pendulum(left, domain::PendulumSide::LEFT));
+	CHECK(duel.set_pendulum(right, domain::PendulumSide::RIGHT));
+
+	const std::array monsters{low, high};
+	CHECK(duel.pendulum_summon(monsters));
+	CHECK(duel.pending_summon());
+	CHECK(game.zone_of(low) == domain::Zone::HAND);
+	CHECK(game.zone_of(high) == domain::Zone::HAND);
+
+	// 把优先权交给对手后,对手才能发动盖放的「神的宣告」
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.activate_card(solemn));
+	CHECK(duel.chain().size() == 1);
+	CHECK(game.life_points(domain::Player::FIRST) == 4000);
+
+	settle(duel);
+	CHECK(duel.pending_summon());
+
+	resolve_summon(duel);
+
+	CHECK_FALSE(duel.pending_summon());
+	CHECK(game.zone_of(low) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(high) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(left) == domain::Zone::SPELL_TRAP);
+	CHECK(game.zone_of(right) == domain::Zone::SPELL_TRAP);
+	CHECK(game.zone_of(solemn) == domain::Zone::GRAVEYARD);
+	CHECK(game.life_points(domain::Player::FIRST) == 4000);
+}
+
 TEST_CASE("flow::Duel performs a Flip Summon")
 {
 	constexpr domain::CardCode monster_code{91100001};
