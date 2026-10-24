@@ -56,16 +56,22 @@ namespace cg::flow
 			state::CardInstanceId attacker;
 			// 攻击目标(空 = 直接攻击)
 			std::optional<state::CardInstanceId> target;
+
 			// 攻击者控制者/对方(攻击宣言时确定)
 			domain::Player controller = domain::Player::FIRST;
 			domain::Player opponent = domain::Player::SECOND;
+
 			// 伤害计算时目标的表示形式
 			domain::Position target_position = domain::Position::FACE_UP_ATTACK;
 			// 目标是否因攻击翻面
 			bool target_flipped = false;
+			// 目标已离场,等待重新选择攻击目标
+			bool replay_required = false;
+
 			// 伤害计算确定的破坏(实际送墓在伤害步骤结束时)
 			std::optional<state::CardInstanceId> destroy_attacker = std::nullopt;
 			std::optional<state::CardInstanceId> destroy_target = std::nullopt;
+
 			// 战斗伤害
 			std::underlying_type_t<domain::AttackDefense> damage_to_opponent = 0;
 			std::underlying_type_t<domain::AttackDefense> damage_to_controller = 0;
@@ -525,6 +531,9 @@ namespace cg::flow
 
 		// 攻击宣言:target = 空表示直接攻击
 		auto declare_attack(state::CardInstanceId attacker, std::optional<state::CardInstanceId> target) noexcept -> bool;
+
+		// 目标离场后重新选择攻击目标:target = 空表示直接攻击
+		auto replay_attack(std::optional<state::CardInstanceId> target) noexcept -> bool;
 
 		// ================================================================
 		// 驱动动作: 效果

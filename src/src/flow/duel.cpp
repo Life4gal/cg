@@ -1251,6 +1251,18 @@ namespace cg::flow
 
 		auto& attack = *attack_;
 
+		if (attack.replay_required)
+		{
+			const auto* attacker = game_.find_instance(attack.attacker);
+			const auto field_info = attacker == nullptr ? std::optional<domain::FieldInfo>{} : domain::field_info_of(attacker->placement());
+			if (!field_info.has_value() || field_info->position != domain::Position::FACE_UP_ATTACK)
+			{
+				clear_attack();
+			}
+
+			return;
+		}
+
 		if (battle_.battle_step() == domain::BattleStep::BATTLE)
 		{
 			if (!is_on_field(attack.attacker))
@@ -1284,7 +1296,24 @@ namespace cg::flow
 		{
 			case domain::DamageStep::START:
 			{
-				if (!is_on_field(attack.attacker) || !prepare_attack_target(attack))
+				if (!is_on_field(attack.attacker))
+				{
+					clear_attack();
+					return;
+				}
+
+				if (attack.target.has_value() && !is_on_field(*attack.target))
+				{
+					attack.target.reset();
+					attack.replay_required = true;
+					attack.target_flipped = false;
+					attack.target_position = domain::Position::FACE_UP_ATTACK;
+					priority_.reset();
+					windows_.clear();
+					return;
+				}
+
+				if (!prepare_attack_target(attack))
 				{
 					clear_attack();
 					return;
@@ -2650,6 +2679,75 @@ namespace cg::flow
 				{
 						.source = dsl::TriggerSource{domain::EventCode::ATTACK_DECLARED},
 						.card = attacker,
+						.player = std::nullopt,
+						.amount = std::nullopt,
+				},
+		};
+		open_timing(windows);
+
+		return true;
+	}
+
+	auto Duel::replay_attack(const std::optional<state::CardInstanceId> target) noexcept -> bool
+	{
+		if (!attack_.has_value() || !attack_->replay_required)
+		{
+			return false;
+		}
+
+		if (turn_.phase() != domain::Phase::BATTLE || !chain_.empty() || summon_.has_value())
+		{
+			return false;
+		}
+
+		const auto* attacker = game_.find_instance(attack_->attacker);
+		if (attacker == nullptr || !is_on_field(attack_->attacker))
+		{
+			return false;
+		}
+
+		if (const auto field_info = domain::field_info_of(attacker->placement());
+			!field_info.has_value() || field_info->position != domain::Position::FACE_UP_ATTACK)
+		{
+			return false;
+		}
+
+		if (target.has_value())
+		{
+			const auto* target_instance = game_.find_instance(*target);
+			if (target_instance == nullptr || target_instance->controller() != attack_->opponent)
+			{
+				return false;
+			}
+
+			if (const auto zone = game_.zone_of(*target); zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
+			{
+				return false;
+			}
+		}
+		else if (!game_.is_zones_empty(attack_->opponent, {domain::Zone::MONSTER, domain::Zone::EXTRA_MONSTER}))
+		{
+			return false;
+		}
+
+		attack_->target = target;
+		attack_->replay_required = false;
+		attack_->target_flipped = false;
+		attack_->target_position = domain::Position::FACE_UP_ATTACK;
+		attack_->destroy_attacker.reset();
+		attack_->destroy_target.reset();
+		attack_->damage_to_opponent = 0;
+		attack_->damage_to_controller = 0;
+
+		battle_.reset();
+		battle_.advance_battle_step();
+
+		const std::array windows
+		{
+				execution::EventWindow
+				{
+						.source = dsl::TriggerSource{domain::EventCode::ATTACK_DECLARED},
+						.card = attack_->attacker,
 						.player = std::nullopt,
 						.amount = std::nullopt,
 				},

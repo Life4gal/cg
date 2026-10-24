@@ -214,7 +214,7 @@ TEST_CASE("flow::Duel rejects Flip Summon on the turn the monster was Set")
 	CHECK_FALSE(duel.flip_summon(monster));
 }
 
-TEST_CASE("flow::Duel aborts an attack when the target leaves before damage")
+TEST_CASE("flow::Duel replays an attack when the target leaves before damage")
 {
 	constexpr domain::CardCode attacker_code{91100010};
 	constexpr domain::CardCode defender_code{91100011};
@@ -239,11 +239,18 @@ TEST_CASE("flow::Duel aborts an attack when the target leaves before damage")
 	CHECK(duel.declare_attack(attacker, defender));
 
 	game.move_to_graveyard(*game.find_instance_mutable(defender), {domain::Reason::RULE});
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.pass_priority());
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.pass_priority());
+
+	CHECK(duel.pending_attack());
+	CHECK(duel.replay_attack(std::nullopt));
 	resolve_attack(duel);
 
 	CHECK_FALSE(duel.pending_attack());
 	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
-	CHECK(game.life_points(domain::Player::FIRST) == 8000);
+	CHECK(game.life_points(domain::Player::FIRST) == 7000);
 	CHECK(game.life_points(domain::Player::SECOND) == 8000);
 }
 
@@ -3482,8 +3489,8 @@ TEST_CASE("flow::Duel cannot summon-negate an effect-driven Special Summon")
 			duel.windows(),
 			[](const execution::EventWindow& window) noexcept -> bool
 			{
-				const auto* code = std::get_if<domain::EventCode>(&window.source);
-				return code != nullptr && *code == domain::EventCode::SPECIAL_SUMMON_DECLARED;
+			const auto* code = std::get_if<domain::EventCode>(&window.source);
+			return code != nullptr && *code == domain::EventCode::SPECIAL_SUMMON_DECLARED;
 			}
 		)
 	);
