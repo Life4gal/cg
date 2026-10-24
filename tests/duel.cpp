@@ -3210,6 +3210,196 @@ TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck mon
 	CHECK_FALSE(game.find_instance(fusion)->properly_summoned());
 }
 
+TEST_CASE("flow::Duel rejects a non-monster target for an effect Special Summon")
+{
+	constexpr domain::CardCode summon_spell_code{97000157};
+	constexpr domain::CardCode target_spell_code{97000125};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(summon_spell_code, make_spell(summon_spell_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(target_spell_code, make_spell(target_spell_code, {domain::CardSubtype::RITUAL}));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
+
+	const auto summon_spell = game.create_instance(summon_spell_code, domain::Player::FIRST);
+	REQUIRE(summon_spell.valid());
+	const auto target_spell = game.create_instance(target_spell_code, domain::Player::FIRST);
+	REQUIRE(target_spell.valid());
+
+	game.place(*game.find_instance_mutable(summon_spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(target_spell), domain::GraveyardPlacement{.index = 0});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(summon_spell));
+	settle(duel);
+
+	CHECK(game.zone_of(target_spell) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(summon_spell) == domain::Zone::GRAVEYARD);
+	CHECK_FALSE(duel.pending_summon());
+}
+
+TEST_CASE("flow::Duel rejects an unproper Ritual Monster from hand")
+{
+	constexpr domain::CardCode summon_spell_code{97000158};
+	constexpr domain::CardCode ritual_code{97000130};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(summon_spell_code, make_spell(summon_spell_code, {domain::CardSubtype::RITUAL}));
+	auto ritual = make_monster(ritual_code, 2000, 2000, 4);
+	ritual.subtypes = {domain::CardSubtype::RITUAL};
+	game.register_definition(ritual_code, ritual);
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
+
+	const auto summon_spell = game.create_instance(summon_spell_code, domain::Player::FIRST);
+	REQUIRE(summon_spell.valid());
+	const auto ritual_card = game.create_instance(ritual_code, domain::Player::FIRST);
+	REQUIRE(ritual_card.valid());
+
+	game.place(*game.find_instance_mutable(summon_spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(ritual_card), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(summon_spell));
+	settle(duel);
+
+	CHECK(game.zone_of(ritual_card) == domain::Zone::HAND);
+	CHECK(game.zone_of(summon_spell) == domain::Zone::GRAVEYARD);
+	CHECK_FALSE(duel.pending_summon());
+}
+
+TEST_CASE("flow::Duel negates an effect-driven Special Summon activation")
+{
+	constexpr domain::CardCode spell_code{97000150};
+	constexpr domain::CardCode monster_code{97000151};
+	constexpr domain::CardCode negator_code{97000134};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+	game.register_definition(negator_code, make_monster(negator_code));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(monster.valid());
+	const auto negator = game.create_instance(negator_code, domain::Player::SECOND);
+	REQUIRE(negator.valid());
+
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(monster), domain::GraveyardPlacement{.index = 0});
+	game.place(*game.find_instance_mutable(negator), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+	CHECK(duel.activate_effect(negator, 0));
+	REQUIRE(duel.chain().size() == 2);
+	settle(duel);
+
+	CHECK(game.zone_of(monster) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(negator) == domain::Zone::MONSTER);
+}
+
+TEST_CASE("flow::Duel cannot summon-negate an effect-driven Special Summon")
+{
+	constexpr domain::CardCode solemn_code{41420027};
+	constexpr domain::CardCode spell_code{97000150};
+	constexpr domain::CardCode monster_code{97000151};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto solemn = game.create_instance(solemn_code, domain::Player::FIRST);
+	REQUIRE(solemn.valid());
+	const auto spell = game.create_instance(spell_code, domain::Player::SECOND);
+	REQUIRE(spell.valid());
+	const auto monster = game.create_instance(monster_code, domain::Player::SECOND);
+	REQUIRE(monster.valid());
+
+	game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(monster), domain::GraveyardPlacement{.index = 0});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.set_spell_trap(solemn, domain::FieldColumn::C1));
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+	settle(duel);
+
+	CHECK_FALSE(duel.pending_summon());
+	CHECK(game.zone_of(monster) == domain::Zone::MONSTER);
+	CHECK(game.find_instance(monster)->controller() == domain::Player::SECOND);
+	CHECK(game.zone_of(solemn) == domain::Zone::SPELL_TRAP);
+	CHECK(game.life_points(domain::Player::FIRST) == 8000);
+	CHECK(
+		std::ranges::none_of(
+			duel.windows(),
+			[](const execution::EventWindow& window) noexcept -> bool
+			{
+				const auto* code = std::get_if<domain::EventCode>(&window.source);
+				return code != nullptr && *code == domain::EventCode::SPECIAL_SUMMON_DECLARED;
+			}
+		)
+	);
+}
+
+TEST_CASE("flow::Duel resolves an effect Special Summon from the Banished zone")
+{
+	constexpr domain::CardCode spell_code{97000159};
+	constexpr domain::CardCode monster_code{97000151};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(monster.valid());
+
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(monster), domain::BanishedPlacement{.index = 0, .position = domain::Position::FACE_UP_ATTACK});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+	settle(duel);
+
+	CHECK(game.zone_of(monster) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::SPECIAL);
+}
+
 TEST_CASE("flow::Duel takes control with an effect Special Summon from the opponent's Graveyard")
 {
 	constexpr domain::CardCode spell_code{97000154};

@@ -1347,7 +1347,7 @@ namespace cg::execution
 		}
 
 		auto* instance = game.find_instance_mutable(*card);
-		if (instance == nullptr)
+		if (instance == nullptr || !state_resolver_.contains_card_type(*instance, domain::CardType::MONSTER))
 		{
 			return std::nullopt;
 		}
@@ -1360,20 +1360,23 @@ namespace cg::execution
 
 		const auto method_value = static_cast<domain::SummonMethod>(static_cast<std::underlying_type_t<domain::SummonMethod>>(*method));
 		const auto from = instance->placement();
+		const auto source_zone = game.zone_of(*card);
+		const auto requires_proper_summon = state_resolver_.contains_card_subtypes(
+			*instance,
+			utility::EnumMask
+			{
+					domain::CardSubtype::FUSION,
+					domain::CardSubtype::SYNCHRO,
+					domain::CardSubtype::XYZ,
+					domain::CardSubtype::LINK,
+					domain::CardSubtype::RITUAL,
+			}
+		);
 
 		if (
-			game.zone_of(*card) == domain::Zone::GRAVEYARD &&
-			state_resolver_.contains_card_subtypes(
-				*instance,
-				utility::EnumMask
-				{
-						domain::CardSubtype::FUSION,
-						domain::CardSubtype::SYNCHRO,
-						domain::CardSubtype::XYZ,
-						domain::CardSubtype::LINK,
-						domain::CardSubtype::RITUAL,
-				}
-			) &&
+			source_zone != domain::Zone::MONSTER &&
+			source_zone != domain::Zone::EXTRA_MONSTER &&
+			requires_proper_summon &&
 			!instance->properly_summoned()
 		)
 		{
