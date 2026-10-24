@@ -269,6 +269,10 @@ namespace cg::execution
 		{
 			return discard(*definition, call, context);
 		}
+		if (definition->name == "is_code")
+		{
+			return is_code(*definition, call, context);
+		}
 		if (definition->name == "is_card_type")
 		{
 			return is_card_type(*definition, call, context);
@@ -700,6 +704,35 @@ namespace cg::execution
 		const auto value = static_cast<domain::CardType>(static_cast<std::underlying_type_t<domain::CardType>>(*kind));
 		const auto result = state_resolver_.contains_card_type(*instance, value);
 		return Value{Boolean{result}};
+	}
+
+	auto Interpreter::is_code(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		const auto* code = as_argument<dsl::ValueClass::INT>(*args, 1);
+		if (card == nullptr || code == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto* instance = game.find_instance(*card);
+		if (instance == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto expected = static_cast<domain::CardCode>(
+			static_cast<std::underlying_type_t<domain::CardCode>>(*code)
+		);
+		return Value{Boolean{state_resolver_.effective_code(*instance) == expected}};
 	}
 
 	auto Interpreter::is_card_subtype(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>

@@ -44,6 +44,17 @@ namespace cg::dsl
 		// ---------------- 谓词/查询 ----------------
 
 		do_register(
+			"is_code",
+			PrimitiveKind::PREDICATE,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "code", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+			},
+			type_id("bool"),
+			"card code predicate"
+		);
+		do_register(
 			"is_card_type",
 			PrimitiveKind::PREDICATE,
 			all_phases,
