@@ -1433,6 +1433,17 @@ namespace cg::execution
 			}
 		);
 
+		if (call.args.size() > 1)
+		{
+			auto filtered = filter(call.args[1], monster_candidates, context);
+			if (!filtered.has_value())
+			{
+				return std::nullopt;
+			}
+
+			monster_candidates = *std::move(filtered);
+		}
+
 		const auto selected_monster = select(context, monster_candidates, 1, 1);
 		if (!selected_monster.has_value() || selected_monster->empty())
 		{

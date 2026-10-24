@@ -1,0 +1,44 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["RITUAL"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"condition": {
+				"call": "exists_matching",
+				"args": {
+					"players": ["SELF"],
+					"zones": ["HAND"],
+					"min": 1,
+					"filter": {
+						"and": [
+							{
+								"call": "is_card_type",
+								"args": {"card": {"call": "$"}, "card_type": "MONSTER"}
+							},
+							{
+								"call": "is_card_subtype",
+								"args": {"card": {"call": "$"}, "subtype": "RITUAL"}
+							}
+						]
+					}
+				}
+			},
+			"effect": [
+				{
+					"call": "ritual_summon",
+					"args": {
+						"position": "FACE_UP_ATTACK",
+						"filter": {
+							"call": "is_attribute",
+							"args": {"card": {"call": "$"}, "attribute": "EARTH"}
+						}
+					}
+				}
+			]
+		}
+	]
+}

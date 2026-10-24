@@ -2835,6 +2835,56 @@ TEST_CASE("flow::Duel resolves a Ritual Spell through effect summon")
 	CHECK(game.find_instance(ritual_card)->summon_record().materials.size() == 2);
 }
 
+TEST_CASE("flow::Duel filters the Ritual Spell monster choice")
+{
+	constexpr domain::CardCode spell_code{97000128};
+	constexpr domain::CardCode earth_ritual_code{97000130};
+	constexpr domain::CardCode dark_ritual_code{97000135};
+	constexpr domain::CardCode material_code{97000133};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::RITUAL}));
+	auto earth_ritual = make_monster(earth_ritual_code, 2000, 2000, 4);
+	earth_ritual.subtypes = {domain::CardSubtype::RITUAL};
+	game.register_definition(earth_ritual_code, earth_ritual);
+	auto dark_ritual = make_monster(dark_ritual_code, 2000, 2000, 4);
+	dark_ritual.subtypes = {domain::CardSubtype::RITUAL};
+	dark_ritual.monster->attribute = domain::Attribute::DARK;
+	game.register_definition(dark_ritual_code, dark_ritual);
+	game.register_definition(material_code, make_monster(material_code, 1000, 1000, 4));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	const auto material = game.create_instance(material_code, domain::Player::FIRST);
+	REQUIRE(material.valid());
+	const auto earth_ritual_card = game.create_instance(earth_ritual_code, domain::Player::FIRST);
+	REQUIRE(earth_ritual_card.valid());
+	const auto dark_ritual_card = game.create_instance(dark_ritual_code, domain::Player::FIRST);
+	REQUIRE(dark_ritual_card.valid());
+
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(material), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(earth_ritual_card), domain::HandPlacement{.index = 2, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(dark_ritual_card), domain::HandPlacement{.index = 3, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+	settle(duel);
+
+	CHECK(game.zone_of(earth_ritual_card) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(dark_ritual_card) == domain::Zone::HAND);
+	CHECK(game.zone_of(material) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+}
+
 TEST_CASE("flow::Duel fizzles a Ritual Spell with an invalid level sum")
 {
 	constexpr domain::CardCode spell_code{97000125};
