@@ -523,57 +523,75 @@ namespace cg::flow
 		}
 
 		std::vector used(materials.size(), false);
-		for (const auto& [selector, count]: procedure.materials)
+
+		const auto material_matches = [&](const dsl::MaterialSpec& spec, const state::CardInstanceId material) noexcept -> bool
 		{
-			std::size_t matched = 0;
-			for (std::size_t index = 0; index < procedure.materials.size(); ++index)
+			const auto* instance = game_.find_instance(material);
+			if (instance == nullptr)
 			{
-				if (used[index])
+				return false;
+			}
+
+			return std::visit(
+				utility::Overloaded
+				{
+						[&](const domain::CardCode code) noexcept -> bool
+						{
+							return instance->origin_code() == code;
+						},
+						[&](const dsl::Expression& expression) noexcept -> bool
+						{
+							const auto candidates = match_summon_materials(summon_card, expression, {&material, 1});
+							return candidates.has_value() && !candidates->empty();
+						}
+				},
+				spec.selector
+			);
+		};
+
+		// 按素材声明顺序回溯分配,避免贪婪匹配把通用素材占给后续的特定素材
+		const auto assign = [&](
+			this auto&& self,
+			std::size_t spec_index,
+			const std::size_t start,
+			const std::size_t remaining
+		) noexcept -> bool
+		{
+			if (spec_index == procedure.materials.size())
+			{
+				return std::ranges::all_of(used, std::identity{});
+			}
+
+			if (remaining == 0)
+			{
+				spec_index += 1;
+				if (spec_index == procedure.materials.size())
+				{
+					return std::ranges::all_of(used, std::identity{});
+				}
+
+				return self(spec_index, 0, static_cast<std::size_t>(procedure.materials[spec_index].count));
+			}
+
+			for (std::size_t index = start; index < materials.size(); ++index)
+			{
+				if (used[index] || !material_matches(procedure.materials[spec_index], materials[index]))
 				{
 					continue;
 				}
 
-				const auto material = materials[index];
-				const auto* instance = game_.find_instance(material);
-				if (instance == nullptr)
+				used[index] = true;
+				if (self(spec_index, index + 1, remaining - 1))
 				{
-					return false;
+					return true;
 				}
-
-				const auto matches = std::visit(
-					utility::Overloaded
-					{
-							[&](const domain::CardCode code) noexcept -> bool
-							{
-								return instance->origin_code() == code;
-							},
-							[&](const dsl::Expression& expression) noexcept -> bool
-							{
-								const auto candidates = match_summon_materials(summon_card, expression, {&material, 1});
-								return candidates.has_value() && !candidates->empty();
-							}
-					},
-					selector
-				);
-				if (matches)
-				{
-					used[index] = true;
-					matched += 1;
-
-					if (matched == static_cast<std::size_t>(count))
-					{
-						break;
-					}
-				}
+				used[index] = false;
 			}
 
-			if (matched != static_cast<std::size_t>(count))
-			{
-				return false;
-			}
-		}
+			return false;
+		};
 
-		return std::ranges::all_of(used, std::identity{});
+		return assign(0, 0, static_cast<std::size_t>(procedure.materials.front().count));
 	}
 
 	auto Duel::validate_synchro_materials(
@@ -698,6 +716,12 @@ namespace cg::flow
 		}
 
 		if (procedure.count != 0 && materials.size() != static_cast<std::size_t>(procedure.count))
+		{
+			return false;
+		}
+
+		// 连接怪兽的连接评级等于其连接标记数量，也等于所用连接素材数量。
+		if (summon_card.origin_link_marker().size() != materials.size())
 		{
 			return false;
 		}

@@ -1349,8 +1349,16 @@ TEST_CASE("flow::Duel resolves Fusion, Link, Ritual, and SelfSpecial summons")
 		R"({"identity":{"kind":"MONSTER","subtypes":["FUSION"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"fusion","materials":[{"card":99700011},{"card":99700012}]}]})"
 	);
 	write(
+		"99700013.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["FUSION"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"fusion","materials":[{"filter":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}}},{"card":99700011}]}]})"
+	);
+	write(
 		"99700020.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["LINK"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"link","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"count":2}]})"
+		R"({"identity":{"kind":"MONSTER","subtypes":["LINK"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000},"link_marker":["TOP","BOTTOM"]},"summons":[{"method":"link","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"count":2}]})"
+	);
+	write(
+		"99700023.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["LINK"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000},"link_marker":["TOP","BOTTOM","LEFT"]},"summons":[{"method":"link","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"count":2}]})"
 	);
 	write(
 		"99700030.json",
@@ -1360,17 +1368,24 @@ TEST_CASE("flow::Duel resolves Fusion, Link, Ritual, and SelfSpecial summons")
 		"99700040.json",
 		R"({"identity":{"kind":"MONSTER","subtypes":["SPECIAL_SUMMON"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"special","condition":true,"cost":[],"source_zones":["HAND"]}]})"
 	);
+	write(
+		"99700041.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["SPECIAL_SUMMON"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"special","condition":false,"cost":[],"source_zones":["HAND"]}]})"
+	);
 
 	constexpr domain::CardCode fusion_code{99700010};
 	constexpr domain::CardCode fusion_material_a{99700011};
 	constexpr domain::CardCode fusion_material_b{99700012};
+	constexpr domain::CardCode fusion_alternate_code{99700013};
 	constexpr domain::CardCode link_code{99700020};
 	constexpr domain::CardCode link_material_a{99700021};
 	constexpr domain::CardCode link_material_b{99700022};
+	constexpr domain::CardCode link_bad_rating_code{99700023};
 	constexpr domain::CardCode ritual_code{99700030};
 	constexpr domain::CardCode ritual_material_a{99700031};
 	constexpr domain::CardCode ritual_material_b{99700032};
 	constexpr domain::CardCode self_code{99700040};
+	constexpr domain::CardCode self_false_code{99700041};
 
 	const auto prepare = [&](flow::Duel& duel) -> void
 	{
@@ -1378,23 +1393,43 @@ TEST_CASE("flow::Duel resolves Fusion, Link, Ritual, and SelfSpecial summons")
 
 		auto fusion = make_monster(fusion_code, 2000, 2000, 4);
 		fusion.subtypes = {domain::CardSubtype::FUSION};
+		auto fusion_alternate = make_monster(fusion_alternate_code, 2000, 2000, 4);
+		fusion_alternate.subtypes = {domain::CardSubtype::FUSION};
 		auto link = make_monster(link_code, 2000, 2000, 4);
 		link.subtypes = {domain::CardSubtype::LINK};
+		link.monster->link_marker = utility::EnumMask
+		{
+				domain::LinkMarker::TOP,
+				domain::LinkMarker::BOTTOM,
+		};
+		auto link_bad_rating = make_monster(link_bad_rating_code, 2000, 2000, 4);
+		link_bad_rating.subtypes = {domain::CardSubtype::LINK};
+		link_bad_rating.monster->link_marker = utility::EnumMask
+		{
+				domain::LinkMarker::TOP,
+				domain::LinkMarker::BOTTOM,
+				domain::LinkMarker::LEFT,
+		};
 		auto ritual = make_monster(ritual_code, 2000, 2000, 4);
 		ritual.subtypes = {domain::CardSubtype::RITUAL};
 		auto self = make_monster(self_code, 2000, 2000, 4);
 		self.subtypes = {domain::CardSubtype::SPECIAL_SUMMON};
+		auto self_false = make_monster(self_false_code, 2000, 2000, 4);
+		self_false.subtypes = {domain::CardSubtype::SPECIAL_SUMMON};
 
 		game.register_definition(fusion_code, fusion);
+		game.register_definition(fusion_alternate_code, fusion_alternate);
 		game.register_definition(fusion_material_a, make_monster(fusion_material_a, 1000, 1000, 2));
 		game.register_definition(fusion_material_b, make_monster(fusion_material_b, 1000, 1000, 2));
 		game.register_definition(link_code, link);
+		game.register_definition(link_bad_rating_code, link_bad_rating);
 		game.register_definition(link_material_a, make_monster(link_material_a, 1000, 1000, 2));
 		game.register_definition(link_material_b, make_monster(link_material_b, 1000, 1000, 2));
 		game.register_definition(ritual_code, ritual);
 		game.register_definition(ritual_material_a, make_monster(ritual_material_a, 1000, 1000, 2));
 		game.register_definition(ritual_material_b, make_monster(ritual_material_b, 1000, 1000, 2));
 		game.register_definition(self_code, self);
+		game.register_definition(self_false_code, self_false);
 
 		REQUIRE(duel.load_scripts(directory));
 		game.set_life_points(domain::Player::FIRST, 8000);
@@ -1434,6 +1469,36 @@ TEST_CASE("flow::Duel resolves Fusion, Link, Ritual, and SelfSpecial summons")
 		CHECK(game.find_instance(fusion)->summon_record().method == domain::SummonMethod::FUSION);
 	}
 
+	SUBCASE("fusion alternates")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto fusion = game.create_instance(fusion_alternate_code, domain::Player::FIRST);
+		REQUIRE(fusion.valid());
+		game.place(*game.find_instance_mutable(fusion), domain::ExtraDeckPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+		const auto material_a = game.create_instance(fusion_material_a, domain::Player::FIRST);
+		REQUIRE(material_a.valid());
+		game.place(*game.find_instance_mutable(material_a), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+		const auto material_b = game.create_instance(fusion_material_b, domain::Player::FIRST);
+		REQUIRE(material_b.valid());
+		game.place(*game.find_instance_mutable(material_b), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+		advance_phase(duel);
+		advance_phase(duel);
+
+		// 具体的 99700011 必须留给第二个素材槽,通用表达式先占用 99700012
+		const std::array materials{material_a, material_b};
+		CHECK(duel.fusion_summon(fusion, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, materials));
+		resolve_summon(duel);
+
+		CHECK(game.zone_of(fusion) == domain::Zone::EXTRA_MONSTER);
+		CHECK(game.zone_of(material_a) == domain::Zone::GRAVEYARD);
+		CHECK(game.zone_of(material_b) == domain::Zone::GRAVEYARD);
+	}
+
 	SUBCASE("link")
 	{
 		flow::Duel duel{g_selector};
@@ -1443,6 +1508,9 @@ TEST_CASE("flow::Duel resolves Fusion, Link, Ritual, and SelfSpecial summons")
 		const auto link = game.create_instance(link_code, domain::Player::FIRST);
 		REQUIRE(link.valid());
 		game.place(*game.find_instance_mutable(link), domain::ExtraDeckPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+		const auto link_bad_rating = game.create_instance(link_bad_rating_code, domain::Player::FIRST);
+		REQUIRE(link_bad_rating.valid());
+		game.place(*game.find_instance_mutable(link_bad_rating), domain::ExtraDeckPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
 
 		const auto material_a = game.create_instance(link_material_a, domain::Player::FIRST);
 		REQUIRE(material_a.valid());
@@ -1458,6 +1526,7 @@ TEST_CASE("flow::Duel resolves Fusion, Link, Ritual, and SelfSpecial summons")
 		CHECK_FALSE(duel.link_summon(link, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, one_material));
 
 		const std::array materials{material_a, material_b};
+		CHECK_FALSE(duel.link_summon(link_bad_rating, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, materials));
 		CHECK(duel.link_summon(link, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, materials));
 		resolve_summon(duel);
 
@@ -1518,6 +1587,31 @@ TEST_CASE("flow::Duel resolves Fusion, Link, Ritual, and SelfSpecial summons")
 
 		CHECK(game.zone_of(self) == domain::Zone::MONSTER);
 		CHECK(game.find_instance(self)->summon_record().method == domain::SummonMethod::SPECIAL);
+	}
+
+	SUBCASE("self special failures")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto on_field = game.create_instance(self_code, domain::Player::FIRST);
+		REQUIRE(on_field.valid());
+		game.place(*game.find_instance_mutable(on_field), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+		const auto condition_false = game.create_instance(self_false_code, domain::Player::FIRST);
+		REQUIRE(condition_false.valid());
+		game.place(*game.find_instance_mutable(condition_false), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+		advance_phase(duel);
+		advance_phase(duel);
+
+		// 来源区域不是 procedure 允许的HAND
+		CHECK_FALSE(duel.self_special_summon(on_field, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+		// 条件本身不成立。
+		CHECK_FALSE(duel.self_special_summon(condition_false, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+		CHECK_FALSE(duel.pending_summon());
+		CHECK(game.zone_of(condition_false) == domain::Zone::HAND);
 	}
 
 	std::filesystem::remove_all(directory);
@@ -1657,6 +1751,271 @@ TEST_CASE("flow::Duel: Solemn Judgment negates an Xyz Summon")
 	CHECK(game.zone_of(material_b) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(solemn) == domain::Zone::GRAVEYARD);
 	CHECK(game.find_instance(xyz_card)->overlays().empty());
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel: Solemn Judgment negates a Fusion Summon")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_solemn_fusion";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"99700010.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["FUSION"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"fusion","materials":[{"card":99700011},{"card":99700012}]}]})"
+	);
+
+	constexpr domain::CardCode solemn_code{41420027};
+	constexpr domain::CardCode fusion_code{99700010};
+	constexpr domain::CardCode material_a_code{99700011};
+	constexpr domain::CardCode material_b_code{99700012};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+	auto fusion_definition = make_monster(fusion_code, 2000, 2000, 4);
+	fusion_definition.subtypes = {domain::CardSubtype::FUSION};
+	game.register_definition(fusion_code, fusion_definition);
+	game.register_definition(material_a_code, make_monster(material_a_code, 1000, 1000, 2));
+	game.register_definition(material_b_code, make_monster(material_b_code, 1000, 1000, 2));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto solemn = game.create_instance(solemn_code, domain::Player::FIRST);
+	REQUIRE(solemn.valid());
+	game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto fusion = game.create_instance(fusion_code, domain::Player::SECOND);
+	REQUIRE(fusion.valid());
+	game.place(*game.find_instance_mutable(fusion), domain::ExtraDeckPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto material_a = game.create_instance(material_a_code, domain::Player::SECOND);
+	REQUIRE(material_a.valid());
+	game.place(*game.find_instance_mutable(material_a), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+	const auto material_b = game.create_instance(material_b_code, domain::Player::SECOND);
+	REQUIRE(material_b.valid());
+	game.place(*game.find_instance_mutable(material_b), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.set_spell_trap(solemn, domain::FieldColumn::C1));
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+
+	const std::array materials{material_a, material_b};
+	CHECK(duel.fusion_summon(fusion, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, materials));
+	CHECK(duel.pending_summon());
+	CHECK_FALSE(duel.pass_priority());
+
+	CHECK(duel.activate_card(solemn));
+	CHECK(game.life_points(domain::Player::FIRST) == 4000);
+	resolve_summon(duel);
+
+	CHECK_FALSE(duel.pending_summon());
+	CHECK(game.zone_of(fusion) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(material_a) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(material_b) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(solemn) == domain::Zone::GRAVEYARD);
+	CHECK(game.find_instance(fusion)->overlays().empty());
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel: Solemn Judgment negates Link, Ritual, and SelfSpecial Summons")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_solemn_extra_summons";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"97000101.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["LINK"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000},"link_marker":["TOP","BOTTOM"]},"summons":[{"method":"link","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"count":2}]})"
+	);
+	write(
+		"97000110.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["RITUAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"ritual","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"level":4}]})"
+	);
+	write(
+		"97000120.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["SPECIAL_SUMMON"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"special","condition":true,"cost":[],"source_zones":["HAND"]}]})"
+	);
+
+	constexpr domain::CardCode solemn_code{41420027};
+	constexpr domain::CardCode link_code{97000101};
+	constexpr domain::CardCode link_material_a_code{97000102};
+	constexpr domain::CardCode link_material_b_code{97000103};
+	constexpr domain::CardCode ritual_code{97000110};
+	constexpr domain::CardCode ritual_material_a_code{97000111};
+	constexpr domain::CardCode ritual_material_b_code{97000112};
+	constexpr domain::CardCode self_code{97000120};
+
+	const auto prepare = [&](flow::Duel& duel) -> void
+	{
+		auto& game = duel.game();
+
+		game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+
+		auto link = make_monster(link_code, 2000, 2000, 4);
+		link.subtypes = {domain::CardSubtype::LINK};
+		link.monster->link_marker = utility::EnumMask
+		{
+				domain::LinkMarker::TOP,
+				domain::LinkMarker::BOTTOM,
+		};
+		game.register_definition(link_code, link);
+		game.register_definition(link_material_a_code, make_monster(link_material_a_code, 1000, 1000, 2));
+		game.register_definition(link_material_b_code, make_monster(link_material_b_code, 1000, 1000, 2));
+
+		auto ritual = make_monster(ritual_code, 2000, 2000, 4);
+		ritual.subtypes = {domain::CardSubtype::RITUAL};
+		game.register_definition(ritual_code, ritual);
+		game.register_definition(ritual_material_a_code, make_monster(ritual_material_a_code, 1000, 1000, 2));
+		game.register_definition(ritual_material_b_code, make_monster(ritual_material_b_code, 1000, 1000, 2));
+
+		auto self = make_monster(self_code, 2000, 2000, 4);
+		self.subtypes = {domain::CardSubtype::SPECIAL_SUMMON};
+		game.register_definition(self_code, self);
+
+		REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+		REQUIRE(duel.load_scripts(directory));
+
+		game.set_life_points(domain::Player::FIRST, 8000);
+		game.set_life_points(domain::Player::SECOND, 8000);
+	};
+
+	const auto set_solemn_and_pass = [](flow::Duel& duel, const state::CardInstanceId solemn) -> void
+	{
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		CHECK(duel.set_spell_trap(solemn, domain::FieldColumn::C1));
+		CHECK(advance_phase(duel)); // END
+		CHECK(duel.end_turn());
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+	};
+
+	SUBCASE("link")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto link = game.create_instance(link_code, domain::Player::SECOND);
+		REQUIRE(link.valid());
+		game.place(*game.find_instance_mutable(link), domain::ExtraDeckPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+		const auto material_a = game.create_instance(link_material_a_code, domain::Player::SECOND);
+		REQUIRE(material_a.valid());
+		game.place(*game.find_instance_mutable(material_a), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+		const auto material_b = game.create_instance(link_material_b_code, domain::Player::SECOND);
+		REQUIRE(material_b.valid());
+		game.place(*game.find_instance_mutable(material_b), domain::MonsterPlacement{.column = domain::FieldColumn::C3, .position = domain::Position::FACE_UP_ATTACK});
+
+		const auto solemn = game.create_instance(solemn_code, domain::Player::FIRST);
+		REQUIRE(solemn.valid());
+		game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+		set_solemn_and_pass(duel, solemn);
+
+		const std::array materials{material_a, material_b};
+		CHECK(duel.link_summon(link, domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}, materials));
+		CHECK(duel.pending_summon());
+		CHECK_FALSE(duel.pass_priority());
+		CHECK(duel.activate_card(solemn));
+		CHECK(game.life_points(domain::Player::FIRST) == 4000);
+		resolve_summon(duel);
+
+		CHECK_FALSE(duel.pending_summon());
+		CHECK(game.zone_of(link) == domain::Zone::GRAVEYARD);
+		CHECK(game.zone_of(material_a) == domain::Zone::GRAVEYARD);
+		CHECK(game.zone_of(material_b) == domain::Zone::GRAVEYARD);
+		CHECK(game.zone_of(solemn) == domain::Zone::GRAVEYARD);
+	}
+
+	SUBCASE("ritual")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto ritual = game.create_instance(ritual_code, domain::Player::SECOND);
+		REQUIRE(ritual.valid());
+		game.place(*game.find_instance_mutable(ritual), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+		const auto material_a = game.create_instance(ritual_material_a_code, domain::Player::SECOND);
+		REQUIRE(material_a.valid());
+		game.place(*game.find_instance_mutable(material_a), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+		const auto material_b = game.create_instance(ritual_material_b_code, domain::Player::SECOND);
+		REQUIRE(material_b.valid());
+		game.place(*game.find_instance_mutable(material_b), domain::MonsterPlacement{.column = domain::FieldColumn::C3, .position = domain::Position::FACE_UP_ATTACK});
+
+		const auto solemn = game.create_instance(solemn_code, domain::Player::FIRST);
+		REQUIRE(solemn.valid());
+		game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+		set_solemn_and_pass(duel, solemn);
+
+		const std::array materials{material_a, material_b};
+		CHECK(duel.ritual_summon(ritual, domain::MonsterPlacement{.column = domain::FieldColumn::C4, .position = domain::Position::FACE_UP_ATTACK}, materials));
+		CHECK(duel.pending_summon());
+		CHECK_FALSE(duel.pass_priority());
+		CHECK(duel.activate_card(solemn));
+		CHECK(game.life_points(domain::Player::FIRST) == 4000);
+		resolve_summon(duel);
+
+		CHECK_FALSE(duel.pending_summon());
+		CHECK(game.zone_of(ritual) == domain::Zone::GRAVEYARD);
+		CHECK(game.zone_of(material_a) == domain::Zone::GRAVEYARD);
+		CHECK(game.zone_of(material_b) == domain::Zone::GRAVEYARD);
+		CHECK(game.zone_of(solemn) == domain::Zone::GRAVEYARD);
+	}
+
+	SUBCASE("self special")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto self = game.create_instance(self_code, domain::Player::SECOND);
+		REQUIRE(self.valid());
+		game.place(*game.find_instance_mutable(self), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+		const auto solemn = game.create_instance(solemn_code, domain::Player::FIRST);
+		REQUIRE(solemn.valid());
+		game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+		set_solemn_and_pass(duel, solemn);
+
+		CHECK(duel.self_special_summon(self, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+		CHECK(duel.pending_summon());
+		CHECK_FALSE(duel.pass_priority());
+		CHECK(duel.activate_card(solemn));
+		CHECK(game.life_points(domain::Player::FIRST) == 4000);
+		resolve_summon(duel);
+
+		CHECK_FALSE(duel.pending_summon());
+		CHECK(game.zone_of(self) == domain::Zone::GRAVEYARD);
+		CHECK(game.zone_of(solemn) == domain::Zone::GRAVEYARD);
+	}
 
 	std::filesystem::remove_all(directory);
 }

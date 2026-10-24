@@ -598,6 +598,32 @@ TEST_CASE("execution::CardStateResolver sees effective attributes in static effe
 	CHECK(interpreter.state_resolver().attack(*target_instance) == target_instance->origin_attack() + 500);
 }
 
+TEST_CASE("execution::CardStateResolver contains_card_types includes origin types")
+{
+	constexpr domain::CardCode spell_code{90000110};
+	constexpr domain::CardCode trap_code{90000111};
+	constexpr domain::CardCode monster_code{90000112};
+
+	state::Game game{};
+	game.register_definition(spell_code, make_definition(spell_code, domain::CardType::SPELL));
+	game.register_definition(trap_code, make_definition(trap_code, domain::CardType::TRAP));
+	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	const auto trap = game.create_instance(trap_code, domain::Player::FIRST);
+	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	REQUIRE(trap.valid());
+	REQUIRE(monster.valid());
+
+	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	const auto& resolver = interpreter.state_resolver();
+
+	CHECK(resolver.contains_card_types(*game.find_instance(spell), {domain::CardType::SPELL, domain::CardType::TRAP}));
+	CHECK(resolver.contains_card_types(*game.find_instance(trap), {domain::CardType::SPELL, domain::CardType::TRAP}));
+	CHECK_FALSE(resolver.contains_card_types(*game.find_instance(monster), {domain::CardType::SPELL, domain::CardType::TRAP}));
+}
+
 TEST_CASE("execution::ScriptRegistry loads the card corpus")
 {
 	execution::ScriptRegistry scripts{};
