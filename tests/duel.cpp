@@ -3231,6 +3231,98 @@ TEST_CASE("flow::Duel negates an effect-driven Special Summon effect")
 	std::filesystem::remove_all(directory);
 }
 
+TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck monster")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_proper_summon";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"97000150.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["GRAVEYARD"],"min":1,"filter":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}}}},"target":[{"call":"pick_target","args":{"players":["SELF"],"zones":["GRAVEYARD"],"min":1,"max":1,"filter":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}}},"bind":"target"}],"effect":[{"call":"special_summon","args":{"card":{"call":"sole_card","args":{"group":{"var":"target"}}},"method":"SPECIAL","position":"FACE_UP_ATTACK"}}]}]})"
+	);
+	write(
+		"97000153.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["FUSION"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"fusion","materials":[{"card":97000151}]}]})"
+	);
+
+	constexpr domain::CardCode spell_code{97000150};
+	constexpr domain::CardCode fusion_code{97000153};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
+	auto fusion_definition = make_monster(fusion_code, 2000, 2000, 4);
+	fusion_definition.subtypes = {domain::CardSubtype::FUSION};
+	game.register_definition(fusion_code, fusion_definition);
+
+	REQUIRE(duel.load_scripts(directory));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto first_spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(first_spell.valid());
+	const auto second_spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(second_spell.valid());
+	const auto fusion = game.create_instance(fusion_code, domain::Player::FIRST);
+	REQUIRE(fusion.valid());
+
+	game.place(*game.find_instance_mutable(first_spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(second_spell), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(fusion), domain::GraveyardPlacement{.index = 0});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	// 直接从额外卡组送入墓地的融合怪兽不能苏生。
+	CHECK(duel.activate_card(first_spell));
+	settle(duel);
+	CHECK(game.zone_of(fusion) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(first_spell) == domain::Zone::GRAVEYARD);
+	CHECK_FALSE(game.find_instance(fusion)->properly_summoned());
+
+	// 非正规召唤记录不会置位正规召唤状态。
+	game.set_summon_record(
+		*game.find_instance_mutable(fusion),
+		state::CardInstance::SummonRecord
+		{
+				.player = domain::Player::FIRST,
+				.method = domain::SummonMethod::SPECIAL,
+				.from = domain::GraveyardPlacement{.index = 0},
+				.materials = {},
+		}
+	);
+	CHECK_FALSE(game.find_instance(fusion)->properly_summoned());
+
+	// 模拟已正规融合召唤后送墓。
+	game.set_summon_record(
+		*game.find_instance_mutable(fusion),
+		state::CardInstance::SummonRecord
+		{
+				.player = domain::Player::FIRST,
+				.method = domain::SummonMethod::FUSION,
+				.from = {domain::ExtraDeckPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}},
+				.materials = {},
+		}
+	);
+
+	CHECK(duel.activate_card(second_spell));
+	settle(duel);
+	CHECK(game.zone_of(fusion) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(second_spell) == domain::Zone::GRAVEYARD);
+	CHECK(game.find_instance(fusion)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(fusion)->properly_summoned());
+
+	std::filesystem::remove_all(directory);
+}
+
 TEST_CASE("flow::Duel sets and activates a trap")
 {
 	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_trap";

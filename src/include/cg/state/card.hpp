@@ -62,12 +62,16 @@ namespace cg::state
 			// 设置卡牌当前位置
 			auto set_placement(const domain::Placement& placement) noexcept -> void;
 
+			// 设置移动来源
 			auto set_move_provenance(const MoveProvenance& provenance) noexcept -> void;
 
+			// 设置召唤记录
 			auto set_summon_record(SummonRecord record) noexcept -> void;
 
+			// 添加超量素材
 			auto add_overlay(const CardInstance& material) noexcept -> void;
 
+			// 移除超量素材
 			auto remove_overlay(const CardInstance& material) noexcept -> bool;
 		};
 
@@ -92,6 +96,8 @@ namespace cg::state
 		// 最近一次召唤的记录
 		SummonRecord summon_;
 
+		// 是否曾经完成正规召唤
+		bool properly_summoned_;
 		// 是否为衍生物
 		bool token_;
 
@@ -175,6 +181,8 @@ namespace cg::state
 		[[nodiscard]] auto move_provenance() const noexcept -> const MoveProvenance&;
 
 		[[nodiscard]] auto summon_record() const noexcept -> const SummonRecord&;
+
+		[[nodiscard]] auto properly_summoned() const noexcept -> bool;
 
 		[[nodiscard]] auto overlays() const noexcept -> const std::vector<CardInstanceId>&;
 	};

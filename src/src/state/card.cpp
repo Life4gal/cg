@@ -35,6 +35,21 @@ namespace cg::state
 	auto CardInstance::Modifier::set_summon_record(SummonRecord record) noexcept -> void
 	{
 		ref().summon_ = std::move(record);
+
+		if (!ref().properly_summoned_)
+		{
+			auto& instance = ref();
+
+			const auto properly_summoned =
+					(instance.summon_.method == domain::SummonMethod::FUSION && instance.origin_is_card_subtype(domain::CardSubtype::FUSION)) ||
+					(instance.summon_.method == domain::SummonMethod::SYNCHRO && instance.origin_is_card_subtype(domain::CardSubtype::SYNCHRO)) ||
+					(instance.summon_.method == domain::SummonMethod::XYZ && instance.origin_is_card_subtype(domain::CardSubtype::XYZ)) ||
+					(instance.summon_.method == domain::SummonMethod::LINK && instance.origin_is_card_subtype(domain::CardSubtype::LINK)) ||
+					(instance.summon_.method == domain::SummonMethod::RITUAL && instance.origin_is_card_subtype(domain::CardSubtype::RITUAL)
+					);
+
+			instance.properly_summoned_ = properly_summoned;
+		}
 	}
 
 	auto CardInstance::Modifier::add_overlay(const CardInstance& material) noexcept -> void
@@ -62,6 +77,7 @@ namespace cg::state
 		  {
 				  //
 		  },
+		  properly_summoned_{false},
 		  token_{false} {}
 
 	auto CardInstance::id() const noexcept -> CardInstanceId
@@ -251,6 +267,11 @@ namespace cg::state
 	auto CardInstance::summon_record() const noexcept -> const SummonRecord&
 	{
 		return summon_;
+	}
+
+	auto CardInstance::properly_summoned() const noexcept -> bool
+	{
+		return properly_summoned_;
 	}
 
 	auto CardInstance::overlays() const noexcept -> const std::vector<CardInstanceId>&
