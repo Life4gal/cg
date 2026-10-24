@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <ranges>
 
-#include <cg/utility/variant.hpp>
 #include <cg/utility/functional.hpp>
 #include <cg/dsl/expression.hpp>
 #include <cg/dsl/statement.hpp>
@@ -150,84 +149,70 @@ namespace cg::execution
 			// read_enum_set_constant_expression应该保证dsl::EnumSetConstant::mask就是我们需要的值
 			return utility::EnumMask<T>{static_cast<typename utility::EnumMask<T>::value_type>(mask)};
 		}
+	}
 
-		[[nodiscard]] auto players_of(const EnumMask mask, const Context& context) noexcept -> std::vector<domain::Player>
+	auto Interpreter::players_of(const Context& context, const EnumMask mask) const noexcept -> std::vector<domain::Player>
+	{
+		std::ignore = this;
+
+		const auto selectors = to_enum_mask<domain::PlayerSelector>(mask);
+
+		std::vector<domain::Player> players{};
+		if (selectors.contains(domain::PlayerSelector::SELF))
 		{
-			const auto selectors = to_enum_mask<domain::PlayerSelector>(mask);
-
-			std::vector<domain::Player> players{};
-			if (selectors.contains(domain::PlayerSelector::SELF))
-			{
-				players.push_back(context.controller);
-			}
-			if (selectors.contains(domain::PlayerSelector::OPPONENT))
-			{
-				players.push_back(domain::opponent_of(context.controller));
-			}
-
-			// TODO: EVENT_PLAYER / REASON_PLAYER / TRIGGERING_PLAYER
-			return players;
+			players.push_back(context.controller);
+		}
+		if (selectors.contains(domain::PlayerSelector::OPPONENT))
+		{
+			players.push_back(domain::opponent_of(context.controller));
 		}
 
-		[[nodiscard]] auto collect(const Context& context, const std::vector<domain::Player>& players, const utility::EnumMask<domain::Zone> zones) noexcept -> Group
+		// TODO: EVENT_PLAYER / REASON_PLAYER / TRIGGERING_PLAYER
+		return players;
+	}
+
+	auto Interpreter::collect(const std::span<const domain::Player> players, const utility::EnumMask<domain::Zone> zones) const noexcept -> Group
+	{
+		const auto& game = game_.get();
+
+		Group result{};
+
+		for (const auto player: players)
 		{
-			Group result{};
-
-			for (const auto player: players)
-			{
-				auto cards = context.game.get().collect_zones_card(player, zones);
-				result.append_range(std::move(cards));
-			}
-
-			return result;
+			auto cards = game.collect_zones_card(player, zones);
+			result.append_range(std::move(cards));
 		}
 
-		[[nodiscard]] auto select(const Context& context, const Group& candidates, const std::size_t min, const std::size_t max) -> std::optional<Group>
+		return result;
+	}
+
+	auto Interpreter::select(const Context& context, const Group& candidates, const std::size_t min, const std::size_t max) const noexcept -> std::optional<Group>
+	{
+		if (min > max || candidates.size() < min)
 		{
-			if (min > max || candidates.size() < min)
+			return std::nullopt;
+		}
+
+		// 引擎不自动决策:必须由外部提供选择
+		auto selected = selector_.get().select_cards(context.controller, candidates, min, max);
+		if (selected.size() < min || selected.size() > max)
+		{
+			return std::nullopt;
+		}
+
+		Group result{};
+		result.reserve(selected.size());
+		for (const auto card: selected)
+		{
+			if (!std::ranges::contains(candidates, card) || std::ranges::contains(result, card))
 			{
 				return std::nullopt;
 			}
 
-			// 引擎不自动决策:必须由外部提供选择
-			auto selected = context.selector.get().select_cards(context.controller, candidates, min, max);
-			if (selected.size() < min || selected.size() > max)
-			{
-				return std::nullopt;
-			}
-
-			Group result{};
-			result.reserve(selected.size());
-			for (const auto card: selected)
-			{
-				if (!std::ranges::contains(candidates, card) || std::ranges::contains(result, card))
-				{
-					return std::nullopt;
-				}
-
-				result.push_back(card);
-			}
-
-			return result;
+			result.push_back(card);
 		}
-	}
 
-	Interpreter::Evaluator::Evaluator(Interpreter& interpreter) noexcept
-		: interpreter_{interpreter} {}
-
-	auto Interpreter::Evaluator::evaluate_list(const dsl::ExpressionList& expressions, Context& context) const noexcept -> std::optional<std::vector<Value>>
-	{
-		return interpreter_.get().evaluate_list(expressions, context);
-	}
-
-	auto Interpreter::Evaluator::evaluate_scoped(const dsl::Expression& expression, const state::CardInstanceId element, Context& context) const noexcept -> std::optional<Value>
-	{
-		return interpreter_.get().evaluate_scoped(expression, element, context);
-	}
-
-	auto Interpreter::Evaluator::evaluate(const dsl::Expression& expression, Context& context) const noexcept -> std::optional<Value>
-	{
-		return interpreter_.get().evaluate(expression, context);
+		return result;
 	}
 
 	auto Interpreter::evaluate_arguments(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<std::vector<std::optional<Value>>>
@@ -254,177 +239,6 @@ namespace cg::execution
 		}
 
 		return values;
-	}
-
-	auto Interpreter::evaluate_list(const dsl::ExpressionList& expressions, Context& context) noexcept -> std::optional<std::vector<Value>>
-	{
-		std::vector<Value> values{};
-		values.reserve(expressions.size());
-
-		for (const auto& expression: expressions)
-		{
-			auto value = evaluate(expression, context);
-			if (!value.has_value())
-			{
-				return std::nullopt;
-			}
-
-			values.emplace_back(*std::move(value));
-		}
-
-		return values;
-	}
-
-	auto Interpreter::evaluate_scoped(const dsl::Expression& expression, const state::CardInstanceId element, Context& context) noexcept -> std::optional<Value>
-	{
-		context.frame.element_scopes.push_back(element);
-
-		auto value = evaluate(expression, context);
-
-		context.frame.element_scopes.pop_back();
-
-		return value;
-	}
-
-	auto Interpreter::evaluate(const dsl::Expression& expression, Context& context) noexcept -> std::optional<Value>
-	{
-		return std::visit(
-			utility::Overloaded
-			{
-					[](const dsl::Literal& literal) noexcept -> std::optional<Value>
-					{
-						return std::visit(
-							utility::Overloaded
-							{
-									[](const dsl::Literal::boolean_type boolean) noexcept -> Value
-									{
-										return {Boolean{boolean}};
-									},
-									[](const dsl::Literal::number_type number) noexcept -> Value
-									{
-										const auto value = static_cast<Integer::value_type>(number);
-
-										return {Integer{value}};
-									},
-									[](const dsl::Literal::Symbol& symbol) noexcept -> Value
-									{
-										const auto value = static_cast<Integer::value_type>(symbol.value);
-
-										return {Integer{value}};
-									},
-							},
-							literal.value
-						);
-					},
-					[](const dsl::EnumSetConstant& enums) noexcept -> std::optional<Value>
-					{
-						const auto value = static_cast<EnumMask::value_type>(enums.mask);
-
-						return Value{EnumMask{value}};
-					},
-					[&](const dsl::BindingRef& binding) noexcept -> std::optional<Value>
-					{
-						const auto it = context.frame.bindings.find(binding.id);
-						if (it == context.frame.bindings.end())
-						{
-							return std::nullopt;
-						}
-
-						return it->second;
-					},
-					[&](const dsl::PrimitiveCall& call) noexcept -> std::optional<Value>
-					{
-						return invoke(call, context);
-					},
-					[&](const dsl::BooleanOperation& boolean) noexcept -> std::optional<Value>
-					{
-						const auto operands = evaluate_list(boolean.operands, context);
-						if (!operands.has_value())
-						{
-							return std::nullopt;
-						}
-
-						if (boolean.op == dsl::BooleanOperator::NOT)
-						{
-							if (operands->size() != 1)
-							{
-								return std::nullopt;
-							}
-
-							const auto value = as<dsl::ValueClass::BOOL>(operands->operator[](0));
-							if (value == nullptr)
-							{
-								return std::nullopt;
-							}
-
-							return Value{Boolean{!*value}};
-						}
-
-						auto result = boolean.op == dsl::BooleanOperator::AND;
-						for (const auto& operand: *operands)
-						{
-							const auto value = as<dsl::ValueClass::BOOL>(operand);
-							if (value == nullptr)
-							{
-								return std::nullopt;
-							}
-
-							if (boolean.op == dsl::BooleanOperator::AND)
-							{
-								result = result && *value;
-							}
-							else
-							{
-								result = result || *value;
-							}
-						}
-
-						return Value{Boolean{result}};
-					},
-					[&](const dsl::CompareOperation& compare) noexcept -> std::optional<Value>
-					{
-						const auto operands = evaluate_list(compare.operands, context);
-						if (!operands.has_value() || operands->size() != 2)
-						{
-							return std::nullopt;
-						}
-
-						// TODO: 卡片/组的相等比较
-						const auto lhs = as<dsl::ValueClass::INT>(operands->operator[](0));
-						const auto rhs = as<dsl::ValueClass::INT>(operands->operator[](1));
-						if (lhs == nullptr || rhs == nullptr)
-						{
-							return std::nullopt;
-						}
-
-						return Value{Boolean{integer_compare(compare.op, *lhs, *rhs)}};
-					},
-					[&](const dsl::ArithmeticOperation& arithmetic) noexcept -> std::optional<Value>
-					{
-						const auto operands = evaluate_list(arithmetic.operands, context);
-						if (!operands.has_value() || operands->size() != 2)
-						{
-							return std::nullopt;
-						}
-
-						const auto lhs = as<dsl::ValueClass::INT>(operands->operator[](0));
-						const auto rhs = as<dsl::ValueClass::INT>(operands->operator[](1));
-						if (lhs == nullptr || rhs == nullptr)
-						{
-							return std::nullopt;
-						}
-
-						const auto result = integer_arithmetic(arithmetic.op, *lhs, *rhs);
-						if (!result.has_value())
-						{
-							return std::nullopt;
-						}
-
-						return Value{Integer{*result}};
-					},
-			},
-			expression
-		);
 	}
 
 	auto Interpreter::invoke(const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -691,14 +505,16 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
-		const auto* zones = as_argument<dsl::ValueClass::ENUM_SET>(*args, 1);
-		if (players == nullptr || zones == nullptr)
+		const auto* players_mask = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* zones_mask = as_argument<dsl::ValueClass::ENUM_SET>(*args, 1);
+		if (players_mask == nullptr || zones_mask == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		auto candidates = collect(context, players_of(*players, context), to_enum_mask<domain::Zone>(*zones));
+		const auto players = players_of(context, *players_mask);
+		const auto zones = to_enum_mask<domain::Zone>(*zones_mask);
+		auto candidates = collect(players, zones);
 
 		if (call.args.size() > 2)
 		{
@@ -722,15 +538,17 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
-		const auto* zones = as_argument<dsl::ValueClass::ENUM_SET>(*args, 1);
+		const auto* players_mask = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* zones_mask = as_argument<dsl::ValueClass::ENUM_SET>(*args, 1);
 		const auto* min = as_argument<dsl::ValueClass::INT>(*args, 2);
-		if (players == nullptr || zones == nullptr || min == nullptr)
+		if (players_mask == nullptr || zones_mask == nullptr || min == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		auto candidates = collect(context, players_of(*players, context), to_enum_mask<domain::Zone>(*zones));
+		const auto players = players_of(context, *players_mask);
+		const auto zones = to_enum_mask<domain::Zone>(*zones_mask);
+		auto candidates = collect(players, zones);
 
 		if (call.args.size() > 3)
 		{
@@ -754,16 +572,18 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
-		const auto* zones = as_argument<dsl::ValueClass::ENUM_SET>(*args, 1);
+		const auto* players_mask = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* zones_mask = as_argument<dsl::ValueClass::ENUM_SET>(*args, 1);
 		const auto* min = as_argument<dsl::ValueClass::INT>(*args, 2);
 		const auto* max = as_argument<dsl::ValueClass::INT>(*args, 3);
-		if (players == nullptr || zones == nullptr || min == nullptr || max == nullptr)
+		if (players_mask == nullptr || zones_mask == nullptr || min == nullptr || max == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		auto candidates = collect(context, players_of(*players, context), to_enum_mask<domain::Zone>(*zones));
+		const auto players = players_of(context, *players_mask);
+		const auto zones = to_enum_mask<domain::Zone>(*zones_mask);
+		auto candidates = collect(players, zones);
 
 		if (call.args.size() > 4)
 		{
@@ -787,6 +607,8 @@ namespace cg::execution
 
 	auto Interpreter::destroy(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -803,13 +625,13 @@ namespace cg::execution
 		for (const utility::EnumMask reasons{static_cast<domain::Reason>(static_cast<std::underlying_type_t<domain::Reason>>(*reason))};
 		     const auto card: *cards)
 		{
-			auto* instance = context.game.get().find_instance_mutable(card);
+			auto* instance = game.find_instance_mutable(card);
 			if (instance == nullptr)
 			{
 				return std::nullopt;
 			}
 
-			context.game.get().move_to_graveyard(*instance, reasons);
+			game.move_to_graveyard(*instance, reasons);
 
 			pending_events_.emplace_back(domain::EventCode::DESTROYED, card);
 			pending_events_.emplace_back(domain::EventCode::EFFECT_DESTROYED, card);
@@ -820,6 +642,8 @@ namespace cg::execution
 
 	auto Interpreter::discard(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -834,13 +658,13 @@ namespace cg::execution
 
 		for (const auto card: *cards)
 		{
-			auto* instance = context.game.get().find_instance_mutable(card);
+			auto* instance = game.find_instance_mutable(card);
 			if (instance == nullptr)
 			{
 				return std::nullopt;
 			}
 
-			context.game.get().move_to_graveyard(*instance, {domain::Reason::DISCARD});
+			game.move_to_graveyard(*instance, {domain::Reason::DISCARD});
 		}
 
 		return Value{Void{}};
@@ -848,6 +672,8 @@ namespace cg::execution
 
 	auto Interpreter::is_card_type(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		const auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -861,23 +687,21 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* instance = context.game.get().find_instance(*card);
+		const auto* instance = game.find_instance(*card);
 		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
 		const auto value = static_cast<domain::CardType>(static_cast<std::underlying_type_t<domain::CardType>>(*kind));
-		if (context.card_state)
-		{
-			return Value{Boolean{context.card_state->is_card_type(*instance, value)}};
-		}
-
-		return Value{Boolean{instance->origin_is_card_type(value)}};
+		const auto result = state_resolver_.contains_card_type(*instance, value);
+		return Value{Boolean{result}};
 	}
 
 	auto Interpreter::is_card_subtype(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		const auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -891,23 +715,21 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* instance = context.game.get().find_instance(*card);
+		const auto* instance = game.find_instance(*card);
 		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
 		const auto value = static_cast<domain::CardSubtype>(static_cast<std::underlying_type_t<domain::CardSubtype>>(*subtype));
-		if (context.card_state)
-		{
-			return Value{Boolean{context.card_state->is_card_subtype(*instance, value)}};
-		}
-
-		return Value{Boolean{instance->origin_is_card_subtype(value)}};
+		const auto result = state_resolver_.contains_card_subtype(*instance, value);
+		return Value{Boolean{result}};
 	}
 
 	auto Interpreter::is_attribute(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		const auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -921,38 +743,26 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* instance = context.game.get().find_instance(*card);
+		const auto* instance = game.find_instance(*card);
 		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		if (context.card_state)
+		if (!state_resolver_.contains_card_type(*instance, domain::CardType::MONSTER))
 		{
-			if (!context.card_state->is_card_type(*instance, domain::CardType::MONSTER))
-			{
-				return std::nullopt;
-			}
-		}
-		else
-		{
-			if (!instance->origin_is_monster_card())
-			{
-				return std::nullopt;
-			}
+			return std::nullopt;
 		}
 
 		const auto value = static_cast<domain::Attribute>(static_cast<std::underlying_type_t<domain::Attribute>>(*attribute));
-		if (context.card_state)
-		{
-			return Value{Boolean{context.card_state->attributes(*instance).contains(value)}};
-		}
-
-		return Value{Boolean{instance->origin_is_attribute(value)}};
+		const auto result = state_resolver_.contains_attribute(*instance, value);
+		return Value{Boolean{result}};
 	}
 
 	auto Interpreter::is_race(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		const auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -966,38 +776,26 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* instance = context.game.get().find_instance(*card);
+		const auto* instance = game.find_instance(*card);
 		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		if (context.card_state)
+		if (!state_resolver_.contains_card_type(*instance, domain::CardType::MONSTER))
 		{
-			if (!context.card_state->is_card_type(*instance, domain::CardType::MONSTER))
-			{
-				return std::nullopt;
-			}
-		}
-		else
-		{
-			if (!instance->origin_is_monster_card())
-			{
-				return std::nullopt;
-			}
+			return std::nullopt;
 		}
 
 		const auto value = static_cast<domain::Race>(static_cast<std::underlying_type_t<domain::Race>>(*race));
-		if (context.card_state)
-		{
-			return Value{Boolean{context.card_state->race(*instance) == value}};
-		}
-
-		return Value{Boolean{instance->origin_is_race(value)}};
+		const auto result = state_resolver_.is_race(*instance, value);
+		return Value{Boolean{result}};
 	}
 
 	auto Interpreter::is_in_zone(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		const auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -1012,13 +810,15 @@ namespace cg::execution
 		}
 
 		const auto zones_mask = to_enum_mask<domain::Zone>(*zones);
-		const auto zone = context.game.get().zone_of(*card);
+		const auto zone = game.zone_of(*card);
 
 		return Value{Boolean{zones_mask.contains(zone)}};
 	}
 
 	auto Interpreter::is_face_up(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		const auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -1031,7 +831,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* instance = context.game.get().find_instance(*card);
+		const auto* instance = game.find_instance(*card);
 		if (instance == nullptr)
 		{
 			return std::nullopt;
@@ -1051,6 +851,8 @@ namespace cg::execution
 
 	auto Interpreter::level(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		const auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -1063,37 +865,24 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* instance = context.game.get().find_instance(*card);
+		const auto* instance = game.find_instance(*card);
 		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		if (context.card_state)
+		if (!state_resolver_.contains_card_type(*instance, domain::CardType::MONSTER))
 		{
-			if (!context.card_state->is_card_type(*instance, domain::CardType::MONSTER))
-			{
-				return std::nullopt;
-			}
-		}
-		else
-		{
-			if (!instance->origin_is_monster_card())
-			{
-				return std::nullopt;
-			}
+			return std::nullopt;
 		}
 
-		if (context.card_state)
-		{
-			return Value{Integer{context.card_state->level(*instance)}};
-		}
-
-		return Value{Integer{instance->origin_level()}};
+		return Value{Integer{state_resolver_.level(*instance)}};
 	}
 
 	auto Interpreter::attack(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		const auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -1106,37 +895,24 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* instance = context.game.get().find_instance(*card);
+		const auto* instance = game.find_instance(*card);
 		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		if (context.card_state)
+		if (!state_resolver_.contains_card_type(*instance, domain::CardType::MONSTER))
 		{
-			if (!context.card_state->is_card_type(*instance, domain::CardType::MONSTER))
-			{
-				return std::nullopt;
-			}
-		}
-		else
-		{
-			if (!instance->origin_is_monster_card())
-			{
-				return std::nullopt;
-			}
+			return std::nullopt;
 		}
 
-		if (context.card_state)
-		{
-			return Value{Integer{context.card_state->attack(*instance)}};
-		}
-
-		return Value{Integer{instance->origin_attack()}};
+		return Value{Integer{state_resolver_.attack(*instance)}};
 	}
 
 	auto Interpreter::defense(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		const auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -1149,33 +925,18 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		const auto* instance = context.game.get().find_instance(*card);
+		const auto* instance = game.find_instance(*card);
 		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		if (context.card_state)
+		if (!state_resolver_.contains_card_type(*instance, domain::CardType::MONSTER))
 		{
-			if (!context.card_state->is_card_type(*instance, domain::CardType::MONSTER))
-			{
-				return std::nullopt;
-			}
-		}
-		else
-		{
-			if (!instance->origin_is_monster_card())
-			{
-				return std::nullopt;
-			}
+			return std::nullopt;
 		}
 
-		if (context.card_state)
-		{
-			return Value{Integer{context.card_state->defense(*instance)}};
-		}
-
-		return Value{Integer{instance->origin_defense()}};
+		return Value{Integer{state_resolver_.defense(*instance)}};
 	}
 
 	auto Interpreter::this_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1289,21 +1050,23 @@ namespace cg::execution
 
 	auto Interpreter::draw(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
 			return std::nullopt;
 		}
 
-		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* players_mask = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
 		const auto* count = as_argument<dsl::ValueClass::INT>(*args, 1);
-		if (players == nullptr || count == nullptr)
+		if (players_mask == nullptr || count == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		for (auto& game = context.game.get();
-		     const auto player: players_of(*players, context))
+		for (const auto players = players_of(context, *players_mask);
+		     const auto player: players)
 		{
 			for (Integer::value_type i = 0; i < *count; ++i)
 			{
@@ -1329,6 +1092,8 @@ namespace cg::execution
 
 	auto Interpreter::add_to_hand(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -1341,8 +1106,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		for (auto& game = context.game.get();
-		     const auto card: *cards)
+		for (const auto card: *cards)
 		{
 			auto* instance = game.find_instance_mutable(card);
 			if (instance == nullptr)
@@ -1358,6 +1122,8 @@ namespace cg::execution
 
 	auto Interpreter::banish(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -1373,8 +1139,7 @@ namespace cg::execution
 
 		const auto position = *face_down ? domain::Position::FACE_DOWN_DEFENSE : domain::Position::FACE_UP_ATTACK;
 
-		for (auto& game = context.game.get();
-		     const auto card: *cards)
+		for (const auto card: *cards)
 		{
 			auto* instance = game.find_instance_mutable(card);
 			if (instance == nullptr)
@@ -1390,23 +1155,25 @@ namespace cg::execution
 
 	auto Interpreter::effect_damage(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
 			return std::nullopt;
 		}
 
-		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* players_mask = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
 		const auto* amount = as_argument<dsl::ValueClass::INT>(*args, 1);
-		if (players == nullptr || amount == nullptr)
+		if (players_mask == nullptr || amount == nullptr)
 		{
 			return std::nullopt;
 		}
 
+		const auto players = players_of(context, *players_mask);
 		const auto value = static_cast<std::underlying_type_t<domain::AttackDefense>>(*amount);
 
-		for (auto& game = context.game.get();
-		     const auto player: players_of(*players, context))
+		for (const auto player: players)
 		{
 			game.change_life_points(player, -value);
 		}
@@ -1416,23 +1183,25 @@ namespace cg::execution
 
 	auto Interpreter::recover_life(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
 			return std::nullopt;
 		}
 
-		const auto* players = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
+		const auto* players_mask = as_argument<dsl::ValueClass::ENUM_SET>(*args, 0);
 		const auto* amount = as_argument<dsl::ValueClass::INT>(*args, 1);
-		if (players == nullptr || amount == nullptr)
+		if (players_mask == nullptr || amount == nullptr)
 		{
 			return std::nullopt;
 		}
 
+		const auto players = players_of(context, *players_mask);
 		const auto value = static_cast<std::underlying_type_t<domain::AttackDefense>>(*amount);
 
-		for (auto& game = context.game.get();
-		     const auto player: players_of(*players, context))
+		for (const auto player: players)
 		{
 			game.change_life_points(player, value);
 		}
@@ -1442,13 +1211,14 @@ namespace cg::execution
 
 	auto Interpreter::pay_half_life(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		auto& game = game_.get();
+
 		if (const auto args = evaluate_arguments(definition, call, context);
 			!args.has_value())
 		{
 			return std::nullopt;
 		}
 
-		auto& game = context.game.get();
 		const auto life = game.life_points(context.controller);
 		// 规则:一半生命值,出现小数时向上取整
 		const auto amount = (life + 1) / 2;
@@ -1459,6 +1229,8 @@ namespace cg::execution
 
 	auto Interpreter::change_position(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -1472,7 +1244,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		auto* instance = context.game.get().find_instance_mutable(*card);
+		auto* instance = game.find_instance_mutable(*card);
 		if (instance == nullptr)
 		{
 			return std::nullopt;
@@ -1513,13 +1285,15 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		context.game.get().place(*instance, *updated);
+		game.place(*instance, *updated);
 
 		return Value{Void{}};
 	}
 
 	auto Interpreter::special_summon(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -1535,7 +1309,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		auto* instance = context.game.get().find_instance_mutable(*card);
+		auto* instance = game.find_instance_mutable(*card);
 
 		// TODO: 记录召唤方式(method)
 		std::ignore = method;
@@ -1543,8 +1317,7 @@ namespace cg::execution
 		const auto value = static_cast<domain::Position>(static_cast<std::underlying_type_t<domain::Position>>(*position));
 
 		// TODO: 指定召唤位置
-		for (auto& game = context.game.get();
-		     const auto column: domain::field_columns)
+		for (const auto column: domain::field_columns)
 		{
 			if (const auto location = domain::MonsterLocation{.column = column};
 				!game.is_location_empty(context.controller, domain::Location{location}))
@@ -1586,6 +1359,8 @@ namespace cg::execution
 
 	auto Interpreter::negate_activation_and_destroy(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
+		auto& game = game_.get();
+
 		const auto args = evaluate_arguments(definition, call, context);
 		if (!args.has_value())
 		{
@@ -1603,13 +1378,14 @@ namespace cg::execution
 
 		link.negate_activation();
 
-		auto* instance = context.game.get().find_instance_mutable(source);
+		auto* instance = game.find_instance_mutable(source);
 		if (instance == nullptr)
 		{
 			return std::nullopt;
 		}
 
-		context.game.get().move_to_graveyard(*instance, {domain::Reason::EFFECT, domain::Reason::DESTROY});
+		game.move_to_graveyard(*instance, {domain::Reason::EFFECT, domain::Reason::DESTROY});
+
 		pending_events_.emplace_back(domain::EventCode::DESTROYED, source);
 		pending_events_.emplace_back(domain::EventCode::EFFECT_DESTROYED, source);
 
@@ -1637,12 +1413,224 @@ namespace cg::execution
 		return Value{Void{}};
 	}
 
-	Interpreter::Interpreter(const dsl::Vocabulary& vocabulary) noexcept
-		: vocabulary_{vocabulary} {}
+	Interpreter::Interpreter(
+		state::Game& game,
+		const dsl::TypeRegistry& types,
+		const dsl::Vocabulary& vocabulary,
+		Selector& selector
+	) noexcept
+		: game_{game},
+		  types_
+		  {types},
+		  vocabulary_{vocabulary},
+		  selector_{selector},
+		  // scripts_{},
+		  state_resolver_{game, vocabulary, *this, scripts_} {}
+
+	auto Interpreter::load_scripts(const std::filesystem::path& directory) noexcept -> bool
+	{
+		return scripts_.load_directory(directory, types_, vocabulary_);
+	}
+
+	auto Interpreter::load_script(const std::filesystem::path& file) noexcept -> bool
+	{
+		return scripts_.load_file(file, types_, vocabulary_);
+	}
+
+	auto Interpreter::add_script(const domain::CardCode code, dsl::CardScript script) noexcept -> bool
+	{
+		return scripts_.add(code, std::move(script));
+	}
+
+	auto Interpreter::find_script(const domain::CardCode code) const noexcept -> const dsl::CardScript*
+	{
+		return scripts_.find(code);
+	}
+
+	auto Interpreter::state_resolver() const noexcept -> const CardStateResolver&
+	{
+		return state_resolver_;
+	}
 
 	auto Interpreter::take_events() noexcept -> PendingEventList
 	{
 		return std::exchange(pending_events_, {});
+	}
+
+	auto Interpreter::evaluate_list(const dsl::ExpressionList& expressions, Context& context) noexcept -> std::optional<std::vector<Value>>
+	{
+		std::vector<Value> values{};
+		values.reserve(expressions.size());
+
+		for (const auto& expression: expressions)
+		{
+			auto value = evaluate(expression, context);
+			if (!value.has_value())
+			{
+				return std::nullopt;
+			}
+
+			values.emplace_back(*std::move(value));
+		}
+
+		return values;
+	}
+
+	auto Interpreter::evaluate(const dsl::Expression& expression, Context& context) noexcept -> std::optional<Value>
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[](const dsl::Literal& literal) noexcept -> std::optional<Value>
+					{
+						return std::visit(
+							utility::Overloaded
+							{
+									[](const dsl::Literal::boolean_type boolean) noexcept -> Value
+									{
+										return {Boolean{boolean}};
+									},
+									[](const dsl::Literal::number_type number) noexcept -> Value
+									{
+										const auto value = static_cast<Integer::value_type>(number);
+
+										return {Integer{value}};
+									},
+									[](const dsl::Literal::Symbol& symbol) noexcept -> Value
+									{
+										const auto value = static_cast<Integer::value_type>(symbol.value);
+
+										return {Integer{value}};
+									},
+							},
+							literal.value
+						);
+					},
+					[](const dsl::EnumSetConstant& enums) noexcept -> std::optional<Value>
+					{
+						const auto value = static_cast<EnumMask::value_type>(enums.mask);
+
+						return Value{EnumMask{value}};
+					},
+					[&](const dsl::BindingRef& binding) noexcept -> std::optional<Value>
+					{
+						const auto it = context.frame.bindings.find(binding.id);
+						if (it == context.frame.bindings.end())
+						{
+							return std::nullopt;
+						}
+
+						return it->second;
+					},
+					[&](const dsl::PrimitiveCall& call) noexcept -> std::optional<Value>
+					{
+						return invoke(call, context);
+					},
+					[&](const dsl::BooleanOperation& boolean) noexcept -> std::optional<Value>
+					{
+						const auto operands = evaluate_list(boolean.operands, context);
+						if (!operands.has_value())
+						{
+							return std::nullopt;
+						}
+
+						if (boolean.op == dsl::BooleanOperator::NOT)
+						{
+							if (operands->size() != 1)
+							{
+								return std::nullopt;
+							}
+
+							const auto value = as<dsl::ValueClass::BOOL>(operands->operator[](0));
+							if (value == nullptr)
+							{
+								return std::nullopt;
+							}
+
+							return Value{Boolean{!*value}};
+						}
+
+						auto result = boolean.op == dsl::BooleanOperator::AND;
+						for (const auto& operand: *operands)
+						{
+							const auto value = as<dsl::ValueClass::BOOL>(operand);
+							if (value == nullptr)
+							{
+								return std::nullopt;
+							}
+
+							if (boolean.op == dsl::BooleanOperator::AND)
+							{
+								result = result && *value;
+							}
+							else
+							{
+								result = result || *value;
+							}
+						}
+
+						return Value{Boolean{result}};
+					},
+					[&](const dsl::CompareOperation& compare) noexcept -> std::optional<Value>
+					{
+						const auto operands = evaluate_list(compare.operands, context);
+						if (!operands.has_value() || operands->size() != 2)
+						{
+							return std::nullopt;
+						}
+
+						// TODO: 卡片/组的相等比较
+						const auto lhs = as<dsl::ValueClass::INT>(operands->operator[](0));
+						const auto rhs = as<dsl::ValueClass::INT>(operands->operator[](1));
+						if (lhs == nullptr || rhs == nullptr)
+						{
+							return std::nullopt;
+						}
+
+						return Value{Boolean{integer_compare(compare.op, *lhs, *rhs)}};
+					},
+					[&](const dsl::ArithmeticOperation& arithmetic) noexcept -> std::optional<Value>
+					{
+						const auto operands = evaluate_list(arithmetic.operands, context);
+						if (!operands.has_value() || operands->size() != 2)
+						{
+							return std::nullopt;
+						}
+
+						const auto lhs = as<dsl::ValueClass::INT>(operands->operator[](0));
+						const auto rhs = as<dsl::ValueClass::INT>(operands->operator[](1));
+						if (lhs == nullptr || rhs == nullptr)
+						{
+							return std::nullopt;
+						}
+
+						const auto result = integer_arithmetic(arithmetic.op, *lhs, *rhs);
+						if (!result.has_value())
+						{
+							return std::nullopt;
+						}
+
+						return Value{Integer{*result}};
+					},
+			},
+			expression
+		);
+	}
+
+	auto Interpreter::evaluate_scoped(const dsl::Expression& expression, const state::CardInstanceId element, Context& context) noexcept -> std::optional<Value>
+	{
+		context.frame.element_scopes.push_back(element);
+
+		auto value = evaluate(expression, context);
+
+		context.frame.element_scopes.pop_back();
+
+		return value;
+	}
+
+	auto Interpreter::execute(const dsl::StatementList& statements, Context& context) noexcept -> bool
+	{
+		return execute_statements(statements, context);
 	}
 
 	auto Interpreter::filter(const dsl::Expression& predicate, const Group& candidates, Context& context) noexcept -> std::optional<Group>
@@ -1703,19 +1691,14 @@ namespace cg::execution
 		return true;
 	}
 
-	auto Interpreter::collect_triggered(
-		const ScriptRegistry& scripts,
-		const Context& context,
-		const std::span<const EventWindow> windows,
-		const domain::Player turn_player
-	) noexcept -> TriggeredEffectList
+	auto Interpreter::collect_triggered(const std::span<const EventWindow> windows, const domain::Player turn_player) noexcept -> TriggeredEffectList
 	{
-		TriggeredEffectList result{};
+		const auto& game = game_.get();
 
-		for (const auto& game = context.game.get();
-		     const auto& instance: game.instances())
+		TriggeredEffectList result{};
+		for (const auto& instance: game.instances())
 		{
-			const auto* script = scripts.find(instance.origin_code());
+			const auto* script = scripts_.find(instance.origin_code());
 			if (script == nullptr)
 			{
 				continue;
@@ -1751,10 +1734,8 @@ namespace cg::execution
 				// 命中任一事件时点即可;同一效果只取首个命中的窗口
 				for (const auto& window: windows)
 				{
-					auto card_context = context.make_child(instance.controller(), instance.id());
-					card_context.event = window;
-
-					if (!matches(*trigger, card_context))
+					if (Context context{instance.controller(), instance.id(), window};
+						!matches(*trigger, context))
 					{
 						continue;
 					}
@@ -1844,10 +1825,9 @@ namespace cg::execution
 		return resolved;
 	}
 
-	auto Interpreter::make_link(const TriggeredEffect& entry, const Context& context) noexcept -> std::optional<ChainLink>
+	auto Interpreter::make_link(const TriggeredEffect& entry) noexcept -> std::optional<ChainLink>
 	{
-		auto link_context = context.make_child(entry.controller, entry.instance.get().id());
-		link_context.event = entry.window;
+		Context link_context{entry.controller, entry.instance.get().id(), entry.window};
 
 		if (!activate(entry.activated.get(), link_context))
 		{
@@ -1866,25 +1846,18 @@ namespace cg::execution
 		};
 	}
 
-	auto Interpreter::collect_triggered(const ScriptRegistry& scripts, const Context& context, const domain::Player turn_player) noexcept -> TriggeredEffectList
+	auto Interpreter::collect_triggered(const EventWindow& window, const domain::Player turn_player) noexcept -> TriggeredEffectList
 	{
-		if (!context.event.has_value())
-		{
-			return {};
-		}
-
-		const EventWindow& window = *context.event;
-
-		return collect_triggered(scripts, context, {&window, 1}, turn_player);
+		return collect_triggered({&window, 1}, turn_player);
 	}
 
-	auto Interpreter::build_chain(const TriggeredEffectList& triggered, const Context& context) noexcept -> Chain
+	auto Interpreter::build_chain(const TriggeredEffectList& triggered) noexcept -> Chain
 	{
 		Chain chain{};
 
 		for (const auto& entry: triggered)
 		{
-			auto link = make_link(entry, context);
+			auto link = make_link(entry);
 			if (!link.has_value())
 			{
 				continue;

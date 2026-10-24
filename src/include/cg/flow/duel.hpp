@@ -198,9 +198,7 @@ namespace cg::flow
 		dsl::Vocabulary vocabulary_;
 
 		std::reference_wrapper<execution::Selector> selector_;
-		execution::ScriptRegistry scripts_;
 		execution::Interpreter interpreter_;
-		execution::CardStateResolver card_state_;
 
 		// ================================================================
 		// 内部动作
@@ -386,6 +384,9 @@ namespace cg::flow
 		// 从目录加载卡脚本(文件名即卡密)
 		auto load_scripts(const std::filesystem::path& directory) noexcept -> bool;
 
+		// 加载卡脚本(文件名即卡密)
+		auto load_script(const std::filesystem::path& file) noexcept -> bool;
+
 		// ================================================================
 		// 状态查询(只读;供驱动/UI)
 		// ================================================================
@@ -539,7 +540,7 @@ namespace cg::flow
 		[[nodiscard]] auto game() noexcept -> state::Game&;
 
 		// 脚本注册表:测试断言用
-		[[nodiscard]] auto scripts() const noexcept -> const execution::ScriptRegistry&;
+		[[nodiscard]] auto find_script(domain::CardCode code) const noexcept -> const dsl::CardScript*;
 
 		// 当前事件时点:测试断言用;触发选择通过Selector
 		[[nodiscard]] auto windows() const noexcept -> std::span<const execution::EventWindow>;

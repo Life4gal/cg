@@ -13,6 +13,7 @@
 
 namespace cg::dsl
 {
+	class Effect;
 	class StaticModifier;
 	class Vocabulary;
 }
@@ -34,14 +35,21 @@ namespace cg::execution
 	class CardStateResolver
 	{
 	public:
-		//
+		using effect_stack_type = std::vector<const dsl::Effect*>;
 
 	private:
+		// 引用Interpreter的state::Game
 		std::reference_wrapper<state::Game> game_;
-		std::reference_wrapper<const ScriptRegistry> scripts_;
+		// 引用Interpreter的dsl::Vocabulary
 		std::reference_wrapper<const dsl::Vocabulary> vocabulary_;
+
+		// 引用Interpreter
 		std::reference_wrapper<Interpreter> interpreter_;
-		std::reference_wrapper<Selector> selector_;
+		// 引用Interpreter的ScriptRegistry
+		std::reference_wrapper<const ScriptRegistry> scripts_;
+
+		// 正在求值 apply_to/condition 的静态效果;递归求值 effective 属性时跳过它们
+		mutable effect_stack_type active_effects_;
 
 		// 收集作用于目标卡的静态修饰(已通过 apply_to / condition 筛选)
 		[[nodiscard]] auto collect_static_modifiers(
@@ -60,10 +68,9 @@ namespace cg::execution
 	public:
 		CardStateResolver(
 			state::Game& game,
-			const ScriptRegistry& scripts,
 			const dsl::Vocabulary& vocabulary,
 			Interpreter& interpreter,
-			Selector& selector
+			const ScriptRegistry& scripts
 		) noexcept;
 
 		// 获取卡密 = 印刷值 + 静态修饰
@@ -72,17 +79,35 @@ namespace cg::execution
 		// 获取类型 = 印刷值 + 静态修饰
 		[[nodiscard]] auto card_types(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardType>;
 
+		// 检查是否包含指定类型 = 印刷值 + 静态修饰
+		[[nodiscard]] auto contains_card_type(const state::CardInstance& card, domain::CardType type) const noexcept -> bool;
+
+		// 检查是否包含指定类型 = 印刷值 + 静态修饰
+		[[nodiscard]] auto contains_card_types(const state::CardInstance& card, utility::EnumMask<domain::CardType> types) const noexcept -> bool;
+
 		// 获取子类型 = 印刷值 + 静态修饰
 		[[nodiscard]] auto card_subtypes(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardSubtype>;
 
-		// 检查是否包含指定类型 = 印刷值 + 静态修饰
-		[[nodiscard]] auto is_card_type(const state::CardInstance& card, domain::CardType type) const noexcept -> bool;
+		// 检查是否包含指定子类型 = 印刷值 + 静态修饰
+		[[nodiscard]] auto contains_card_subtype(const state::CardInstance& card, domain::CardSubtype subtype) const noexcept -> bool;
 
 		// 检查是否包含指定子类型 = 印刷值 + 静态修饰
-		[[nodiscard]] auto is_card_subtype(const state::CardInstance& card, domain::CardSubtype subtype) const noexcept -> bool;
+		[[nodiscard]] auto contains_card_subtypes(const state::CardInstance& card, utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool;
 
-		// 检查是否包含指定子类型 = 印刷值 + 静态修饰
-		[[nodiscard]] auto is_card_subtype(const state::CardInstance& card, utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool;
+		// 获取属性 = 印刷值 + 静态修饰
+		[[nodiscard]] auto attributes(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Attribute>;
+
+		// 检查是否包含指定属性 = 印刷值 + 静态修饰
+		[[nodiscard]] auto contains_attribute(const state::CardInstance& card, domain::Attribute attribute) const noexcept -> bool;
+
+		// 获取种族
+		[[nodiscard]] auto race(const state::CardInstance& card) const noexcept -> domain::Race;
+
+		// 检查是否是指定种族
+		[[nodiscard]] auto is_race(const state::CardInstance& card, domain::Race race) const noexcept -> bool;
+
+		// 获取等级/阶级 = 印刷值 + 静态修饰
+		[[nodiscard]] auto level(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::LevelRank>;
 
 		// 获取攻击力 = 印刷值 + 静态修饰
 		[[nodiscard]] auto attack(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>;
@@ -90,16 +115,13 @@ namespace cg::execution
 		// 获取守备力 = 印刷值 + 静态修饰
 		[[nodiscard]] auto defense(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>;
 
-		// 获取属性 = 印刷值 + 静态修饰
-		[[nodiscard]] auto attributes(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Attribute>;
-
-		// 获取种族
-		[[nodiscard]] auto race(const state::CardInstance& card) const noexcept -> domain::Race;
-
-		// 获取等级/阶级 = 印刷值 + 静态修饰
-		[[nodiscard]] auto level(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::LevelRank>;
-
 		// 获取防护能力 = 印刷值 + 静态修饰
 		[[nodiscard]] auto protections(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Protection>;
+
+		// 检查是否包含指定防护 = 印刷值 + 静态修饰
+		[[nodiscard]] auto contains_protection(const state::CardInstance& card, domain::Protection protection) const noexcept -> bool;
+
+		// 检查是否包含指定防护 = 印刷值 + 静态修饰
+		[[nodiscard]] auto contains_protections(const state::CardInstance& card, utility::EnumMask<domain::Protection> protections) const noexcept -> bool;
 	};
 }

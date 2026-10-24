@@ -24,10 +24,7 @@ namespace cg::flow
 
 		windows_.assign(windows.begin(), windows.end());
 
-		execution::Context context{game_, selector_, turn_.turn_player()};
-		context.card_state = &card_state_;
-
-		const auto candidates = interpreter_.collect_triggered(scripts_, context, windows_, turn_.turn_player());
+		const auto candidates = interpreter_.collect_triggered(windows_, turn_.turn_player());
 		if (candidates.empty())
 		{
 			return false;
@@ -97,7 +94,7 @@ namespace cg::flow
 
 			// 外部选择校验:索引合法、不重复;必发组必须全选
 			// 非法选择视为驱动错误,引擎不自动纠正
-			std::vector<bool> selected_flags(choices.size(), false);
+			std::vector selected_flags(choices.size(), false);
 			for (const auto choice: selected)
 			{
 				if (choice >= choices.size() || selected_flags[choice])
@@ -126,7 +123,7 @@ namespace cg::flow
 					continue;
 				}
 
-				auto link = interpreter_.make_link(entry, context);
+				auto link = interpreter_.make_link(entry);
 				if (!link.has_value())
 				{
 					continue;
@@ -195,7 +192,7 @@ namespace cg::flow
 		// 连锁开始结算后不能再插入发动,时点关闭
 		windows_.clear();
 
-		static_cast<void>(interpreter_.resolve(chain_));
+		std::ignore = interpreter_.resolve(chain_);
 
 		// 无效回滚:发动无效(USE以外)/ 效果无效(APPLY)
 		for (const auto& link: chain_)
@@ -286,7 +283,7 @@ namespace cg::flow
 	{
 		const auto type = [&] noexcept -> domain::CardType
 		{
-			const auto types = card_state_.card_types(card);
+			const auto types = interpreter_.state_resolver().card_types(card);
 
 			// 优先怪兽
 			if (types.contains(domain::CardType::MONSTER))
@@ -302,7 +299,7 @@ namespace cg::flow
 			return domain::CardType::SPELL;
 		}();
 
-		return dsl::speed_of(type, card_state_.card_subtypes(card), activation);
+		return dsl::speed_of(type, interpreter_.state_resolver().card_subtypes(card), activation);
 	}
 
 	auto Duel::can_chain(const domain::EffectSpeed speed) const noexcept -> bool
@@ -330,12 +327,12 @@ namespace cg::flow
 
 	auto Duel::can_stay_on_field(const state::CardInstance& card) const noexcept -> bool
 	{
-		if (card_state_.is_card_type(card, domain::CardType::MONSTER))
+		if (interpreter_.state_resolver().contains_card_type(card, domain::CardType::MONSTER))
 		{
 			return true;
 		}
 
-		return card_state_.is_card_subtype(
+		return interpreter_.state_resolver().contains_card_subtypes(
 			card,
 			{
 					domain::CardSubtype::CONTINUOUS,
@@ -353,8 +350,8 @@ namespace cg::flow
 		}
 
 		// Counter Trap 在伤害步骤内不受限制
-		if (card_state_.is_card_type(card, domain::CardType::TRAP) &&
-		    card_state_.is_card_subtype(card, domain::CardSubtype::COUNTER))
+		if (interpreter_.state_resolver().contains_card_type(card, domain::CardType::TRAP) &&
+		    interpreter_.state_resolver().contains_card_subtype(card, domain::CardSubtype::COUNTER))
 		{
 			return true;
 		}
@@ -392,7 +389,7 @@ namespace cg::flow
 
 	auto Duel::find_summon_procedure(const state::CardInstance& card, const domain::SummonMethod method) const noexcept -> const dsl::SummonProcedure*
 	{
-		const auto* script = scripts_.find(card.origin_code());
+		const auto* script = interpreter_.find_script(card.origin_code());
 		if (script == nullptr)
 		{
 			return nullptr;
@@ -494,9 +491,7 @@ namespace cg::flow
 		execution::Group candidates{};
 		candidates.append_range(materials);
 
-		execution::Context context{game_, selector_, card.controller(), card.id()};
-		context.card_state = &card_state_;
-
+		execution::Context context{card.controller(), card.id()};
 		return interpreter_.filter(predicate, candidates, context);
 	}
 
@@ -630,7 +625,7 @@ namespace cg::flow
 			}
 		}
 
-		const auto target_level = card_state_.level(card);
+		const auto target_level = interpreter_.state_resolver().level(card);
 		std::underlying_type_t<domain::LevelRank> total_level{};
 		for (const auto material: materials)
 		{
@@ -639,7 +634,7 @@ namespace cg::flow
 			{
 				return false;
 			}
-			total_level += card_state_.level(*instance);
+			total_level += interpreter_.state_resolver().level(*instance);
 		}
 
 		return total_level == target_level;
@@ -667,7 +662,7 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto target_level = card_state_.level(summon_card);
+		const auto target_level = interpreter_.state_resolver().level(summon_card);
 		std::optional<std::underlying_type_t<domain::LevelRank>> material_level{};
 		for (const auto material: materials)
 		{
@@ -677,7 +672,7 @@ namespace cg::flow
 				return false;
 			}
 
-			const auto level = card_state_.level(*instance);
+			const auto level = interpreter_.state_resolver().level(*instance);
 			if (!material_level.has_value())
 			{
 				material_level = level;
@@ -736,9 +731,8 @@ namespace cg::flow
 			return false;
 		}
 
-		execution::Context context{game_, selector_, summon_card.controller(), summon_card.id()};
-		context.card_state = &card_state_;
-		const auto target = interpreter_.evaluate_expression(procedure.level, context);
+		execution::Context context{summon_card.controller(), summon_card.id()};
+		const auto target = interpreter_.evaluate(procedure.level, context);
 		if (!target.has_value())
 		{
 			return false;
@@ -759,7 +753,7 @@ namespace cg::flow
 				return false;
 			}
 
-			total_level += card_state_.level(*instance);
+			total_level += interpreter_.state_resolver().level(*instance);
 		}
 
 		return std::cmp_equal(total_level, static_cast<execution::Integer::value_type>(*target_level));
@@ -796,7 +790,7 @@ namespace cg::flow
 			return nullptr;
 		}
 
-		if (const auto monster = card_state_.is_card_type(*instance, domain::CardType::MONSTER);
+		if (const auto monster = interpreter_.state_resolver().contains_card_type(*instance, domain::CardType::MONSTER);
 			!monster)
 		{
 			return nullptr;
@@ -942,7 +936,7 @@ namespace cg::flow
 		}
 
 		// 等级 5 以上需要祭品(使用 tribute_summon / tribute_set)
-		if (const auto level = card_state_.level(*instance);
+		if (const auto level = interpreter_.state_resolver().level(*instance);
 			level >= 5)
 		{
 			return false;
@@ -992,7 +986,7 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto level = card_state_.level(*instance);
+		const auto level = interpreter_.state_resolver().level(*instance);
 		// 只有等级 5+ 才需要/允许上级召唤
 		if (level < 5)
 		{
@@ -1080,7 +1074,7 @@ namespace cg::flow
 			return card.id().raw();
 		}
 
-		return std::to_underlying(card_state_.effective_code(card));
+		return std::to_underlying(interpreter_.state_resolver().effective_code(card));
 	}
 
 	auto Duel::make_usage_key(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> UsageKey
@@ -1101,7 +1095,7 @@ namespace cg::flow
 
 		return
 		{
-				.owner = card_state_.effective_code(card),
+				.owner = interpreter_.state_resolver().effective_code(card),
 				.group = *effect.mutex,
 		};
 	}
@@ -1328,7 +1322,7 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto attacker_attack = card_state_.attack(*attacker_instance);
+		const auto attacker_attack = interpreter_.state_resolver().attack(*attacker_instance);
 		const auto controller = attack.controller;
 		const auto opponent = attack.opponent;
 
@@ -1351,7 +1345,7 @@ namespace cg::flow
 
 			if (attack.target_position == domain::Position::FACE_UP_ATTACK)
 			{
-				if (const auto target_attack = card_state_.attack(*target_instance);
+				if (const auto target_attack = interpreter_.state_resolver().attack(*target_instance);
 					attacker_attack > target_attack)
 				{
 					attack.destroy_target = *attack.target;
@@ -1370,7 +1364,7 @@ namespace cg::flow
 			}
 			else
 			{
-				if (const auto target_defense = card_state_.defense(*target_instance);
+				if (const auto target_defense = interpreter_.state_resolver().defense(*target_instance);
 					attacker_attack > target_defense)
 				{
 					attack.destroy_target = *attack.target;
@@ -1411,7 +1405,7 @@ namespace cg::flow
 				return;
 			}
 
-			if (card_state_.protections(*instance).contains(domain::Protection::BATTLE))
+			if (interpreter_.state_resolver().contains_protection(*instance, domain::Protection::BATTLE))
 			{
 				return;
 			}
@@ -1487,13 +1481,16 @@ namespace cg::flow
 		// types_{},
 		vocabulary_{types_},
 		selector_{selector},
-		// scripts_{},
-		interpreter_{vocabulary_},
-		card_state_{game_, scripts_, vocabulary_, interpreter_, selector} {}
+		interpreter_{game_, types_, vocabulary_, selector_} {}
 
 	auto Duel::load_scripts(const std::filesystem::path& directory) noexcept -> bool
 	{
-		return scripts_.load_directory(directory, types_, vocabulary_);
+		return interpreter_.load_scripts(directory);
+	}
+
+	auto Duel::load_script(const std::filesystem::path& file) noexcept -> bool
+	{
+		return interpreter_.load_script(file);
 	}
 
 	auto Duel::game() const noexcept -> const state::Game&
@@ -1729,7 +1726,7 @@ namespace cg::flow
 		}
 
 		// 必须是同调子类型
-		if (!card_state_.is_card_subtype(*instance, domain::CardSubtype::SYNCHRO))
+		if (!interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::SYNCHRO))
 		{
 			return false;
 		}
@@ -1799,7 +1796,7 @@ namespace cg::flow
 		}
 
 		// 必须是超量子类型
-		if (!card_state_.is_card_subtype(*instance, domain::CardSubtype::XYZ))
+		if (!interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::XYZ))
 		{
 			return false;
 		}
@@ -1863,7 +1860,7 @@ namespace cg::flow
 		}
 
 		// 必须是融合子类型
-		if (!card_state_.is_card_subtype(*instance, domain::CardSubtype::FUSION))
+		if (!interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::FUSION))
 		{
 			return false;
 		}
@@ -1933,7 +1930,7 @@ namespace cg::flow
 		}
 
 		// 必须是连接子类型
-		if (!card_state_.is_card_subtype(*instance, domain::CardSubtype::LINK))
+		if (!interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::LINK))
 		{
 			return false;
 		}
@@ -2003,7 +2000,7 @@ namespace cg::flow
 		}
 
 		// 必须是仪式子类型
-		if (!card_state_.is_card_subtype(*instance, domain::CardSubtype::RITUAL))
+		if (!interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::RITUAL))
 		{
 			return false;
 		}
@@ -2092,12 +2089,10 @@ namespace cg::flow
 			return false;
 		}
 
-		execution::Context context{game_, selector_, instance->controller(), instance->id()};
-		context.card_state = &card_state_;
-
+		execution::Context context{instance->controller(), instance->id()};
 		if (special->condition.has_value())
 		{
-			const auto condition = interpreter_.evaluate_expression(*special->condition, context);
+			const auto condition = interpreter_.evaluate(*special->condition, context);
 			if (!condition.has_value())
 			{
 				return false;
@@ -2143,8 +2138,8 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto is_spell = card_state_.is_card_type(*instance, domain::CardType::SPELL);
-		const auto is_trap = card_state_.is_card_type(*instance, domain::CardType::TRAP);
+		const auto is_spell = interpreter_.state_resolver().contains_card_type(*instance, domain::CardType::SPELL);
+		const auto is_trap = interpreter_.state_resolver().contains_card_type(*instance, domain::CardType::TRAP);
 		if (!is_spell && !is_trap)
 		{
 			return false;
@@ -2171,7 +2166,7 @@ namespace cg::flow
 				return false;
 			}
 
-			if (card_state_.is_card_subtype(*instance, domain::CardSubtype::FIELD))
+			if (interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::FIELD))
 			{
 				if (!game_.is_zone_empty(controller, domain::Zone::FIELD_SPELL))
 				{
@@ -2227,7 +2222,7 @@ namespace cg::flow
 
 		const auto code = instance->origin_code();
 
-		const auto* script = scripts_.find(code);
+		const auto* script = interpreter_.find_script(code);
 		if (script == nullptr)
 		{
 			return false;
@@ -2261,9 +2256,7 @@ namespace cg::flow
 					windows_,
 					[&](const execution::EventWindow& window) noexcept -> bool
 					{
-						execution::Context timing_context{game_, selector_, controller, card};
-						timing_context.card_state = &card_state_;
-						timing_context.event = window;
+						execution::Context timing_context{controller, card, window};
 
 						return interpreter_.matches(
 							dsl::Trigger{.spec = *card_activation->timing, .optional = false},
@@ -2328,9 +2321,7 @@ namespace cg::flow
 			return false;
 		}
 
-		execution::Context context{game_, selector_, controller, card};
-		context.card_state = &card_state_;
-		context.chain = {.chain = std::ref(chain_), .link_index = chain_.size()};
+		execution::Context context{controller, card, {.chain = std::ref(chain_), .link_index = chain_.size()}};
 		if (matched_window.has_value())
 		{
 			context.event = *matched_window;
@@ -2399,7 +2390,7 @@ namespace cg::flow
 			return false;
 		}
 
-		if (!card_state_.is_card_type(*instance, domain::CardType::SPELL) && !card_state_.is_card_type(*instance, domain::CardType::TRAP))
+		if (!interpreter_.state_resolver().contains_card_types(*instance, {domain::CardType::SPELL, domain::CardType::TRAP}))
 		{
 			return false;
 		}
@@ -2559,7 +2550,7 @@ namespace cg::flow
 
 		const auto code = instance->origin_code();
 
-		const auto* script = scripts_.find(code);
+		const auto* script = interpreter_.find_script(code);
 		if (script == nullptr)
 		{
 			// 指定实例不存在卡牌脚本
@@ -2639,9 +2630,7 @@ namespace cg::flow
 			return false;
 		}
 
-		execution::Context context{game_, selector_, controller, card};
-		context.card_state = &card_state_;
-		context.chain = {.chain = std::ref(chain_), .link_index = chain_.size()};
+		execution::Context context{controller, card, {.chain = std::ref(chain_), .link_index = chain_.size()}};
 		if (!interpreter_.activate(*activated, context))
 		{
 			return false;
@@ -2674,9 +2663,9 @@ namespace cg::flow
 		return game_;
 	}
 
-	auto Duel::scripts() const noexcept -> const execution::ScriptRegistry&
+	auto Duel::find_script(const domain::CardCode code) const noexcept -> const dsl::CardScript*
 	{
-		return scripts_;
+		return interpreter_.find_script(code);
 	}
 
 	auto Duel::windows() const noexcept -> std::span<const execution::EventWindow>

@@ -9,6 +9,8 @@
 #include <cg/execution/effect.hpp>
 #include <cg/execution/chain.hpp>
 #include <cg/execution/context.hpp>
+#include <cg/execution/script_registry.hpp>
+#include <cg/execution/card_state_resolver.hpp>
 
 namespace cg::dsl
 {
@@ -32,36 +34,35 @@ namespace cg::dsl
 
 namespace cg::execution
 {
-	class CardStateResolver;
-	class ScriptRegistry;
-	class Chain;
+	class Selector;
 
 	class Interpreter
 	{
 	public:
-		// 只向 CardStateResolver 暴露求值能力
-		class Evaluator
-		{
-			friend class CardStateResolver;
-
-			std::reference_wrapper<Interpreter> interpreter_;
-
-			explicit Evaluator(Interpreter& interpreter) noexcept;
-
-			[[nodiscard]] auto evaluate_list(const dsl::ExpressionList& expressions, Context& context) const noexcept -> std::optional<std::vector<Value>>;
-			[[nodiscard]] auto evaluate_scoped(const dsl::Expression& expression, state::CardInstanceId element, Context& context) const noexcept -> std::optional<Value>;
-			[[nodiscard]] auto evaluate(const dsl::Expression& expression, Context& context) const noexcept -> std::optional<Value>;
-		};
+		//
 
 	private:
+		// 引用flow::Duel的state::Game
+		std::reference_wrapper<state::Game> game_;
+		// 引用flow::Duel的dsl::TypeRegistry
+		std::reference_wrapper<const dsl::TypeRegistry> types_;
+		// 引用flow::Duel的dsl::Vocabulary
 		std::reference_wrapper<const dsl::Vocabulary> vocabulary_;
+		// 引用创建flow::Duel时指定的Selector
+		std::reference_wrapper<Selector> selector_;
+
+		// 所有脚本
+		ScriptRegistry scripts_;
+		// 卡牌状态解析器
+		CardStateResolver state_resolver_;
 
 		PendingEventList pending_events_;
 
+		[[nodiscard]] auto players_of(const Context& context, EnumMask mask) const noexcept -> std::vector<domain::Player>;
+		[[nodiscard]] auto collect(std::span<const domain::Player> players, utility::EnumMask<domain::Zone> zones) const noexcept -> Group;
+		[[nodiscard]] auto select(const Context& context, const Group& candidates, std::size_t min, std::size_t max) const noexcept -> std::optional<Group>;
+
 		[[nodiscard]] auto evaluate_arguments(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<std::vector<std::optional<Value>>>;
-		[[nodiscard]] auto evaluate_list(const dsl::ExpressionList& expressions, Context& context) noexcept -> std::optional<std::vector<Value>>;
-		[[nodiscard]] auto evaluate_scoped(const dsl::Expression& expression, state::CardInstanceId element, Context& context) noexcept -> std::optional<Value>;
-		[[nodiscard]] auto evaluate(const dsl::Expression& expression, Context& context) noexcept -> std::optional<Value>;
 		[[nodiscard]] auto invoke(const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 
 		[[nodiscard]] auto execute_action(const dsl::ActionCall& call, Context& context) noexcept -> bool;
@@ -117,14 +118,43 @@ namespace cg::execution
 		[[nodiscard]] auto negate_effect(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 
 	public:
-		explicit Interpreter(const dsl::Vocabulary& vocabulary) noexcept;
+		explicit Interpreter(
+			state::Game& game,
+			const dsl::TypeRegistry& types,
+			const dsl::Vocabulary& vocabulary,
+			Selector& selector
+		) noexcept;
 
 		// ================================================================
 		// 执行入口(flow 层)
 		// ================================================================
 
+		// 从目录加载卡脚本
+		auto load_scripts(const std::filesystem::path& directory) noexcept -> bool;
+
+		// 加载卡脚本
+		auto load_script(const std::filesystem::path& file) noexcept -> bool;
+
+		// 添加卡脚本
+		auto add_script(domain::CardCode code, dsl::CardScript script) noexcept -> bool;
+
+		[[nodiscard]] auto find_script(domain::CardCode code) const noexcept -> const dsl::CardScript*;
+
+		// 获取CardStateResolver
+		[[nodiscard]] auto state_resolver() const noexcept -> const CardStateResolver&;
+
 		// 取出并清空结算过程中产生的事件
 		[[nodiscard]] auto take_events() noexcept -> PendingEventList;
+
+		[[nodiscard]] auto evaluate_list(const dsl::ExpressionList& expressions, Context& context) noexcept -> std::optional<std::vector<Value>>;
+
+		// flow 侧读取 procedure 的标量条件(如仪式等级)
+		[[nodiscard]] auto evaluate(const dsl::Expression& expression, Context& context) noexcept -> std::optional<Value>;
+
+		[[nodiscard]] auto evaluate_scoped(const dsl::Expression& expression, state::CardInstanceId element, Context& context) noexcept -> std::optional<Value>;
+
+		// flow 侧执行 procedure 的 cost/条件语句
+		[[nodiscard]] auto execute(const dsl::StatementList& statements, Context& context) noexcept -> bool;
 
 		// 用当前上下文筛选候选卡;`$` 绑定候选(召唤素材等)
 		[[nodiscard]] auto filter(const dsl::Expression& predicate, const Group& candidates, Context& context) noexcept -> std::optional<Group>;
@@ -134,7 +164,8 @@ namespace cg::execution
 
 		// 收集同一时点多个事件触发的全部效果
 		// - 同一效果被多个事件命中只取首个;不同效果可以进入同一连锁
-		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, std::span<const EventWindow> windows, domain::Player turn_player) noexcept -> TriggeredEffectList;
+		// [[nodiscard]] auto collect_triggered(const EventWindowList& windows, domain::Player turn_player) noexcept -> TriggeredEffectList;
+		[[nodiscard]] auto collect_triggered(std::span<const EventWindow> windows, domain::Player turn_player) noexcept -> TriggeredEffectList;
 
 		// 激活(condition → cost → target);不执行效果处理
 		[[nodiscard]] auto activate(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;
@@ -143,7 +174,7 @@ namespace cg::execution
 		[[nodiscard]] auto resolve(Chain& chain) noexcept -> bool;
 
 		// 构造单个连锁环(激活 + Context);SEGOC/选择/usage 由 Duel 负责
-		[[nodiscard]] auto make_link(const TriggeredEffect& entry, const Context& context) noexcept -> std::optional<ChainLink>;
+		[[nodiscard]] auto make_link(const TriggeredEffect& entry) noexcept -> std::optional<ChainLink>;
 
 		// ================================================================
 		// 测试 / 嵌入支持
@@ -151,10 +182,10 @@ namespace cg::execution
 		// ================================================================
 
 		// 单窗口便捷重载:使用 context.event;flow 使用 span 版本
-		[[nodiscard]] auto collect_triggered(const ScriptRegistry& scripts, const Context& context, domain::Player turn_player) noexcept -> TriggeredEffectList;
+		[[nodiscard]] auto collect_triggered(const EventWindow& window, domain::Player turn_player) noexcept -> TriggeredEffectList;
 
 		// 由触发列表构建连锁(逐条make_link)
-		[[nodiscard]] auto build_chain(const TriggeredEffectList& triggered, const Context& context) noexcept -> Chain;
+		[[nodiscard]] auto build_chain(const TriggeredEffectList& triggered) noexcept -> Chain;
 
 		// 执行一张发动类效果:condition → cost → target → resolve
 		[[nodiscard]] auto execute(const dsl::ActivatedEffect& effect, Context& context) noexcept -> bool;

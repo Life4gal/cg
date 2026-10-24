@@ -98,8 +98,8 @@ TEST_CASE("execution::Interpreter resolves Raigeki")
 	const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 	REQUIRE(activated != nullptr);
 
-	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, g_selector, domain::Player::FIRST, raigeki};
+	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Context context{domain::Player::FIRST, raigeki};
 
 	CHECK(interpreter.execute(*activated, context));
 
@@ -135,8 +135,8 @@ TEST_CASE("execution::Interpreter resolves Tribute to the Doomed")
 	const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 	REQUIRE(activated != nullptr);
 
-	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, g_selector, domain::Player::FIRST};
+	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Context context{domain::Player::FIRST, state::CardInstanceId{state::CardInstanceId::invalid_id}};
 
 	CHECK(interpreter.execute(*activated, context));
 
@@ -168,8 +168,8 @@ TEST_CASE("execution::Interpreter evaluates boolean operators")
 		const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 		REQUIRE(activated != nullptr);
 
-		execution::Interpreter interpreter{g_vocabulary};
-		execution::Context context{game, g_selector, domain::Player::FIRST};
+		execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+		execution::Context context{domain::Player::FIRST, state::CardInstanceId{state::CardInstanceId::invalid_id}};
 
 		return interpreter.execute(*activated, context);
 	};
@@ -216,8 +216,8 @@ TEST_CASE("execution::Interpreter searches a subtype from the deck")
 	const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 	REQUIRE(activated != nullptr);
 
-	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, g_selector, domain::Player::FIRST, terraforming};
+	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Context context{domain::Player::FIRST, terraforming};
 
 	CHECK(interpreter.execute(*activated, context));
 
@@ -252,8 +252,8 @@ TEST_CASE("execution::Interpreter draws cards")
 	const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 	REQUIRE(activated != nullptr);
 
-	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, g_selector, domain::Player::FIRST, pot};
+	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Context context{domain::Player::FIRST, pot};
 
 	CHECK(interpreter.execute(*activated, context));
 
@@ -278,7 +278,7 @@ TEST_CASE("execution::Interpreter changes life points")
 	game.change_life_points(domain::Player::FIRST, 8000);
 	game.change_life_points(domain::Player::SECOND, 8000);
 
-	execution::Interpreter interpreter{g_vocabulary};
+	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
 
 	{
 		const auto script = read_card_script("76103675.json");
@@ -288,7 +288,7 @@ TEST_CASE("execution::Interpreter changes life points")
 		const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 		REQUIRE(activated != nullptr);
 
-		execution::Context context{game, g_selector, domain::Player::FIRST, sparks};
+		execution::Context context{domain::Player::FIRST, sparks};
 		CHECK(interpreter.execute(*activated, context));
 	}
 
@@ -302,7 +302,7 @@ TEST_CASE("execution::Interpreter changes life points")
 		const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 		REQUIRE(activated != nullptr);
 
-		execution::Context context{game, g_selector, domain::Player::FIRST, dian_keto};
+		execution::Context context{domain::Player::FIRST, dian_keto};
 		CHECK(interpreter.execute(*activated, context));
 	}
 
@@ -356,9 +356,13 @@ TEST_CASE("execution::Interpreter matches a FLIP trigger and resolves")
 	const auto* trigger = std::get_if<dsl::Trigger>(&activated->activation);
 	REQUIRE(trigger != nullptr);
 
-	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, g_selector, domain::Player::FIRST, jar};
-	context.event = execution::EventWindow{.source = dsl::TriggerSource{domain::EventCode::FLIP}, .card = jar};
+	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Context context
+	{
+			domain::Player::FIRST,
+			jar,
+			{.source = dsl::TriggerSource{domain::EventCode::FLIP}, .card = jar, .player = std::nullopt, .amount = std::nullopt},
+	};
 
 	CHECK(interpreter.matches(*trigger, context));
 	CHECK(interpreter.execute(*activated, context));
@@ -392,7 +396,7 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 	game.place(*game.find_instance_mutable(turn_jar), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_DOWN_DEFENSE});
 	game.place(*game.find_instance_mutable(optional_card), domain::MonsterPlacement{.column = domain::FieldColumn::C3, .position = domain::Position::FACE_UP_ATTACK});
 
-	const auto jar = read_card_script("33508719.json");
+	auto jar = read_card_script("33508719.json");
 	REQUIRE(jar.has_value());
 
 	// 合成一个同一事件(FLIP)的任意触发,用于验证"必发优先"
@@ -422,18 +426,16 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 				.body = dsl::EffectBody{std::move(optional_activated)},
 				.usage = std::nullopt,
 				.mutex = std::nullopt,
+				.properties = {},
 		}
 	);
 
-	execution::ScriptRegistry scripts{};
-	scripts.add(jar_code, *jar);
-	scripts.add(optional_code, std::move(optional_script));
+	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	interpreter.add_script(jar_code, *std::move(jar));
+	interpreter.add_script(optional_code, std::move(optional_script));
 
-	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, g_selector, domain::Player::FIRST};
-	context.event = execution::EventWindow{.source = dsl::TriggerSource{domain::EventCode::FLIP}, .card = std::nullopt};
-
-	const auto triggered = interpreter.collect_triggered(scripts, context, domain::Player::FIRST);
+	constexpr execution::EventWindow window{.source = dsl::TriggerSource{domain::EventCode::FLIP}, .card = std::nullopt, .player = std::nullopt, .amount = std::nullopt};
+	const auto triggered = interpreter.collect_triggered(window, domain::Player::FIRST);
 	REQUIRE(triggered.size() == 3);
 
 	CHECK(triggered[0].instance.get().id() == turn_jar);
@@ -468,21 +470,17 @@ TEST_CASE("execution::Interpreter builds and resolves a chain")
 	game.place(*game.find_instance_mutable(first_deck), domain::DeckPlacement{.index = 0});
 	game.place(*game.find_instance_mutable(second_deck), domain::DeckPlacement{.index = 0});
 
-	const auto rat = read_card_script("97017120.json");
+	auto rat = read_card_script("97017120.json");
 	REQUIRE(rat.has_value());
 
-	execution::ScriptRegistry scripts{};
-	scripts.add(rat_code, *rat);
+	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	interpreter.add_script(rat_code, *std::move(rat));
 
-	execution::Interpreter interpreter{g_vocabulary};
-	execution::Context context{game, g_selector, domain::Player::FIRST};
-
-	context.event = execution::EventWindow{.source = dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, .card = std::nullopt};
-
-	const auto triggered = interpreter.collect_triggered(scripts, context, domain::Player::FIRST);
+	constexpr execution::EventWindow window{.source = dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, .card = std::nullopt, .player = std::nullopt, .amount = std::nullopt};
+	const auto triggered = interpreter.collect_triggered(window, domain::Player::FIRST);
 	REQUIRE(triggered.size() == 2);
 
-	auto chain = interpreter.build_chain(triggered, context);
+	auto chain = interpreter.build_chain(triggered);
 	REQUIRE(chain.size() == 2);
 
 	CHECK(interpreter.resolve(chain));
@@ -525,22 +523,79 @@ TEST_CASE("execution::Interpreter applies static numeric modifiers")
 	game.place(*game.find_instance_mutable(dragon), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
 	game.place(*game.find_instance_mutable(warrior), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
 
-	const auto mountain_script = read_card_script("50913601.json");
+	auto mountain_script = read_card_script("50913601.json");
 	REQUIRE(mountain_script.has_value());
 
-	execution::ScriptRegistry scripts{};
-	scripts.add(mountain_code, *mountain_script);
-	execution::Interpreter interpreter{g_vocabulary};
-	execution::CardStateResolver resolver{game, scripts, g_vocabulary, interpreter, g_selector};
+	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	interpreter.add_script(mountain_code, *std::move(mountain_script));
 
 	const auto* dragon_instance = game.find_instance(dragon);
 	const auto* warrior_instance = game.find_instance(warrior);
 	REQUIRE(dragon_instance != nullptr);
 	REQUIRE(warrior_instance != nullptr);
 
-	CHECK(resolver.attack(*dragon_instance) == dragon_instance->origin_attack() + 200);
-	CHECK(resolver.defense(*dragon_instance) == dragon_instance->origin_defense() + 200);
-	CHECK(resolver.attack(*warrior_instance) == warrior_instance->origin_attack());
+	CHECK(interpreter.state_resolver().attack(*dragon_instance) == dragon_instance->origin_attack() + 200);
+	CHECK(interpreter.state_resolver().defense(*dragon_instance) == dragon_instance->origin_defense() + 200);
+	CHECK(interpreter.state_resolver().attack(*warrior_instance) == warrior_instance->origin_attack());
+}
+
+TEST_CASE("execution::CardStateResolver sees effective attributes in static effects")
+{
+	constexpr domain::CardCode field_code{90000100};
+	constexpr domain::CardCode light_source_code{90000101};
+	constexpr domain::CardCode target_code{90000102};
+
+	state::Game game{};
+
+	auto field_definition = make_definition(field_code, domain::CardType::SPELL);
+	field_definition.subtypes = {domain::CardSubtype::FIELD};
+	game.register_definition(field_code, field_definition);
+
+	auto source_definition = make_definition(light_source_code, domain::CardType::MONSTER);
+	source_definition.subtypes = {domain::CardSubtype::EFFECT};
+	game.register_definition(light_source_code, source_definition);
+
+	auto target_definition = make_definition(target_code, domain::CardType::MONSTER);
+	target_definition.monster->attribute = domain::Attribute::DARK;
+	game.register_definition(target_code, target_definition);
+
+	const auto field = game.create_instance(field_code, domain::Player::FIRST);
+	const auto source = game.create_instance(light_source_code, domain::Player::FIRST);
+	const auto target = game.create_instance(target_code, domain::Player::FIRST);
+	REQUIRE(field.valid());
+	REQUIRE(source.valid());
+	REQUIRE(target.valid());
+
+	game.place(*game.find_instance_mutable(field), domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(source), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(target), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	std::ignore = g_reader.take_diagnostics();
+	auto field_script = g_reader.read_card_script(
+		nlohmann::json::parse(
+			R"({"identity":{"kind":"SPELL","subtypes":["FIELD"]},"effects":[{"type":"static","apply_to":{"call":"is_attribute","args":{"card":{"call":"$"},"attribute":"LIGHT"}},"modifiers":[{"call":"add_numeric_property","args":{"property":"ATTACK","value":500}}]}]})"
+		),
+		"<field>"
+	);
+	REQUIRE(field_script.has_value());
+
+	auto source_script = g_reader.read_card_script(
+		nlohmann::json::parse(
+			R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"LIGHT","race":"DRAGON","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"static","apply_to":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"modifiers":[{"call":"add_attribute","args":{"attribute":"LIGHT"}}]}]})"
+		),
+		"<source>"
+	);
+	REQUIRE(source_script.has_value());
+
+	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	interpreter.add_script(field_code, *std::move(field_script));
+	interpreter.add_script(light_source_code, *std::move(source_script));
+
+	const auto* target_instance = game.find_instance(target);
+	REQUIRE(target_instance != nullptr);
+
+	CHECK(interpreter.state_resolver().attributes(*target_instance).contains(domain::Attribute::LIGHT));
+	CHECK(interpreter.state_resolver().attack(*target_instance) == target_instance->origin_attack() + 500);
 }
 
 TEST_CASE("execution::ScriptRegistry loads the card corpus")

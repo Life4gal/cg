@@ -3,13 +3,13 @@
 #include <algorithm>
 #include <ranges>
 
-#include <cg/state/card.hpp>
-#include <cg/state/game.hpp>
 #include <cg/dsl/effect.hpp>
 #include <cg/dsl/vocabulary.hpp>
 #include <cg/execution/context.hpp>
 #include <cg/execution/interpreter.hpp>
 #include <cg/execution/script_registry.hpp>
+#include <cg/state/card.hpp>
+#include <cg/state/game.hpp>
 
 namespace cg::execution
 {
@@ -18,11 +18,34 @@ namespace cg::execution
 		Context& context
 	) const noexcept -> std::vector<std::reference_wrapper<const dsl::StaticModifier>>
 	{
-		const Interpreter::Evaluator evaluator{interpreter_.get()};
+		class ActiveEffectGuard
+		{
+		public:
+			ActiveEffectGuard(std::vector<const dsl::Effect*>& stack, const dsl::Effect* effect) noexcept
+				: stack_{stack}
+			{
+				stack_.push_back(effect);
+			}
+
+			ActiveEffectGuard(const ActiveEffectGuard&) noexcept = delete;
+			auto operator=(const ActiveEffectGuard&) noexcept -> ActiveEffectGuard& = delete;
+			ActiveEffectGuard(ActiveEffectGuard&&) noexcept = delete;
+			auto operator=(ActiveEffectGuard&&) noexcept -> ActiveEffectGuard& = delete;
+
+			~ActiveEffectGuard() noexcept
+			{
+				stack_.pop_back();
+			}
+
+		private:
+			std::vector<const dsl::Effect*>& stack_;
+		};
+
+		const auto& game = game_.get();
+		auto& interpreter = interpreter_.get();
 
 		std::vector<std::reference_wrapper<const dsl::StaticModifier>> result{};
-		for (const auto& game = game_.get();
-		     const auto& instance: game.instances())
+		for (const auto& instance: game.instances())
 		{
 			if (const auto zone = game.zone_of(instance.id());
 				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER && zone != domain::Zone::SPELL_TRAP && zone != domain::Zone::FIELD_SPELL)
@@ -39,36 +62,48 @@ namespace cg::execution
 			for (const auto& effect: script->effects)
 			{
 				const auto* static_effect = std::get_if<dsl::StaticEffect>(&effect.body);
-				if (static_effect == nullptr)
+				if (
+					static_effect == nullptr ||
+					std::ranges::find(active_effects_, &effect) != active_effects_.end()
+				)
 				{
 					continue;
 				}
 
-				const auto applies = evaluator.evaluate_scoped(static_effect->apply_to.expression, card.id(), context);
-				if (!applies.has_value())
+				const auto applies = [&]() noexcept -> bool
 				{
-					continue;
-				}
+					const ActiveEffectGuard guard{active_effects_, &effect};
 
-				if (const auto* condition = std::get_if<Boolean>(&*applies);
-					condition == nullptr || !static_cast<bool>(*condition))
-				{
-					continue;
-				}
-
-				if (static_effect->condition.has_value())
-				{
-					const auto value = evaluator.evaluate(*static_effect->condition, context);
+					const auto value = interpreter.evaluate_scoped(static_effect->apply_to.expression, card.id(), context);
 					if (!value.has_value())
 					{
-						continue;
+						return false;
 					}
 
 					if (const auto* condition = std::get_if<Boolean>(&*value);
 						condition == nullptr || !static_cast<bool>(*condition))
 					{
-						continue;
+						return false;
 					}
+
+					if (!static_effect->condition.has_value())
+					{
+						return true;
+					}
+
+					const auto condition = interpreter.evaluate(*static_effect->condition, context);
+					if (!condition.has_value())
+					{
+						return false;
+					}
+
+					const auto* condition_value = std::get_if<Boolean>(&*condition);
+					return condition_value != nullptr && static_cast<bool>(*condition_value);
+				}();
+
+				if (!applies)
+				{
+					continue;
 				}
 
 				for (const auto& modifier: static_effect->modifiers)
@@ -83,17 +118,18 @@ namespace cg::execution
 
 	auto CardStateResolver::static_code(const state::CardInstance& card, Context& context) const noexcept -> std::optional<domain::CardCode>
 	{
-		const Interpreter::Evaluator evaluator{interpreter_.get()};
+		const auto& vocabulary = vocabulary_.get();
+		auto& interpreter = interpreter_.get();
 
 		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "change_name")
 			{
 				continue;
 			}
 
-			const auto args = evaluator.evaluate_list(modifier.args, context);
+			const auto args = interpreter.evaluate_list(modifier.args, context);
 			if (!args.has_value() || args->size() != 1)
 			{
 				continue;
@@ -119,18 +155,19 @@ namespace cg::execution
 
 	auto CardStateResolver::static_card_types(const state::CardInstance& card, Context& context) const noexcept -> utility::EnumMask<domain::CardType>
 	{
-		const Interpreter::Evaluator evaluator{interpreter_.get()};
+		const auto& vocabulary = vocabulary_.get();
+		auto& interpreter = interpreter_.get();
 
 		utility::EnumMask<domain::CardType> result{};
 		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "add_card_type")
 			{
 				continue;
 			}
 
-			const auto args = evaluator.evaluate_list(modifier.args, context);
+			const auto args = interpreter.evaluate_list(modifier.args, context);
 			if (!args.has_value() || args->size() != 1)
 			{
 				continue;
@@ -149,18 +186,19 @@ namespace cg::execution
 
 	auto CardStateResolver::static_card_subtypes(const state::CardInstance& card, Context& context) const noexcept -> utility::EnumMask<domain::CardSubtype>
 	{
-		const Interpreter::Evaluator evaluator{interpreter_.get()};
+		const auto& vocabulary = vocabulary_.get();
+		auto& interpreter = interpreter_.get();
 
 		utility::EnumMask<domain::CardSubtype> result{};
 		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "add_card_subtype")
 			{
 				continue;
 			}
 
-			const auto args = evaluator.evaluate_list(modifier.args, context);
+			const auto args = interpreter.evaluate_list(modifier.args, context);
 			if (!args.has_value() || args->size() != 1)
 			{
 				continue;
@@ -179,18 +217,19 @@ namespace cg::execution
 
 	auto CardStateResolver::static_attributes(const state::CardInstance& card, Context& context) const noexcept -> utility::EnumMask<domain::Attribute>
 	{
-		const Interpreter::Evaluator evaluator{interpreter_.get()};
+		const auto& vocabulary = vocabulary_.get();
+		auto& interpreter = interpreter_.get();
 
 		utility::EnumMask<domain::Attribute> result{};
 		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "add_attribute")
 			{
 				continue;
 			}
 
-			const auto args = evaluator.evaluate_list(modifier.args, context);
+			const auto args = interpreter.evaluate_list(modifier.args, context);
 			if (!args.has_value() || args->size() != 1)
 			{
 				continue;
@@ -209,18 +248,19 @@ namespace cg::execution
 
 	auto CardStateResolver::static_level_bonus(const state::CardInstance& card, Context& context) const noexcept -> Integer::value_type
 	{
-		const Interpreter::Evaluator evaluator{interpreter_.get()};
+		const auto& vocabulary = vocabulary_.get();
+		auto& interpreter = interpreter_.get();
 
 		Integer::value_type total = 0;
 		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "change_level")
 			{
 				continue;
 			}
 
-			const auto args = evaluator.evaluate_list(modifier.args, context);
+			const auto args = interpreter.evaluate_list(modifier.args, context);
 			if (!args.has_value() || args->size() != 1)
 			{
 				continue;
@@ -242,18 +282,19 @@ namespace cg::execution
 		Context& context
 	) const noexcept -> Integer::value_type
 	{
-		const Interpreter::Evaluator evaluator{interpreter_.get()};
+		const auto& vocabulary = vocabulary_.get();
+		auto& interpreter = interpreter_.get();
 
 		Integer::value_type total = 0;
 		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "add_numeric_property")
 			{
 				continue;
 			}
 
-			const auto args = evaluator.evaluate_list(modifier.args, context);
+			const auto args = interpreter.evaluate_list(modifier.args, context);
 			if (!args.has_value() || args->size() != 2)
 			{
 				continue;
@@ -278,18 +319,19 @@ namespace cg::execution
 
 	auto CardStateResolver::static_protections(const state::CardInstance& card, Context& context) const noexcept -> utility::EnumMask<domain::Protection>
 	{
-		const Interpreter::Evaluator evaluator{interpreter_.get()};
+		const auto& vocabulary = vocabulary_.get();
+		auto& interpreter = interpreter_.get();
 
 		utility::EnumMask<domain::Protection> result{};
 		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
-			const auto* definition = vocabulary_.get().find(modifier.primitive);
+			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "add_protection")
 			{
 				continue;
 			}
 
-			const auto args = evaluator.evaluate_list(modifier.args, context);
+			const auto args = interpreter.evaluate_list(modifier.args, context);
 			if (!args.has_value() || args->size() != 1)
 			{
 				continue;
@@ -308,100 +350,81 @@ namespace cg::execution
 
 	CardStateResolver::CardStateResolver(
 		state::Game& game,
-		const ScriptRegistry& scripts,
 		const dsl::Vocabulary& vocabulary,
 		Interpreter& interpreter,
-		Selector& selector
+		const ScriptRegistry& scripts
 	) noexcept
 		: game_{game},
-		  scripts_{scripts},
 		  vocabulary_{vocabulary},
 		  interpreter_{interpreter},
-		  selector_{selector} {}
+		  scripts_{scripts} {}
 
 	auto CardStateResolver::effective_code(const state::CardInstance& card) const noexcept -> domain::CardCode
 	{
-		Context context{game_.get(), selector_.get(), card.controller()};
+		Context context{card.controller(), card.id()};
 
-		return static_code(card, context).value_or(card.origin_code());
+		const auto code = static_code(card, context);
+		return code.value_or(card.origin_code());
 	}
 
 	auto CardStateResolver::card_types(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardType>
 	{
-		Context context{game_.get(), selector_.get(), card.controller()};
+		Context context{card.controller(), card.id()};
+
 		auto result = static_card_types(card, context);
 		result.unite_with(card.origin_kind());
 
 		return result;
 	}
 
+	auto CardStateResolver::contains_card_type(const state::CardInstance& card, const domain::CardType type) const noexcept -> bool
+	{
+		const auto result = card_types(card);
+		return result.contains(type);
+	}
+
+	auto CardStateResolver::contains_card_types(const state::CardInstance& card, const utility::EnumMask<domain::CardType> types) const noexcept -> bool
+	{
+		const auto result = card_types(card);
+		return !result.intersect(types).empty();
+	}
+
 	auto CardStateResolver::card_subtypes(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::CardSubtype>
 	{
-		Context context{game_.get(), selector_.get(), card.controller()};
+		Context context{card.controller(), card.id()};
+
 		auto result = static_card_subtypes(card, context);
 		result.unite_with(card.origin_subtypes());
 
 		return result;
 	}
 
-	auto CardStateResolver::is_card_type(const state::CardInstance& card, const domain::CardType type) const noexcept -> bool
+	auto CardStateResolver::contains_card_subtype(const state::CardInstance& card, const domain::CardSubtype subtype) const noexcept -> bool
 	{
-		if (card.origin_is_card_type(type))
-		{
-			return true;
-		}
-
-		Context context{game_.get(), selector_.get(), card.controller()};
-		return static_card_types(card, context).contains(type);
+		const auto result = card_subtypes(card);
+		return result.contains(subtype);
 	}
 
-	auto CardStateResolver::is_card_subtype(const state::CardInstance& card, const domain::CardSubtype subtype) const noexcept -> bool
+	auto CardStateResolver::contains_card_subtypes(const state::CardInstance& card, const utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool
 	{
-		if (card.origin_is_card_subtype(subtype))
-		{
-			return true;
-		}
-
-		Context context{game_.get(), selector_.get(), card.controller()};
-		return static_card_subtypes(card, context).contains(subtype);
-	}
-
-	auto CardStateResolver::is_card_subtype(const state::CardInstance& card, const utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool
-	{
-		if (card.origin_is_card_subtype(subtypes))
-		{
-			return true;
-		}
-
-		Context context{game_.get(), selector_.get(), card.controller()};
-		const auto extra = static_card_subtypes(card, context);
-
-		return (extra.value() & subtypes.value()) != 0;
-	}
-
-	auto CardStateResolver::attack(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>
-	{
-		Context context{game_.get(), selector_.get(), card.controller()};
-		const auto bonus = static_numeric_bonus(card, domain::NumericProperty::ATTACK, context);
-
-		return static_cast<std::underlying_type_t<domain::AttackDefense>>(card.origin_attack() + bonus);
-	}
-
-	auto CardStateResolver::defense(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>
-	{
-		Context context{game_.get(), selector_.get(), card.controller()};
-		const auto bonus = static_numeric_bonus(card, domain::NumericProperty::DEFENSE, context);
-
-		return static_cast<std::underlying_type_t<domain::AttackDefense>>(card.origin_defense() + bonus);
+		const auto result = card_subtypes(card);
+		return !result.intersect(subtypes).empty();
 	}
 
 	auto CardStateResolver::attributes(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Attribute>
 	{
-		Context context{game_.get(), selector_.get(), card.controller()};
+		Context context{card.controller(), card.id()};
+
 		auto result = static_attributes(card, context);
 		result.add_with(card.origin_attribute());
 
 		return result;
+	}
+
+	auto CardStateResolver::contains_attribute(const state::CardInstance& card, const domain::Attribute attribute) const noexcept -> bool
+	{
+		const auto result = attributes(card);
+		return result.contains(attribute);
 	}
 
 	auto CardStateResolver::race(const state::CardInstance& card) const noexcept -> domain::Race
@@ -411,18 +434,53 @@ namespace cg::execution
 		return card.origin_race();
 	}
 
+	auto CardStateResolver::is_race(const state::CardInstance& card, const domain::Race race) const noexcept -> bool
+	{
+		std::ignore = this;
+
+		return card.origin_is_race(race);
+	}
+
 	auto CardStateResolver::level(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::LevelRank>
 	{
-		Context context{game_.get(), selector_.get(), card.controller()};
-		const auto bonus = static_level_bonus(card, context);
+		Context context{card.controller(), card.id()};
 
+		const auto bonus = static_level_bonus(card, context);
 		return static_cast<std::underlying_type_t<domain::LevelRank>>(card.origin_level() + bonus);
+	}
+
+	auto CardStateResolver::attack(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>
+	{
+		Context context{card.controller(), card.id()};
+
+		const auto bonus = static_numeric_bonus(card, domain::NumericProperty::ATTACK, context);
+		return static_cast<std::underlying_type_t<domain::AttackDefense>>(card.origin_attack() + bonus);
+	}
+
+	auto CardStateResolver::defense(const state::CardInstance& card) const noexcept -> std::underlying_type_t<domain::AttackDefense>
+	{
+		Context context{card.controller(), card.id()};
+
+		const auto bonus = static_numeric_bonus(card, domain::NumericProperty::DEFENSE, context);
+		return static_cast<std::underlying_type_t<domain::AttackDefense>>(card.origin_defense() + bonus);
 	}
 
 	auto CardStateResolver::protections(const state::CardInstance& card) const noexcept -> utility::EnumMask<domain::Protection>
 	{
-		Context context{game_.get(), selector_.get(), card.controller()};
+		Context context{card.controller(), card.id()};
 
 		return static_protections(card, context);
+	}
+
+	auto CardStateResolver::contains_protection(const state::CardInstance& card, const domain::Protection protection) const noexcept -> bool
+	{
+		const auto result = protections(card);
+		return result.contains(protection);
+	}
+
+	auto CardStateResolver::contains_protections(const state::CardInstance& card, const utility::EnumMask<domain::Protection> protections) const noexcept -> bool
+	{
+		const auto result = this->protections(card);
+		return !result.intersect(protections).empty();
 	}
 }

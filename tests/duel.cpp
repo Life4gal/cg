@@ -3140,7 +3140,7 @@ TEST_CASE("flow::Duel lets the driver order optional triggers")
 	advance_phase(duel); // MAIN_1
 	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
 
-	const auto* script = duel.scripts().find(victim_code);
+	const auto* script = duel.find_script(victim_code);
 	REQUIRE(script != nullptr);
 
 	CHECK(duel.activate_effect(destroyer, 0));
