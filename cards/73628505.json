@@ -18,7 +18,7 @@
 						"filter": {
 							"call": "is_card_subtype",
 							"args": {
-								"card": {"call":"candidate_card","args":{}},
+								"card": {"call":"$"},
 								"subtype": "FIELD"
 							}
 						}

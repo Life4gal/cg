@@ -20,14 +20,14 @@
 								{
 									"call": "is_card_type",
 									"args": {
-										"card": {"call":"candidate_card","args":{}},
+										"card": {"call":"$"},
 										"card_type": "MONSTER"
 									}
 								},
 								{
 									"call": "is_face_up",
 									"args": {
-										"card": {"call":"candidate_card","args":{}}
+										"card": {"call":"$"}
 									}
 								}
 							]
@@ -43,7 +43,7 @@
 			"apply_to": {
 				"eq": [
 					{"call": "equipped_card", "args": {}},
-					{"call":"candidate_card","args":{}}
+					{"call":"$"}
 				]
 			},
 			"modifiers": [

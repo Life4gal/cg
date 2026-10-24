@@ -55,7 +55,7 @@ namespace cg::dsl
 		};
 
 		// 作用域参数:表达式在一个 scoped 元素的作用域内求值
-		// - element = 当前元素的类型;表达式内用 candidate_card() 读取
+		// - element = 当前元素的类型;表达式内用 `$` 原语读取
 		// - type    = 表达式类型(过滤/条件 = bool;投影/映射 = 任意结果类型)
 		class Scoped
 		{

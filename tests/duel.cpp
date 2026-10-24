@@ -1119,7 +1119,7 @@ TEST_CASE("flow::CardStateResolver applies static discrete properties")
 
 	write(
 		"99500007.json",
-		R"({"identity":{"kind":"SPELL","subtypes":["FIELD"]},"effects":[{"type":"static","apply_to":{"call":"is_card_type","args":{"card":{"call":"candidate_card","args":{}},"card_type":"MONSTER"}},"modifiers":[{"call":"add_attribute","args":{"attribute":"DARK"}},{"call":"change_level","args":{"delta":1}},{"call":"add_card_subtype","args":{"subtype":"TUNER"}}]}]})"
+		R"({"identity":{"kind":"SPELL","subtypes":["FIELD"]},"effects":[{"type":"static","apply_to":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"modifiers":[{"call":"add_attribute","args":{"attribute":"DARK"}},{"call":"change_level","args":{"delta":1}},{"call":"add_card_subtype","args":{"subtype":"TUNER"}}]}]})"
 	);
 	write(
 		"99500008.json",
@@ -1210,22 +1210,22 @@ TEST_CASE("flow::Duel validates Synchro and Xyz summon procedures")
 	// 合法同调:调整 + 通常怪兽,等级合计 8
 	write(
 		"99600003.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["SYNCHRO"],"monster":{"attribute":"EARTH","race":"DRAGON","level":8,"attack":2500,"defense":2000}},"summons":[{"method":"synchro","tuner":{"call":"is_card_subtype","args":{"card":{"call":"candidate_card","args":{}},"subtype":"TUNER"}},"non_tuner":{"call":"is_card_subtype","args":{"card":{"call":"candidate_card","args":{}},"subtype":"NORMAL"}}}]})"
+		R"({"identity":{"kind":"MONSTER","subtypes":["SYNCHRO"],"monster":{"attribute":"EARTH","race":"DRAGON","level":8,"attack":2500,"defense":2000}},"summons":[{"method":"synchro","tuner":{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"TUNER"}},"non_tuner":{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"NORMAL"}}}]})"
 	);
 	// 受限同调:要求 non_tuner 为 EFFECT;测试素材中的通常怪兽不满足
 	write(
 		"99600007.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["SYNCHRO"],"monster":{"attribute":"EARTH","race":"DRAGON","level":8,"attack":2500,"defense":2000}},"summons":[{"method":"synchro","tuner":{"call":"is_card_subtype","args":{"card":{"call":"candidate_card","args":{}},"subtype":"TUNER"}},"non_tuner":{"call":"is_card_subtype","args":{"card":{"call":"candidate_card","args":{}},"subtype":"EFFECT"}}}]})"
+		R"({"identity":{"kind":"MONSTER","subtypes":["SYNCHRO"],"monster":{"attribute":"EARTH","race":"DRAGON","level":8,"attack":2500,"defense":2000}},"summons":[{"method":"synchro","tuner":{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"TUNER"}},"non_tuner":{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"EFFECT"}}}]})"
 	);
 	// 合法超量:2 只怪兽,同等级 4
 	write(
 		"99600004.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["XYZ"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"xyz","material":{"call":"is_card_type","args":{"card":{"call":"candidate_card","args":{}},"card_type":"MONSTER"}},"count":2}]})"
+		R"({"identity":{"kind":"MONSTER","subtypes":["XYZ"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"xyz","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"count":2}]})"
 	);
 	// 受限超量:要求素材为 TUNER;测试素材不满足
 	write(
 		"99600008.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["XYZ"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"xyz","material":{"call":"is_card_subtype","args":{"card":{"call":"candidate_card","args":{}},"subtype":"TUNER"}},"count":2}]})"
+		R"({"identity":{"kind":"MONSTER","subtypes":["XYZ"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"xyz","material":{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"TUNER"}},"count":2}]})"
 	);
 
 	constexpr domain::CardCode tuner_code{99600001};
@@ -1403,7 +1403,7 @@ TEST_CASE("flow::Duel: Solemn Judgment negates an Xyz Summon")
 
 	write(
 		"97000095.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["XYZ"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"xyz","material":{"call":"is_card_type","args":{"card":{"call":"candidate_card","args":{}},"card_type":"MONSTER"}},"count":2}]})"
+		R"({"identity":{"kind":"MONSTER","subtypes":["XYZ"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"xyz","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"count":2}]})"
 	);
 
 	constexpr domain::CardCode solemn_code{41420027};

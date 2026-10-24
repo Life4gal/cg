@@ -218,7 +218,7 @@ namespace cg::dsl
 			"效果来源卡(不依赖绑定)"
 		);
 		do_register(
-			"candidate_card",
+			"$",
 			PrimitiveKind::QUERY,
 			all_phases,
 			{},

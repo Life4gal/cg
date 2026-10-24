@@ -39,20 +39,20 @@
 								{
 									"call": "is_card_type",
 									"args": {
-										"card": {"call":"candidate_card","args":{}},
+										"card": {"call":"$"},
 										"card_type": "MONSTER"
 									}
 								},
 								{
 									"call": "is_attribute",
 									"args": {
-										"card": {"call":"candidate_card","args":{}},
+										"card": {"call":"$"},
 										"attribute": "EARTH"
 									}
 								},
 								{
 									"le": [
-										{"call": "attack", "args": {"card": {"call":"candidate_card","args":{}}}},
+										{"call": "attack", "args": {"card": {"call":"$"}}},
 										1500
 									]
 								}

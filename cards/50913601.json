@@ -11,21 +11,21 @@
 					{
 						"call": "is_race",
 						"args": {
-							"card": {"call":"candidate_card","args":{}},
+							"card": {"call":"$"},
 							"race": "DRAGON"
 						}
 					},
 					{
 						"call": "is_race",
 						"args": {
-							"card": {"call":"candidate_card","args":{}},
+							"card": {"call":"$"},
 							"race": "WINGED_BEAST"
 						}
 					},
 					{
 						"call": "is_race",
 						"args": {
-							"card": {"call":"candidate_card","args":{}},
+							"card": {"call":"$"},
 							"race": "THUNDER"
 						}
 					}

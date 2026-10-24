@@ -234,15 +234,7 @@ namespace cg::dsl::json
 			return std::nullopt;
 		}
 
-		auto args_path = std::format("{}.args", path);
-
-		const auto& args_it = json.find("args");
-		if (args_it == json.end())
-		{
-			fail(std::move(args_path), "missing");
-			return std::nullopt;
-		}
-		auto args = read_argument_list(*def, args_it, args_path);
+		auto args = read_call_arguments(*def, json, path);
 		if (!args.has_value())
 		{
 			return std::nullopt;
@@ -692,15 +684,7 @@ namespace cg::dsl::json
 			return std::nullopt;
 		}
 
-		auto args_path = std::format("{}.args", path);
-
-		const auto args_it = json.find("args");
-		if (args_it == json.end())
-		{
-			fail(std::move(args_path), "missing");
-			return std::nullopt;
-		}
-		auto args = read_argument_list(*def, args_it, args_path);
+		auto args = read_call_arguments(*def, json, path);
 		if (!args.has_value())
 		{
 			return std::nullopt;
@@ -827,6 +811,26 @@ namespace cg::dsl::json
 		operands.push_back(*std::move(right_operand));
 
 		return Expression{ArithmeticOperation{.op = op, .operands = std::move(operands)}};
+	}
+
+	auto Reader::read_call_arguments(const PrimitiveDef& primitive, const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<ExpressionList>
+	{
+		const auto args_path = std::format("{}.args", path);
+		const auto args_it = json.find("args");
+
+		if (args_it == json.end())
+		{
+			// 仅零参数原语允许省略 args;带可选参数的原语仍必须显式给出参数对象
+			if (!primitive.params.empty())
+			{
+				fail(args_path, std::format("primitive `{}` with non-empty parameters must explicitly specify the parameter list", primitive.name));
+				return std::nullopt;
+			}
+
+			return ExpressionList{};
+		}
+
+		return read_argument_list(primitive, args_it, args_path);
 	}
 
 	auto Reader::read_argument_list(const PrimitiveDef& primitive, const nlohmann::json::const_iterator& args, const std::string_view path) noexcept -> std::optional<ExpressionList>
@@ -2551,22 +2555,13 @@ namespace cg::dsl::json
 			return std::nullopt;
 		}
 
-		ExpressionList args;
-		if (const auto it = json.find("args");
-			it != json.end())
+		auto args = read_call_arguments(*def, json, path);
+		if (!args.has_value())
 		{
-			const auto args_path = std::format("{}.args", path);
-
-			auto list = read_argument_list(*def, it, args_path);
-			if (!list.has_value())
-			{
-				return std::nullopt;
-			}
-
-			args = *std::move(list);
+			return std::nullopt;
 		}
 
-		return StaticModifier{.primitive = def->id, .args = std::move(args)};
+		return StaticModifier{.primitive = def->id, .args = *std::move(args)};
 	}
 
 	auto Reader::read_effect_usage_restriction(

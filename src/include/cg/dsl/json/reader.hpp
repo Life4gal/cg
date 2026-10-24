@@ -68,6 +68,8 @@ namespace cg::dsl::json
 		[[nodiscard]] auto read_compare_operation_expression(const nlohmann::json::const_iterator& operation, CompareOperator op, std::string_view path) noexcept -> std::optional<Expression>;
 		[[nodiscard]] auto read_arithmetic_operation_expression(const nlohmann::json::const_iterator& operation, ArithmeticOperator op, std::string_view path) noexcept -> std::optional<Expression>;
 
+		// 零参数原语可以省略`args`;其他原语仍必须显式给出参数对象
+		[[nodiscard]] auto read_call_arguments(const PrimitiveDef& primitive, const nlohmann::json& json, std::string_view path) noexcept -> std::optional<ExpressionList>;
 		[[nodiscard]] auto read_argument_list(const PrimitiveDef& primitive, const nlohmann::json::const_iterator& args, std::string_view path) noexcept -> std::optional<ExpressionList>;
 
 		// =====================================================================================
@@ -99,7 +101,7 @@ namespace cg::dsl::json
 		[[nodiscard]] auto read_summon_ritual_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<RitualProcedure>;
 		[[nodiscard]] auto read_summon_self_special_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<SelfSpecialProcedure>;
 
-		// 素材谓词:在 scoped card 作用域内读取 bool 表达式;候选用 candidate_card()
+		// 素材谓词:在 scoped card 作用域内读取 bool 表达式;候选用 `$` 原语
 		[[nodiscard]] auto read_summon_material_expression(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<Expression>;
 
 		// =====================================================================================

@@ -495,7 +495,7 @@ namespace cg::execution
 		{
 			return this_card(*definition, call, context);
 		}
-		if (definition->name == "candidate_card")
+		if (definition->name == "$")
 		{
 			return candidate_card(*definition, call, context);
 		}

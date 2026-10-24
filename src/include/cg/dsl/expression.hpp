@@ -165,13 +165,13 @@ namespace cg::dsl
 				ArithmeticOperation
 			> {};
 
-	// 作用域表达式:在 scoped 元素(通过 `candidate_card` 引用)的作用域内求值
+	// 作用域表达式:在 scoped 元素(通过 `$` 原语引用)的作用域内求值
 	class ScopedExpression
 	{
 	public:
 		// scoped 元素的类型
 		TypeId element;
-		// 表达式本身(内部可用 `candidate_card` 引用元素)
+		// 表达式本身(内部可用 `$` 原语引用元素)
 		Expression expression;
 
 		[[nodiscard]] constexpr auto operator==(const ScopedExpression&) const -> bool = default;

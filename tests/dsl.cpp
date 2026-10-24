@@ -102,11 +102,11 @@ TEST_CASE("dsl::json::Reader reads bundled cards")
 	CHECK(count > 0);
 }
 
-TEST_CASE("dsl::json::Reader supports candidate_card in scoped expressions")
+TEST_CASE("dsl::json::Reader supports the $ candidate primitive in scoped expressions")
 {
-	constexpr std::string_view candidate{R"({"call":"candidate_card","args":{}})"};
+	constexpr std::string_view candidate{R"({"call":"$"})"};
 
-	SUBCASE("candidate_card inside a filter")
+	SUBCASE("$ inside a filter")
 	{
 		const auto card = make_card(
 			filter_with(std::format(R"({{"call":"is_card_type","args":{{"card":{},"card_type":"SPELL"}}}})", candidate)),
@@ -133,7 +133,7 @@ TEST_CASE("dsl::json::Reader supports candidate_card in scoped expressions")
 		CHECK(result.script.has_value());
 	}
 
-	SUBCASE("candidate_card inside a comparison")
+	SUBCASE("$ inside a comparison")
 	{
 		const auto card = make_card(
 			filter_with(std::format(R"({{"le":[{{"call":"attack","args":{{"card":{}}}}},1500]}})", candidate)),
@@ -144,7 +144,7 @@ TEST_CASE("dsl::json::Reader supports candidate_card in scoped expressions")
 		CHECK(result.script.has_value());
 	}
 
-	SUBCASE("candidate_card inside apply_to")
+	SUBCASE("$ inside apply_to")
 	{
 		const auto card = nlohmann::json::parse(std::format(
 			R"({{"identity":{{"kind":"SPELL","subtypes":["FIELD"]}},"effects":[{{"type":"static","apply_to":{{"call":"is_card_type","args":{{"card":{},"card_type":"MONSTER"}}}},"modifiers":[{{"call":"add_attribute","args":{{"attribute":"DARK"}}}}]}}]}})",
@@ -153,6 +153,26 @@ TEST_CASE("dsl::json::Reader supports candidate_card in scoped expressions")
 		const auto result = read_card(card);
 
 		CHECK(result.script.has_value());
+	}
+}
+
+TEST_CASE("dsl::json::Reader omits args only for zero-parameter primitives")
+{
+	SUBCASE("zero-parameter statement may omit args")
+	{
+		const auto card = make_card("true", R"([{"call":"negate_activation"}])");
+		const auto result = read_card(card);
+
+		CHECK(result.script.has_value());
+	}
+
+	SUBCASE("statement with parameters still requires args")
+	{
+		const auto card = make_card("true", R"([{"call":"destroy"}])");
+		const auto result = read_card(card);
+
+		CHECK_FALSE(result.script.has_value());
+		CHECK(contains_message(result.diagnostics, "must explicitly specify the parameter list"));
 	}
 }
 
@@ -263,7 +283,7 @@ TEST_CASE("dsl::json::Reader reads player scopes")
 	SUBCASE("pick_target accepts a scope and a filter")
 	{
 		const auto card =
-				R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"target":[{"call":"pick_target","args":{"players":["SELF","OPPONENT"],"zones":["MONSTER"],"min":1,"max":1,"filter":{"call":"is_card_type","args":{"card":{"call":"candidate_card","args":{}},"card_type":"MONSTER"}}},"bind":"target"}],"effect":[]}]})";
+				R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"target":[{"call":"pick_target","args":{"players":["SELF","OPPONENT"],"zones":["MONSTER"],"min":1,"max":1,"filter":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}}},"bind":"target"}],"effect":[]}]})";
 		const auto result = read_card(nlohmann::json::parse(card));
 
 		CHECK(result.script.has_value());
