@@ -2833,7 +2833,6 @@ TEST_CASE("flow::Duel resolves a Ritual Spell through effect summon")
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
 	CHECK(game.find_instance(ritual_card)->summon_record().method == domain::SummonMethod::RITUAL);
 	CHECK(game.find_instance(ritual_card)->summon_record().materials.size() == 2);
-
 }
 
 TEST_CASE("flow::Duel fizzles a Ritual Spell with an invalid level sum")
@@ -2876,7 +2875,6 @@ TEST_CASE("flow::Duel fizzles a Ritual Spell with an invalid level sum")
 	CHECK(game.zone_of(ritual_card) == domain::Zone::HAND);
 	CHECK(game.zone_of(material) == domain::Zone::HAND);
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
-
 }
 
 TEST_CASE("flow::Duel negates a Ritual Spell activation")
@@ -2922,7 +2920,6 @@ TEST_CASE("flow::Duel negates a Ritual Spell activation")
 	CHECK(game.zone_of(ritual_card) == domain::Zone::HAND);
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(negator) == domain::Zone::MONSTER);
-
 }
 
 TEST_CASE("flow::Duel cannot summon-negate an effect-driven Ritual Summon")
@@ -2993,7 +2990,6 @@ TEST_CASE("flow::Duel cannot summon-negate an effect-driven Ritual Summon")
 			}
 		)
 	);
-
 }
 
 TEST_CASE("flow::Duel resolves an effect-driven Special Summon from the Graveyard")
@@ -3040,7 +3036,6 @@ TEST_CASE("flow::Duel resolves an effect-driven Special Summon from the Graveyar
 			}
 		)
 	);
-
 }
 
 TEST_CASE("flow::Duel negates an effect-driven Special Summon effect")
@@ -3084,7 +3079,6 @@ TEST_CASE("flow::Duel negates an effect-driven Special Summon effect")
 	CHECK(game.zone_of(monster) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(negator) == domain::Zone::MONSTER);
-
 }
 
 TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck monster")
@@ -3157,6 +3151,13 @@ TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck mon
 	CHECK(game.find_instance(fusion)->summon_record().method == domain::SummonMethod::SPECIAL);
 	CHECK(game.find_instance(fusion)->properly_summoned());
 
+	// 回到额外卡组后失去正规召唤状态
+	game.place(
+		*game.find_instance_mutable(fusion),
+		domain::ExtraDeckPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+	CHECK(game.zone_of(fusion) == domain::Zone::EXTRA_DECK);
+	CHECK_FALSE(game.find_instance(fusion)->properly_summoned());
 }
 
 TEST_CASE("flow::Duel sets and activates a trap")

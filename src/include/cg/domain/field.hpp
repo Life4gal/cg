@@ -259,6 +259,30 @@ namespace cg::domain
 			> {};
 
 	// ===========================================================================
+	// LOCATION ==> ZONE
+	// ===========================================================================
+
+	[[nodiscard]] constexpr auto zone_of(const Location& location) noexcept -> Zone
+	{
+		const auto index = location.index();
+		return static_cast<Zone>(index);
+	}
+
+	[[nodiscard]] constexpr auto zone_of(const AnyFieldLocation& location) noexcept -> Zone
+	{
+		constexpr auto base = utility::variant_index_v<MonsterLocation, Location>;
+		const auto index = location.index();
+		return static_cast<Zone>(base + index);
+	}
+
+	[[nodiscard]] constexpr auto zone_of(const AnyMonsterLocation& location) noexcept -> Zone
+	{
+		constexpr auto base = utility::variant_index_v<MonsterLocation, Location>;
+		const auto index = location.index();
+		return static_cast<Zone>(base + index);
+	}
+
+	// ===========================================================================
 	// LOCATION ==> INDEX
 	// ===========================================================================
 
@@ -484,6 +508,30 @@ namespace cg::domain
 				ExtraMonsterPlacement
 				//
 			> {};
+
+	// ===========================================================================
+	// PLACEMENT ==> ZONE
+	// ===========================================================================
+
+	[[nodiscard]] constexpr auto zone_of(const Placement& placement) noexcept -> Zone
+	{
+		const auto index = placement.index();
+		return static_cast<Zone>(index);
+	}
+
+	[[nodiscard]] constexpr auto zone_of(const AnyFieldPlacement& placement) noexcept -> Zone
+	{
+		constexpr auto base = utility::variant_index_v<MonsterPlacement, Placement>;
+		const auto index = placement.index();
+		return static_cast<Zone>(base + index);
+	}
+
+	[[nodiscard]] constexpr auto zone_of(const AnyMonsterPlacement& placement) noexcept -> Zone
+	{
+		constexpr auto base = utility::variant_index_v<MonsterPlacement, Placement>;
+		const auto index = placement.index();
+		return static_cast<Zone>(base + index);
+	}
 
 	// ===========================================================================
 	// PLACEMENT ==> INDEX

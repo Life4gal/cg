@@ -27,6 +27,19 @@ namespace
 	}
 }
 
+TEST_CASE("domain::zone_of maps full and restricted variants")
+{
+	CHECK(domain::zone_of(domain::Location{domain::MonsterLocation{.column = domain::FieldColumn::C1}}) == domain::Zone::MONSTER);
+	CHECK(domain::zone_of(domain::AnyMonsterLocation{domain::MonsterLocation{.column = domain::FieldColumn::C1}}) == domain::Zone::MONSTER);
+	CHECK(domain::zone_of(domain::AnyFieldLocation{domain::SpellTrapLocation{}}) == domain::Zone::SPELL_TRAP);
+	CHECK(domain::zone_of(domain::AnyFieldLocation{domain::FieldSpellLocation{}}) == domain::Zone::FIELD_SPELL);
+
+	CHECK(domain::zone_of(domain::Placement{domain::ExtraDeckPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}}) == domain::Zone::EXTRA_DECK);
+	CHECK(domain::zone_of(domain::AnyMonsterPlacement{domain::ExtraMonsterPlacement{.column = domain::FieldColumn::EX1, .position = domain::Position::FACE_UP_ATTACK}}) == domain::Zone::EXTRA_MONSTER);
+	CHECK(domain::zone_of(domain::AnyFieldPlacement{domain::SpellTrapPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}}) == domain::Zone::SPELL_TRAP);
+	CHECK(domain::zone_of(domain::AnyFieldPlacement{domain::FieldSpellPlacement{.position = domain::Position::FACE_UP_ATTACK}}) == domain::Zone::FIELD_SPELL);
+}
+
 TEST_CASE("state::Game moves cards into the requested zones")
 {
 	constexpr domain::CardCode monster_code{90000002};
