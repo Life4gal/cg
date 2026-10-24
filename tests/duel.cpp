@@ -193,6 +193,126 @@ TEST_CASE("flow::Duel performs core actions")
 	CHECK(monster_placement->position == domain::Position::FACE_DOWN_DEFENSE);
 }
 
+TEST_CASE("flow::Duel rejects Flip Summon on the turn the monster was Set")
+{
+	constexpr domain::CardCode monster_code{91100002};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(monster_code, make_monster(monster_code));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(monster.valid());
+	game.place(*game.find_instance_mutable(monster), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+	CHECK(duel.set_monster(monster, domain::FieldColumn::C1));
+	CHECK_FALSE(duel.flip_summon(monster));
+}
+
+TEST_CASE("flow::Duel aborts an attack when the target leaves before damage")
+{
+	constexpr domain::CardCode attacker_code{91100010};
+	constexpr domain::CardCode defender_code{91100011};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+	game.register_definition(defender_code, make_monster(defender_code, 800, 1000));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(defender.valid());
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker.valid());
+	game.place(*game.find_instance_mutable(defender), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+	CHECK(duel.declare_attack(attacker, defender));
+
+	game.move_to_graveyard(*game.find_instance_mutable(defender), {domain::Reason::RULE});
+	resolve_attack(duel);
+
+	CHECK_FALSE(duel.pending_attack());
+	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
+	CHECK(game.life_points(domain::Player::FIRST) == 8000);
+	CHECK(game.life_points(domain::Player::SECOND) == 8000);
+}
+
+TEST_CASE("flow::Duel aborts an attack when the attacker leaves attack position")
+{
+	constexpr domain::CardCode attacker_code{91100020};
+	constexpr domain::CardCode defender_code{91100021};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+	game.register_definition(defender_code, make_monster(defender_code, 800, 1000));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(defender.valid());
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker.valid());
+	game.place(*game.find_instance_mutable(defender), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+	CHECK(duel.declare_attack(attacker, defender));
+
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_DEFENSE});
+	resolve_attack(duel);
+
+	CHECK_FALSE(duel.pending_attack());
+	CHECK(game.zone_of(attacker) == domain::Zone::MONSTER);
+	CHECK(game.life_points(domain::Player::FIRST) == 8000);
+	CHECK(game.life_points(domain::Player::SECOND) == 8000);
+}
+
+TEST_CASE("flow::Duel performs a Flip Summon")
+{
+	constexpr domain::CardCode monster_code{91100001};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(monster_code, make_monster(monster_code));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(monster.valid());
+	game.place(*game.find_instance_mutable(monster), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.flip_summon(monster));
+	CHECK(duel.pending_summon());
+	resolve_summon(duel);
+
+	CHECK(game.zone_of(monster) == domain::Zone::MONSTER);
+	const auto placement = game.find_instance(monster)->placement();
+	const auto* monster_placement = std::get_if<domain::MonsterPlacement>(&placement);
+	REQUIRE(monster_placement != nullptr);
+	CHECK(monster_placement->position == domain::Position::FACE_UP_ATTACK);
+	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::FLIP);
+
+	// 已经是表侧表示的怪兽不能再次翻转召唤。
+	CHECK_FALSE(duel.flip_summon(monster));
+}
+
 TEST_CASE("flow::Duel resolves an attack-position battle")
 {
 	constexpr domain::CardCode attacker_code{91000010};

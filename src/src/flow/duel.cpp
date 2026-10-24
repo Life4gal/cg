@@ -865,6 +865,41 @@ namespace cg::flow
 		}
 
 		const auto from = instance.placement();
+
+		if (summon.method == domain::SummonMethod::FLIP)
+		{
+			game_.place(instance, domain::placement_of(summon.placement));
+			game_.set_summon_record(
+				instance,
+				{
+						.player = summon.controller,
+						.method = domain::SummonMethod::FLIP,
+						.from = from,
+						.materials = {},
+				}
+			);
+
+			priority_.reset();
+			const std::array windows
+			{
+					execution::EventWindow
+					{
+							.source = dsl::TriggerSource{domain::EventCode::FLIP_SUMMON_SUCCESS},
+							.card = instance.id(),
+							.player = std::nullopt,
+							.amount = std::nullopt,
+					},
+					execution::EventWindow
+					{
+							.source = dsl::TriggerSource{domain::EventCode::FLIP},
+							.card = instance.id(),
+							.player = std::nullopt,
+							.amount = std::nullopt,
+					},
+			};
+			open_timing(windows);
+			return true;
+		}
 		game_.place(instance, domain::placement_of(summon.placement));
 
 		auto materials = summon.materials | std::views::transform(&state::CardInstance::id) | std::ranges::to<std::vector<state::CardInstanceId>>();
@@ -906,9 +941,11 @@ namespace cg::flow
 			}
 		}
 
-		const auto event = (summon.method == domain::SummonMethod::NORMAL || summon.method == domain::SummonMethod::TRIBUTE)
+		const auto event = summon.method == domain::SummonMethod::NORMAL || summon.method == domain::SummonMethod::TRIBUTE
 			                   ? domain::EventCode::NORMAL_SUMMON_NEGATED
-			                   : domain::EventCode::SPECIAL_SUMMON_NEGATED;
+			                   : (summon.method == domain::SummonMethod::FLIP
+				                      ? domain::EventCode::FLIP_SUMMON_NEGATED
+				                      : domain::EventCode::SPECIAL_SUMMON_NEGATED);
 		const execution::EventWindow window
 		{
 				.source = dsl::TriggerSource{event},
@@ -973,6 +1010,7 @@ namespace cg::flow
 		if (placement.position == domain::Position::FACE_DOWN_DEFENSE)
 		{
 			game_.place(*instance, {placement});
+			set_turns_.insert_or_assign(card, turn_.turn_id());
 			trigger_event(dsl::TriggerSource{domain::EventCode::MONSTER_SET}, card);
 			return true;
 		}
@@ -1074,6 +1112,7 @@ namespace cg::flow
 		if (placement.position == domain::Position::FACE_DOWN_DEFENSE)
 		{
 			game_.place(*instance, {placement});
+			set_turns_.insert_or_assign(card, turn_.turn_id());
 			trigger_event(dsl::TriggerSource{domain::EventCode::MONSTER_SET}, card);
 			return true;
 		}
@@ -1215,6 +1254,16 @@ namespace cg::flow
 		if (battle_.battle_step() == domain::BattleStep::BATTLE)
 		{
 			if (!is_on_field(attack.attacker))
+			{
+				clear_attack();
+				return;
+			}
+
+			const auto* attacker_instance = game_.find_instance(attack.attacker);
+			const auto attacker_field_info = attacker_instance == nullptr
+				                                 ? std::optional<domain::FieldInfo>{}
+				                                 : domain::field_info_of(attacker_instance->placement());
+			if (!attacker_field_info.has_value() || attacker_field_info->position != domain::Position::FACE_UP_ATTACK)
 			{
 				clear_attack();
 				return;
@@ -1706,6 +1755,60 @@ namespace cg::flow
 	auto Duel::normal_summon(const state::CardInstanceId card, const domain::FieldColumn column) noexcept -> bool
 	{
 		return perform_normal_summon(card, {.column = column, .position = domain::Position::FACE_UP_ATTACK});
+	}
+
+	auto Duel::flip_summon(const state::CardInstanceId card) noexcept -> bool
+	{
+		if (summon_.has_value() || !chain_.empty())
+		{
+			return false;
+		}
+
+		if (const auto phase = turn_.phase(); phase != domain::Phase::MAIN_1 && phase != domain::Phase::MAIN_2)
+		{
+			return false;
+		}
+
+		auto* instance = game_.find_instance_mutable(card);
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		const auto controller = instance->controller();
+		if (controller != turn_.turn_player() || priority_.holder_player(turn_.turn_player()) != controller)
+		{
+			return false;
+		}
+
+		if (game_.zone_of(card) != domain::Zone::MONSTER)
+		{
+			return false;
+		}
+
+		if (const auto it = set_turns_.find(card); it != set_turns_.end() && it->second >= turn_.turn_id())
+		{
+			return false;
+		}
+
+		const auto placement = instance->placement();
+		const auto* monster_placement = std::get_if<domain::MonsterPlacement>(&placement);
+		if (monster_placement == nullptr || monster_placement->position != domain::Position::FACE_DOWN_DEFENSE)
+		{
+			return false;
+		}
+
+		return begin_summon(
+			SummonState
+			{
+					.controller = controller,
+					.placement = domain::AnyMonsterPlacement{domain::MonsterPlacement{.column = monster_placement->column, .position = domain::Position::FACE_UP_ATTACK}},
+					.method = domain::SummonMethod::FLIP,
+					.card = std::ref(*instance),
+					.materials = {},
+			},
+			domain::EventCode::FLIP_SUMMON_DECLARED
+		);
 	}
 
 	auto Duel::set_monster(const state::CardInstanceId card, const domain::FieldColumn column) noexcept -> bool

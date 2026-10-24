@@ -441,6 +441,9 @@ namespace cg::flow
 		// 通常召唤(表侧攻击表示)
 		auto normal_summon(state::CardInstanceId card, domain::FieldColumn column) noexcept -> bool;
 
+		// 翻转召唤(里侧守备表示 -> 表侧攻击表示)
+		auto flip_summon(state::CardInstanceId card) noexcept -> bool;
+
 		// 盖放怪兽(里侧守备表示)
 		auto set_monster(state::CardInstanceId card, domain::FieldColumn column) noexcept -> bool;
 
