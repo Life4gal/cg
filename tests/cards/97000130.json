@@ -1,0 +1,23 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["RITUAL"],
+		"monster": {
+			"attribute": "EARTH",
+			"race": "DRAGON",
+			"level": 4,
+			"attack": 2000,
+			"defense": 2000
+		}
+	},
+	"summons": [
+		{
+			"method": "ritual",
+			"material": {
+				"call": "is_card_type",
+				"args": {"card": {"call": "$"}, "card_type": "MONSTER"}
+			},
+			"level": 4
+		}
+	]
+}

@@ -15,6 +15,7 @@ target_compile_definitions(
 	PRIVATE
 
 	CG_CARDS_DIR="${CMAKE_SOURCE_DIR}/cards"
+	CG_TEST_CARDS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/cards"
 )
 
 target_compile_options(

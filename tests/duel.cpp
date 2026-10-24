@@ -2749,33 +2749,6 @@ TEST_CASE("flow::Duel activates spell cards")
 
 TEST_CASE("flow::Duel resolves a Ritual Spell through effect summon")
 {
-	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_ritual_spell";
-	std::filesystem::remove_all(directory);
-	std::filesystem::create_directories(directory);
-
-	const auto write = [&](const std::string_view name, const std::string_view text) -> void
-	{
-		std::ofstream stream{directory / name, std::ios::binary};
-		stream << text;
-	};
-
-	write(
-		"97000125.json",
-		R"({"identity":{"kind":"SPELL","subtypes":["RITUAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["HAND"],"min":1,"filter":{"and":[{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"RITUAL"}}]}}},"effect":[{"call":"ritual_summon","args":{"position":"FACE_UP_ATTACK"}}]}]})"
-	);
-	write(
-		"97000130.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["RITUAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"ritual","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"level":4}]})"
-	);
-	write(
-		"97000131.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["NORMAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":2,"attack":1000,"defense":1000}}})"
-	);
-	write(
-		"97000132.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["NORMAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":2,"attack":1000,"defense":1000}}})"
-	);
-
 	constexpr domain::CardCode spell_code{97000125};
 	constexpr domain::CardCode ritual_code{97000130};
 	constexpr domain::CardCode material_a_code{97000131};
@@ -2822,7 +2795,7 @@ TEST_CASE("flow::Duel resolves a Ritual Spell through effect summon")
 	game.register_definition(material_a_code, make_monster(material_a_code, 1000, 1000, 2));
 	game.register_definition(material_b_code, make_monster(material_b_code, 1000, 1000, 2));
 
-	REQUIRE(duel.load_scripts(directory));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -2861,34 +2834,10 @@ TEST_CASE("flow::Duel resolves a Ritual Spell through effect summon")
 	CHECK(game.find_instance(ritual_card)->summon_record().method == domain::SummonMethod::RITUAL);
 	CHECK(game.find_instance(ritual_card)->summon_record().materials.size() == 2);
 
-	std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("flow::Duel fizzles a Ritual Spell with an invalid level sum")
 {
-	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_ritual_spell_fizzle";
-	std::filesystem::remove_all(directory);
-	std::filesystem::create_directories(directory);
-
-	const auto write = [&](const std::string_view name, const std::string_view text) -> void
-	{
-		std::ofstream stream{directory / name, std::ios::binary};
-		stream << text;
-	};
-
-	write(
-		"97000125.json",
-		R"({"identity":{"kind":"SPELL","subtypes":["RITUAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["HAND"],"min":1,"filter":{"and":[{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"RITUAL"}}]}}},"effect":[{"call":"ritual_summon","args":{"position":"FACE_UP_ATTACK"}}]}]})"
-	);
-	write(
-		"97000130.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["RITUAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"ritual","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"level":4}]})"
-	);
-	write(
-		"97000131.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["NORMAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":2,"attack":1000,"defense":1000}}})"
-	);
-
 	constexpr domain::CardCode spell_code{97000125};
 	constexpr domain::CardCode ritual_code{97000130};
 	constexpr domain::CardCode material_code{97000131};
@@ -2902,7 +2851,7 @@ TEST_CASE("flow::Duel fizzles a Ritual Spell with an invalid level sum")
 	game.register_definition(ritual_code, ritual);
 	game.register_definition(material_code, make_monster(material_code, 1000, 1000, 2));
 
-	REQUIRE(duel.load_scripts(directory));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -2928,34 +2877,10 @@ TEST_CASE("flow::Duel fizzles a Ritual Spell with an invalid level sum")
 	CHECK(game.zone_of(material) == domain::Zone::HAND);
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
 
-	std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("flow::Duel negates a Ritual Spell activation")
 {
-	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_ritual_spell_negated";
-	std::filesystem::remove_all(directory);
-	std::filesystem::create_directories(directory);
-
-	const auto write = [&](const std::string_view name, const std::string_view text) -> void
-	{
-		std::ofstream stream{directory / name, std::ios::binary};
-		stream << text;
-	};
-
-	write(
-		"97000125.json",
-		R"({"identity":{"kind":"SPELL","subtypes":["RITUAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["HAND"],"min":1,"filter":{"and":[{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"RITUAL"}}]}}},"effect":[{"call":"ritual_summon","args":{"position":"FACE_UP_ATTACK"}}]}]})"
-	);
-	write(
-		"97000130.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["RITUAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"ritual","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"level":4}]})"
-	);
-	write(
-		"97000134.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"negate_activation","args":{}}]}]})"
-	);
-
 	constexpr domain::CardCode spell_code{97000125};
 	constexpr domain::CardCode ritual_code{97000130};
 	constexpr domain::CardCode negator_code{97000134};
@@ -2969,7 +2894,7 @@ TEST_CASE("flow::Duel negates a Ritual Spell activation")
 	game.register_definition(ritual_code, ritual);
 	game.register_definition(negator_code, make_monster(negator_code));
 
-	REQUIRE(duel.load_scripts(directory));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -2998,38 +2923,14 @@ TEST_CASE("flow::Duel negates a Ritual Spell activation")
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(negator) == domain::Zone::MONSTER);
 
-	std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("flow::Duel cannot summon-negate an effect-driven Ritual Summon")
 {
-	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_ritual_spell_effect_summon";
-	std::filesystem::remove_all(directory);
-	std::filesystem::create_directories(directory);
-
-	const auto write = [&](const std::string_view name, const std::string_view text) -> void
-	{
-		std::ofstream stream{directory / name, std::ios::binary};
-		stream << text;
-	};
-
-	write(
-		"97000125.json",
-		R"({"identity":{"kind":"SPELL","subtypes":["RITUAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["HAND"],"min":1,"filter":{"and":[{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"RITUAL"}}]}}},"effect":[{"call":"ritual_summon","args":{"position":"FACE_UP_ATTACK"}}]}]})"
-	);
-	write(
-		"97000130.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["RITUAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"ritual","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"level":4}]})"
-	);
-	write(
-		"97000131.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["NORMAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":1000,"defense":1000}}})"
-	);
-
 	constexpr domain::CardCode solemn_code{41420027};
 	constexpr domain::CardCode spell_code{97000125};
 	constexpr domain::CardCode ritual_code{97000130};
-	constexpr domain::CardCode material_code{97000131};
+	constexpr domain::CardCode material_code{97000133};
 
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
@@ -3042,7 +2943,7 @@ TEST_CASE("flow::Duel cannot summon-negate an effect-driven Ritual Summon")
 	game.register_definition(material_code, make_monster(material_code, 1000, 1000, 4));
 
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
-	REQUIRE(duel.load_scripts(directory));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -3093,30 +2994,10 @@ TEST_CASE("flow::Duel cannot summon-negate an effect-driven Ritual Summon")
 		)
 	);
 
-	std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("flow::Duel resolves an effect-driven Special Summon from the Graveyard")
 {
-	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_effect_special_summon";
-	std::filesystem::remove_all(directory);
-	std::filesystem::create_directories(directory);
-
-	const auto write = [&](const std::string_view name, const std::string_view text) -> void
-	{
-		std::ofstream stream{directory / name, std::ios::binary};
-		stream << text;
-	};
-
-	write(
-		"97000150.json",
-		R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["GRAVEYARD"],"min":1,"filter":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}}}},"target":[{"call":"pick_target","args":{"players":["SELF"],"zones":["GRAVEYARD"],"min":1,"max":1,"filter":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}}},"bind":"target"}],"effect":[{"call":"special_summon","args":{"card":{"call":"sole_card","args":{"group":{"var":"target"}}},"method":"SPECIAL","position":"FACE_UP_ATTACK"}}]}]})"
-	);
-	write(
-		"97000151.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["NORMAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":1800,"defense":1200}}})"
-	);
-
 	constexpr domain::CardCode spell_code{97000150};
 	constexpr domain::CardCode monster_code{97000151};
 
@@ -3126,7 +3007,7 @@ TEST_CASE("flow::Duel resolves an effect-driven Special Summon from the Graveyar
 	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
 	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
 
-	REQUIRE(duel.load_scripts(directory));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -3160,34 +3041,10 @@ TEST_CASE("flow::Duel resolves an effect-driven Special Summon from the Graveyar
 		)
 	);
 
-	std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("flow::Duel negates an effect-driven Special Summon effect")
 {
-	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_effect_special_summon_negated";
-	std::filesystem::remove_all(directory);
-	std::filesystem::create_directories(directory);
-
-	const auto write = [&](const std::string_view name, const std::string_view text) -> void
-	{
-		std::ofstream stream{directory / name, std::ios::binary};
-		stream << text;
-	};
-
-	write(
-		"97000150.json",
-		R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["GRAVEYARD"],"min":1,"filter":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}}}},"target":[{"call":"pick_target","args":{"players":["SELF"],"zones":["GRAVEYARD"],"min":1,"max":1,"filter":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}}},"bind":"target"}],"effect":[{"call":"special_summon","args":{"card":{"call":"sole_card","args":{"group":{"var":"target"}}},"method":"SPECIAL","position":"FACE_UP_ATTACK"}}]}]})"
-	);
-	write(
-		"97000151.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["NORMAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":1800,"defense":1200}}})"
-	);
-	write(
-		"97000152.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"negate_effect","args":{}}]}]})"
-	);
-
 	constexpr domain::CardCode spell_code{97000150};
 	constexpr domain::CardCode monster_code{97000151};
 	constexpr domain::CardCode negator_code{97000152};
@@ -3199,7 +3056,7 @@ TEST_CASE("flow::Duel negates an effect-driven Special Summon effect")
 	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
 	game.register_definition(negator_code, make_monster(negator_code));
 
-	REQUIRE(duel.load_scripts(directory));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -3228,30 +3085,10 @@ TEST_CASE("flow::Duel negates an effect-driven Special Summon effect")
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(negator) == domain::Zone::MONSTER);
 
-	std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck monster")
 {
-	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_proper_summon";
-	std::filesystem::remove_all(directory);
-	std::filesystem::create_directories(directory);
-
-	const auto write = [&](const std::string_view name, const std::string_view text) -> void
-	{
-		std::ofstream stream{directory / name, std::ios::binary};
-		stream << text;
-	};
-
-	write(
-		"97000150.json",
-		R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["GRAVEYARD"],"min":1,"filter":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}}}},"target":[{"call":"pick_target","args":{"players":["SELF"],"zones":["GRAVEYARD"],"min":1,"max":1,"filter":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}}},"bind":"target"}],"effect":[{"call":"special_summon","args":{"card":{"call":"sole_card","args":{"group":{"var":"target"}}},"method":"SPECIAL","position":"FACE_UP_ATTACK"}}]}]})"
-	);
-	write(
-		"97000153.json",
-		R"({"identity":{"kind":"MONSTER","subtypes":["FUSION"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"fusion","materials":[{"card":97000151}]}]})"
-	);
-
 	constexpr domain::CardCode spell_code{97000150};
 	constexpr domain::CardCode fusion_code{97000153};
 
@@ -3263,7 +3100,7 @@ TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck mon
 	fusion_definition.subtypes = {domain::CardSubtype::FUSION};
 	game.register_definition(fusion_code, fusion_definition);
 
-	REQUIRE(duel.load_scripts(directory));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -3320,7 +3157,6 @@ TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck mon
 	CHECK(game.find_instance(fusion)->summon_record().method == domain::SummonMethod::SPECIAL);
 	CHECK(game.find_instance(fusion)->properly_summoned());
 
-	std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("flow::Duel sets and activates a trap")

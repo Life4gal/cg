@@ -1,0 +1,13 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["NORMAL"],
+		"monster": {
+			"attribute": "EARTH",
+			"race": "DRAGON",
+			"level": 4,
+			"attack": 1800,
+			"defense": 1200
+		}
+	}
+}

@@ -1,0 +1,20 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["EFFECT"],
+		"monster": {
+			"attribute": "DARK",
+			"race": "FIEND",
+			"level": 4,
+			"attack": 1000,
+			"defense": 1000
+		}
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "quick"},
+			"effect": [{"call": "negate_effect", "args": {}}]
+		}
+	]
+}
