@@ -2747,6 +2747,355 @@ TEST_CASE("flow::Duel activates spell cards")
 	CHECK_FALSE(duel.activate_card(monster));
 }
 
+TEST_CASE("flow::Duel resolves a Ritual Spell through effect summon")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_ritual_spell";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"97000125.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["RITUAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["HAND"],"min":1,"filter":{"and":[{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"RITUAL"}}]}}},"effect":[{"call":"ritual_summon","args":{"position":"FACE_UP_ATTACK"}}]}]})"
+	);
+	write(
+		"97000130.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["RITUAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"ritual","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"level":4}]})"
+	);
+	write(
+		"97000131.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["NORMAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":2,"attack":1000,"defense":1000}}})"
+	);
+	write(
+		"97000132.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["NORMAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":2,"attack":1000,"defense":1000}}})"
+	);
+
+	constexpr domain::CardCode spell_code{97000125};
+	constexpr domain::CardCode ritual_code{97000130};
+	constexpr domain::CardCode material_a_code{97000131};
+	constexpr domain::CardCode material_b_code{97000132};
+
+	state::CardInstanceId ritual_id{};
+	state::CardInstanceId material_a_id{};
+	state::CardInstanceId material_b_id{};
+
+	driver::LocalTestSelector selector
+	{
+			[&]([[maybe_unused]] const domain::Player player, const execution::Group& candidates, const std::size_t min, [[maybe_unused]] const std::size_t max) -> execution::Group
+			{
+				if (ritual_id.valid() && std::ranges::contains(candidates, ritual_id))
+				{
+					execution::Group result{};
+					result.push_back(ritual_id);
+					return result;
+				}
+
+				if (material_a_id.valid() &&
+				    material_b_id.valid() &&
+				    std::ranges::contains(candidates, material_a_id) &&
+				    std::ranges::contains(candidates, material_b_id))
+				{
+					execution::Group result{};
+					result.push_back(material_a_id);
+					result.push_back(material_b_id);
+					return result;
+				}
+
+				const auto count = std::ranges::min(min, candidates.size());
+				return {candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(count)};
+			},
+			nullptr
+	};
+	flow::Duel duel{selector};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::RITUAL}));
+	auto ritual = make_monster(ritual_code, 2000, 2000, 4);
+	ritual.subtypes = {domain::CardSubtype::RITUAL};
+	game.register_definition(ritual_code, ritual);
+	game.register_definition(material_a_code, make_monster(material_a_code, 1000, 1000, 2));
+	game.register_definition(material_b_code, make_monster(material_b_code, 1000, 1000, 2));
+
+	REQUIRE(duel.load_scripts(directory));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	const auto ritual_card = game.create_instance(ritual_code, domain::Player::FIRST);
+	REQUIRE(ritual_card.valid());
+	const auto material_a = game.create_instance(material_a_code, domain::Player::FIRST);
+	REQUIRE(material_a.valid());
+	const auto material_b = game.create_instance(material_b_code, domain::Player::FIRST);
+	REQUIRE(material_b.valid());
+
+	ritual_id = ritual_card;
+	material_a_id = material_a;
+	material_b_id = material_b;
+
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(ritual_card), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(material_a), domain::HandPlacement{.index = 2, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(material_b), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+	CHECK(game.zone_of(spell) == domain::Zone::SPELL_TRAP);
+	REQUIRE(duel.chain().size() == 1);
+
+	settle(duel);
+
+	CHECK_FALSE(duel.pending_summon());
+	CHECK(game.zone_of(ritual_card) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(material_a) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(material_b) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+	CHECK(game.find_instance(ritual_card)->summon_record().method == domain::SummonMethod::RITUAL);
+	CHECK(game.find_instance(ritual_card)->summon_record().materials.size() == 2);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel fizzles a Ritual Spell with an invalid level sum")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_ritual_spell_fizzle";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"97000125.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["RITUAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["HAND"],"min":1,"filter":{"and":[{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"RITUAL"}}]}}},"effect":[{"call":"ritual_summon","args":{"position":"FACE_UP_ATTACK"}}]}]})"
+	);
+	write(
+		"97000130.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["RITUAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"ritual","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"level":4}]})"
+	);
+	write(
+		"97000131.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["NORMAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":2,"attack":1000,"defense":1000}}})"
+	);
+
+	constexpr domain::CardCode spell_code{97000125};
+	constexpr domain::CardCode ritual_code{97000130};
+	constexpr domain::CardCode material_code{97000131};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::RITUAL}));
+	auto ritual = make_monster(ritual_code, 2000, 2000, 4);
+	ritual.subtypes = {domain::CardSubtype::RITUAL};
+	game.register_definition(ritual_code, ritual);
+	game.register_definition(material_code, make_monster(material_code, 1000, 1000, 2));
+
+	REQUIRE(duel.load_scripts(directory));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	const auto ritual_card = game.create_instance(ritual_code, domain::Player::FIRST);
+	REQUIRE(ritual_card.valid());
+	const auto material = game.create_instance(material_code, domain::Player::FIRST);
+	REQUIRE(material.valid());
+
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(ritual_card), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(material), domain::HandPlacement{.index = 2, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+	settle(duel);
+
+	CHECK_FALSE(duel.pending_summon());
+	CHECK(game.zone_of(ritual_card) == domain::Zone::HAND);
+	CHECK(game.zone_of(material) == domain::Zone::HAND);
+	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel negates a Ritual Spell activation")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_ritual_spell_negated";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"97000125.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["RITUAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["HAND"],"min":1,"filter":{"and":[{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"RITUAL"}}]}}},"effect":[{"call":"ritual_summon","args":{"position":"FACE_UP_ATTACK"}}]}]})"
+	);
+	write(
+		"97000130.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["RITUAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"ritual","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"level":4}]})"
+	);
+	write(
+		"97000134.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"effect":[{"call":"negate_activation","args":{}}]}]})"
+	);
+
+	constexpr domain::CardCode spell_code{97000125};
+	constexpr domain::CardCode ritual_code{97000130};
+	constexpr domain::CardCode negator_code{97000134};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::RITUAL}));
+	auto ritual = make_monster(ritual_code, 2000, 2000, 4);
+	ritual.subtypes = {domain::CardSubtype::RITUAL};
+	game.register_definition(ritual_code, ritual);
+	game.register_definition(negator_code, make_monster(negator_code));
+
+	REQUIRE(duel.load_scripts(directory));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	const auto ritual_card = game.create_instance(ritual_code, domain::Player::FIRST);
+	REQUIRE(ritual_card.valid());
+	const auto negator = game.create_instance(negator_code, domain::Player::SECOND);
+	REQUIRE(negator.valid());
+
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(ritual_card), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(negator), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+	CHECK(duel.activate_effect(negator, 0));
+	REQUIRE(duel.chain().size() == 2);
+
+	settle(duel);
+
+	CHECK_FALSE(duel.pending_summon());
+	CHECK(game.zone_of(ritual_card) == domain::Zone::HAND);
+	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(negator) == domain::Zone::MONSTER);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel cannot summon-negate an effect-driven Ritual Summon")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_ritual_spell_effect_summon";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"97000125.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["RITUAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["HAND"],"min":1,"filter":{"and":[{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},{"call":"is_card_subtype","args":{"card":{"call":"$"},"subtype":"RITUAL"}}]}}},"effect":[{"call":"ritual_summon","args":{"position":"FACE_UP_ATTACK"}}]}]})"
+	);
+	write(
+		"97000130.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["RITUAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":2000,"defense":2000}},"summons":[{"method":"ritual","material":{"call":"is_card_type","args":{"card":{"call":"$"},"card_type":"MONSTER"}},"level":4}]})"
+	);
+	write(
+		"97000131.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["NORMAL"],"monster":{"attribute":"EARTH","race":"DRAGON","level":4,"attack":1000,"defense":1000}}})"
+	);
+
+	constexpr domain::CardCode solemn_code{41420027};
+	constexpr domain::CardCode spell_code{97000125};
+	constexpr domain::CardCode ritual_code{97000130};
+	constexpr domain::CardCode material_code{97000131};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::RITUAL}));
+	auto ritual = make_monster(ritual_code, 2000, 2000, 4);
+	ritual.subtypes = {domain::CardSubtype::RITUAL};
+	game.register_definition(ritual_code, ritual);
+	game.register_definition(material_code, make_monster(material_code, 1000, 1000, 4));
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+	REQUIRE(duel.load_scripts(directory));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto solemn = game.create_instance(solemn_code, domain::Player::FIRST);
+	REQUIRE(solemn.valid());
+	const auto spell = game.create_instance(spell_code, domain::Player::SECOND);
+	REQUIRE(spell.valid());
+	const auto ritual_card = game.create_instance(ritual_code, domain::Player::SECOND);
+	REQUIRE(ritual_card.valid());
+	const auto material = game.create_instance(material_code, domain::Player::SECOND);
+	REQUIRE(material.valid());
+
+	game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(ritual_card), domain::HandPlacement{.index = 2, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(material), domain::HandPlacement{.index = 3, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.set_spell_trap(solemn, domain::FieldColumn::C1));
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+	CHECK(duel.chain().size() == 1);
+	settle(duel);
+
+	CHECK_FALSE(duel.pending_summon());
+	CHECK(game.zone_of(ritual_card) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(material) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(solemn) == domain::Zone::SPELL_TRAP);
+	CHECK(game.life_points(domain::Player::FIRST) == 8000);
+
+	// 效果召唤不会打开 SPECIAL_SUMMON_DECLARED 窗口。
+	CHECK_FALSE(duel.windows().empty());
+	CHECK(
+		std::ranges::none_of(
+			duel.windows(),
+			[](const execution::EventWindow& window) noexcept -> bool
+			{
+			const auto* code = std::get_if<domain::EventCode>(&window.source);
+			return code != nullptr && *code == domain::EventCode::SPECIAL_SUMMON_DECLARED;
+			}
+		)
+	);
+
+	std::filesystem::remove_all(directory);
+}
+
 TEST_CASE("flow::Duel sets and activates a trap")
 {
 	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_trap";

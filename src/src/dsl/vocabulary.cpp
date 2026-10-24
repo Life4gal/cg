@@ -361,6 +361,16 @@ namespace cg::dsl
 			"特殊召唤"
 		);
 		do_register(
+			"ritual_summon",
+			PrimitiveKind::ACTION,
+			{Phase::RESOLVE},
+			{
+					{.name = "position", .kind = ParamDef::Value{.type = type_id("position")}, .required = true},
+			},
+			type_id("void"),
+			"效果驱动的仪式召唤:从手牌选择仪式怪兽与素材,素材送墓后特殊召唤;不开召唤宣言时点"
+		);
+		do_register(
 			"discard",
 			PrimitiveKind::ACTION,
 			{Phase::COST, Phase::RESOLVE},

@@ -365,6 +365,10 @@ namespace cg::execution
 		{
 			return special_summon(*definition, call, context);
 		}
+		if (definition->name == "ritual_summon")
+		{
+			return ritual_summon(*definition, call, context);
+		}
 		if (definition->name == "negate_activation")
 		{
 			return negate_activation(*definition, call, context);
@@ -1333,6 +1337,222 @@ namespace cg::execution
 		}
 
 		return std::nullopt;
+	}
+
+	auto Interpreter::ritual_summon(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* position_value = as_argument<dsl::ValueClass::INT>(*args, 0);
+		if (position_value == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto position = static_cast<domain::Position>(static_cast<std::underlying_type_t<domain::Position>>(*position_value));
+		if (position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
+		{
+			return std::nullopt;
+		}
+
+		// 仪式怪兽:自己手牌、仪式怪兽、脚本含 RitualProcedure。
+		auto monster_candidates = collect({&context.controller, 1}, utility::EnumMask{domain::Zone::HAND});
+		std::erase_if(
+			monster_candidates.operator Group::value_type&(),
+			[&](const state::CardInstanceId card) noexcept -> bool
+			{
+				const auto* instance = game.find_instance(card);
+				if (instance == nullptr)
+				{
+					return true;
+				}
+
+				if (
+					!state_resolver_.contains_card_type(*instance, domain::CardType::MONSTER) ||
+					!state_resolver_.contains_card_subtype(*instance, domain::CardSubtype::RITUAL)
+				)
+				{
+					return true;
+				}
+
+				const auto* script = find_script(instance->origin_code());
+				if (script == nullptr)
+				{
+					return true;
+				}
+
+				return std::ranges::none_of(
+					script->summons,
+					[](const dsl::SummonProcedure& summon) noexcept -> bool
+					{
+						return std::holds_alternative<dsl::RitualProcedure>(summon);
+					}
+				);
+			}
+		);
+
+		const auto selected_monster = select(context, monster_candidates, 1, 1);
+		if (!selected_monster.has_value() || selected_monster->empty())
+		{
+			return std::nullopt;
+		}
+
+		const auto monster_id = *selected_monster->begin();
+		auto* monster = game.find_instance_mutable(monster_id);
+		if (monster == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto* script = find_script(monster->origin_code());
+		if (script == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto* procedure = [&]() noexcept -> const dsl::RitualProcedure*
+		{
+			for (const auto& summon: script->summons)
+			{
+				if (const auto* ritual = std::get_if<dsl::RitualProcedure>(&summon);
+					ritual != nullptr)
+				{
+					return ritual;
+				}
+			}
+			return nullptr;
+		}();
+		if (procedure == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		Context monster_context{monster->controller(), monster->id()};
+		const auto target = evaluate(procedure->level, monster_context);
+		if (!target.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* target_level = std::get_if<Integer>(&*target);
+		if (target_level == nullptr || *target_level < 0)
+		{
+			return std::nullopt;
+		}
+
+		// 素材:自己手牌/场上表侧怪兽,排除仪式怪兽自身,再按 procedure 谓词过滤
+		auto material_candidates = collect(
+			{&context.controller, 1},
+			utility::EnumMask{domain::Zone::HAND, domain::Zone::MONSTER, domain::Zone::EXTRA_MONSTER}
+		);
+		std::erase_if(
+			material_candidates.operator Group::value_type&(),
+			[&](const state::CardInstanceId card) noexcept -> bool
+			{
+				if (card == monster_id)
+				{
+					return true;
+				}
+
+				const auto* instance = game.find_instance(card);
+				if (instance == nullptr || instance->controller() != context.controller)
+				{
+					return true;
+				}
+
+				const auto zone = game.zone_of(card);
+				if (zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
+				{
+					return false;
+				}
+
+				const auto field_info = domain::field_info_of(instance->placement());
+				return !field_info.has_value() ||
+				       (field_info->position != domain::Position::FACE_UP_ATTACK &&
+				        field_info->position != domain::Position::FACE_UP_DEFENSE);
+			}
+		);
+
+		auto filtered = filter(procedure->material, material_candidates, monster_context);
+		if (!filtered.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto selected_materials = select(context, *filtered, 1, filtered->size());
+		if (!selected_materials.has_value() || selected_materials->empty())
+		{
+			return std::nullopt;
+		}
+
+		std::uint64_t total_level{};
+		for (const auto material: *selected_materials)
+		{
+			const auto* instance = game.find_instance(material);
+			if (instance == nullptr)
+			{
+				return std::nullopt;
+			}
+
+			total_level += static_cast<std::uint64_t>(state_resolver_.level(*instance));
+		}
+
+		if (std::cmp_not_equal(total_level, target_level->operator Integer::value_type()))
+		{
+			return std::nullopt;
+		}
+
+		auto column = std::optional<domain::FieldColumn>{};
+		for (const auto candidate: domain::field_columns)
+		{
+			if (game.is_location_empty(context.controller, domain::Location{domain::MonsterLocation{.column = candidate}}))
+			{
+				column = candidate;
+				break;
+			}
+		}
+		if (!column.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto from = monster->placement();
+		for (const auto material: *selected_materials)
+		{
+			auto* material_instance = game.find_instance_mutable(material);
+			if (material_instance == nullptr)
+			{
+				return std::nullopt;
+			}
+
+			game.move_to_graveyard(*material_instance, {domain::Reason::RITUAL});
+			pending_events_.emplace_back(domain::EventCode::SENT_TO_GRAVEYARD, material);
+		}
+
+		game.move_to_monster(
+			*monster,
+			{domain::Reason::EFFECT},
+			domain::MonsterPlacement{.column = *column, .position = position}
+		);
+		game.set_summon_record(
+			*monster,
+			state::CardInstance::SummonRecord
+			{
+					.player = context.controller,
+					.method = domain::SummonMethod::RITUAL,
+					.from = from,
+					.materials = {selected_materials->begin(), selected_materials->end()},
+			}
+		);
+		pending_events_.emplace_back(domain::EventCode::SPECIAL_SUMMON_SUCCESS, monster_id);
+
+		return Value{Void{}};
 	}
 
 	auto Interpreter::negate_activation(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
