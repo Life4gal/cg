@@ -4,6 +4,7 @@
 #include <array>
 #include <ranges>
 
+#include <cg/utility/functional.hpp>
 #include <cg/execution/chain.hpp>
 
 #include <libassert/assert.hpp>
@@ -407,12 +408,41 @@ namespace cg::flow
 			{
 				return &summon;
 			}
+			if (method == domain::SummonMethod::FUSION && std::holds_alternative<dsl::FusionProcedure>(summon))
+			{
+				return &summon;
+			}
+			if (method == domain::SummonMethod::LINK && std::holds_alternative<dsl::LinkProcedure>(summon))
+			{
+				return &summon;
+			}
+			if (method == domain::SummonMethod::RITUAL && std::holds_alternative<dsl::RitualProcedure>(summon))
+			{
+				return &summon;
+			}
+			if (method == domain::SummonMethod::SPECIAL && std::holds_alternative<dsl::SelfSpecialProcedure>(summon))
+			{
+				return &summon;
+			}
 		}
 
 		return nullptr;
 	}
 
 	auto Duel::all_summon_materials_valid(const state::CardInstance& card, const std::span<const state::CardInstanceId> materials) const noexcept -> bool
+	{
+		return all_summon_materials_valid(
+			card,
+			materials,
+			utility::EnumMask{domain::Zone::MONSTER, domain::Zone::EXTRA_MONSTER}
+		);
+	}
+
+	auto Duel::all_summon_materials_valid(
+		const state::CardInstance& card,
+		const std::span<const state::CardInstanceId> materials,
+		const utility::EnumMask<domain::Zone> allowed_zones
+	) const noexcept -> bool
 	{
 		const auto controller = card.controller();
 
@@ -430,20 +460,25 @@ namespace cg::flow
 			}
 
 			if (const auto zone = game_.zone_of(material);
-				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
+				!allowed_zones.contains(zone))
 			{
 				return false;
 			}
 
-			const auto field_info = domain::field_info_of(instance->placement());
-			if (!field_info.has_value())
+			// 手牌素材没有场上位置;场上素材必须是表侧表示
+			if (const auto zone = game_.zone_of(material);
+				zone == domain::Zone::MONSTER || zone == domain::Zone::EXTRA_MONSTER)
 			{
-				return false;
-			}
+				const auto field_info = domain::field_info_of(instance->placement());
+				if (!field_info.has_value())
+				{
+					return false;
+				}
 
-			if (field_info->position != domain::Position::FACE_UP_ATTACK && field_info->position != domain::Position::FACE_UP_DEFENSE)
-			{
-				return false;
+				if (field_info->position != domain::Position::FACE_UP_ATTACK && field_info->position != domain::Position::FACE_UP_DEFENSE)
+				{
+					return false;
+				}
 			}
 		}
 
@@ -463,6 +498,87 @@ namespace cg::flow
 		context.card_state = &card_state_;
 
 		return interpreter_.filter(predicate, candidates, context);
+	}
+
+	auto Duel::validate_fusion_materials(
+		const state::CardInstance& summon_card,
+		const dsl::FusionProcedure& procedure,
+		const std::span<const state::CardInstanceId> materials
+	) noexcept -> bool
+	{
+		if (procedure.materials.empty() ||
+		    !all_summon_materials_valid(
+			    summon_card,
+			    materials,
+			    utility::EnumMask{domain::Zone::HAND, domain::Zone::MONSTER, domain::Zone::EXTRA_MONSTER}
+		    ))
+		{
+			return false;
+		}
+
+		const auto required = std::ranges::fold_left(
+			procedure.materials | std::views::transform(&dsl::MaterialSpec::count),
+			std::size_t{0},
+			std::plus{}
+		);
+
+		if (required != materials.size())
+		{
+			return false;
+		}
+
+		std::vector used(materials.size(), false);
+		for (const auto& [selector, count]: procedure.materials)
+		{
+			std::size_t matched = 0;
+			for (std::size_t index = 0; index < procedure.materials.size(); ++index)
+			{
+				if (used[index])
+				{
+					continue;
+				}
+
+				const auto material = materials[index];
+				const auto* instance = game_.find_instance(material);
+				if (instance == nullptr)
+				{
+					return false;
+				}
+
+				const auto matches = std::visit(
+					utility::Overloaded
+					{
+							[&](const domain::CardCode code) noexcept -> bool
+							{
+								return instance->origin_code() == code;
+							},
+							[&](const dsl::Expression& expression) noexcept -> bool
+							{
+								const auto candidates = match_summon_materials(summon_card, expression, {&material, 1});
+								return candidates.has_value() && !candidates->empty();
+							}
+					},
+					selector
+				);
+				if (matches)
+				{
+					used[index] = true;
+					matched += 1;
+
+					if (matched == static_cast<std::size_t>(count))
+					{
+						break;
+					}
+				}
+			}
+
+			if (matched != static_cast<std::size_t>(count))
+			{
+				return false;
+			}
+		}
+
+		return std::ranges::all_of(used, std::identity{});
 	}
 
 	auto Duel::validate_synchro_materials(
@@ -573,6 +689,80 @@ namespace cg::flow
 		}
 
 		return material_level.has_value() && *material_level == target_level;
+	}
+
+	auto Duel::validate_link_materials(
+		const state::CardInstance& summon_card,
+		const dsl::LinkProcedure& procedure,
+		const std::span<const state::CardInstanceId> materials
+	) noexcept -> bool
+	{
+		if (materials.empty() || !all_summon_materials_valid(summon_card, materials))
+		{
+			return false;
+		}
+
+		if (procedure.count != 0 && materials.size() != static_cast<std::size_t>(procedure.count))
+		{
+			return false;
+		}
+
+		const auto matched = match_summon_materials(summon_card, procedure.material, materials);
+		return matched.has_value() && matched->size() == materials.size();
+	}
+
+	auto Duel::validate_ritual_materials(
+		const state::CardInstance& summon_card,
+		const dsl::RitualProcedure& procedure,
+		const std::span<const state::CardInstanceId> materials
+	) noexcept -> bool
+	{
+		if (
+			materials.empty() ||
+			!all_summon_materials_valid(
+				summon_card,
+				materials,
+				utility::EnumMask{domain::Zone::HAND, domain::Zone::MONSTER, domain::Zone::EXTRA_MONSTER}
+			)
+		)
+		{
+			return false;
+		}
+
+
+		if (const auto matched = match_summon_materials(summon_card, procedure.material, materials);
+			!matched.has_value() || matched->size() != materials.size())
+		{
+			return false;
+		}
+
+		execution::Context context{game_, selector_, summon_card.controller(), summon_card.id()};
+		context.card_state = &card_state_;
+		const auto target = interpreter_.evaluate_expression(procedure.level, context);
+		if (!target.has_value())
+		{
+			return false;
+		}
+
+		const auto* target_level = std::get_if<execution::Integer>(&*target);
+		if (target_level == nullptr)
+		{
+			return false;
+		}
+
+		std::uint64_t total_level{};
+		for (const auto material: materials)
+		{
+			const auto* instance = game_.find_instance(material);
+			if (instance == nullptr)
+			{
+				return false;
+			}
+
+			total_level += card_state_.level(*instance);
+		}
+
+		return std::cmp_equal(total_level, static_cast<execution::Integer::value_type>(*target_level));
 	}
 
 	auto Duel::summonable_instance_of(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement) noexcept -> state::CardInstance*
@@ -1647,6 +1837,292 @@ namespace cg::flow
 					.method = domain::SummonMethod::XYZ,
 					.card = std::ref(*instance),
 					.materials = std::move(summon_materials),
+			},
+			domain::EventCode::SPECIAL_SUMMON_DECLARED
+		);
+	}
+
+	auto Duel::fusion_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
+	{
+		if (summon_.has_value())
+		{
+			return false;
+		}
+
+		// 必须是表侧攻击/守备表示
+		if (const auto position = domain::position_of(placement);
+			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
+		{
+			return false;
+		}
+
+		auto* instance = summonable_instance_of(card, placement);
+		if (instance == nullptr || game_.zone_of(card) != domain::Zone::EXTRA_DECK)
+		{
+			return false;
+		}
+
+		// 必须是融合子类型
+		if (!card_state_.is_card_subtype(*instance, domain::CardSubtype::FUSION))
+		{
+			return false;
+		}
+
+		// 必须存在对应的融合召唤 procedure
+		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::FUSION);
+		if (procedure == nullptr)
+		{
+			return false;
+		}
+
+		const auto* fusion = std::get_if<dsl::FusionProcedure>(procedure);
+		if (fusion == nullptr || !validate_fusion_materials(*instance, *fusion, materials))
+		{
+			return false;
+		}
+
+		// 素材在宣言前送入墓地(召唤被无效也不返还)
+		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
+		summon_materials.reserve(materials.size());
+		for (const auto material: materials)
+		{
+			auto* material_instance = game_.find_instance_mutable(material);
+			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
+			game_.move_to_graveyard(*material_instance, {domain::Reason::FUSION});
+
+			summon_materials.push_back(std::ref(*material_instance));
+		}
+
+		return begin_summon(
+			SummonState
+			{
+					.controller = instance->controller(),
+					.placement = placement,
+					.method = domain::SummonMethod::FUSION,
+					.card = std::ref(*instance),
+					.materials = std::move(summon_materials),
+			},
+			domain::EventCode::SPECIAL_SUMMON_DECLARED
+		);
+	}
+
+	auto Duel::link_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
+	{
+		if (summon_.has_value())
+		{
+			return false;
+		}
+
+		// 必须是表侧攻击
+		if (const auto position = domain::position_of(placement);
+			position != domain::Position::FACE_UP_ATTACK)
+		{
+			return false;
+		}
+
+		auto* instance = summonable_instance_of(card, placement);
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		if (const auto zone = game_.zone_of(card);
+			zone != domain::Zone::EXTRA_DECK)
+		{
+			return false;
+		}
+
+		// 必须是连接子类型
+		if (!card_state_.is_card_subtype(*instance, domain::CardSubtype::LINK))
+		{
+			return false;
+		}
+
+		// 必须存在对应的连接召唤 procedure
+		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::LINK);
+		if (procedure == nullptr)
+		{
+			return false;
+		}
+
+		const auto* link = std::get_if<dsl::LinkProcedure>(procedure);
+		if (link == nullptr || !validate_link_materials(*instance, *link, materials))
+		{
+			return false;
+		}
+
+		// 素材在宣言前送入墓地(召唤被无效也不返还)
+		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
+		summon_materials.reserve(materials.size());
+		for (const auto material: materials)
+		{
+			auto* material_instance = game_.find_instance_mutable(material);
+			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
+			game_.move_to_graveyard(*material_instance, {domain::Reason::LINK});
+
+			summon_materials.push_back(std::ref(*material_instance));
+		}
+
+		return begin_summon(
+			SummonState
+			{
+					.controller = instance->controller(),
+					.placement = placement,
+					.method = domain::SummonMethod::LINK,
+					.card = std::ref(*instance),
+					.materials = std::move(summon_materials),
+			},
+			domain::EventCode::SPECIAL_SUMMON_DECLARED
+		);
+	}
+
+	auto Duel::ritual_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
+	{
+		if (summon_.has_value())
+		{
+			return false;
+		}
+
+		// 必须是表侧攻击/守备表示
+		if (const auto position = domain::position_of(placement);
+			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
+		{
+			return false;
+		}
+
+		auto* instance = summonable_instance_of(card, placement);
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		if (const auto zone = game_.zone_of(card);
+			zone != domain::Zone::HAND)
+		{
+			return false;
+		}
+
+		// 必须是仪式子类型
+		if (!card_state_.is_card_subtype(*instance, domain::CardSubtype::RITUAL))
+		{
+			return false;
+		}
+
+		// 必须存在对应的仪式召唤 procedure
+		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::RITUAL);
+		if (procedure == nullptr)
+		{
+			return false;
+		}
+
+		const auto* ritual = std::get_if<dsl::RitualProcedure>(procedure);
+		if (ritual == nullptr || !validate_ritual_materials(*instance, *ritual, materials))
+		{
+			return false;
+		}
+
+		// 素材在宣言前送入墓地(召唤被无效也不返还)
+		std::vector<std::reference_wrapper<state::CardInstance>> summon_materials{};
+		summon_materials.reserve(materials.size());
+		for (const auto material: materials)
+		{
+			auto* material_instance = game_.find_instance_mutable(material);
+			LIBASSERT_DEBUG_ASSERT(material_instance != nullptr);
+			game_.move_to_graveyard(*material_instance, {domain::Reason::RITUAL});
+
+			summon_materials.push_back(std::ref(*material_instance));
+		}
+
+		return begin_summon(
+			SummonState
+			{
+					.controller = instance->controller(),
+					.placement = placement,
+					.method = domain::SummonMethod::RITUAL,
+					.card = std::ref(*instance),
+					.materials = std::move(summon_materials),
+			},
+			domain::EventCode::SPECIAL_SUMMON_DECLARED
+		);
+	}
+
+	auto Duel::self_special_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement) noexcept -> bool
+	{
+		if (summon_.has_value())
+		{
+			return false;
+		}
+
+		// 必须是表侧攻击/守备表示
+		if (const auto position = domain::position_of(placement);
+			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
+		{
+			return false;
+		}
+
+		auto* instance = summonable_instance_of(card, placement);
+		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		// 必须存在对应的特殊召唤 procedure
+		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::SPECIAL);
+		if (procedure == nullptr)
+		{
+			return false;
+		}
+
+		const auto* special = std::get_if<dsl::SelfSpecialProcedure>(procedure);
+		if (special == nullptr)
+		{
+			return false;
+		}
+
+		const auto source_zone = game_.zone_of(card);
+		if (special->source_zones.empty())
+		{
+			if (source_zone != domain::Zone::HAND)
+			{
+				return false;
+			}
+		}
+		else if (!special->source_zones.contains(source_zone))
+		{
+			return false;
+		}
+
+		execution::Context context{game_, selector_, instance->controller(), instance->id()};
+		context.card_state = &card_state_;
+
+		if (special->condition.has_value())
+		{
+			const auto condition = interpreter_.evaluate_expression(*special->condition, context);
+			if (!condition.has_value())
+			{
+				return false;
+			}
+
+			const auto* value = std::get_if<execution::Boolean>(&*condition);
+			if (value == nullptr || !*value)
+			{
+				return false;
+			}
+		}
+
+		if (!special->cost.empty() && !interpreter_.execute(special->cost, context))
+		{
+			return false;
+		}
+
+		return begin_summon(
+			SummonState
+			{
+					.controller = instance->controller(),
+					.placement = placement,
+					.method = domain::SummonMethod::SPECIAL,
+					.card = std::ref(*instance),
+					.materials = {},
 			},
 			domain::EventCode::SPECIAL_SUMMON_DECLARED
 		);

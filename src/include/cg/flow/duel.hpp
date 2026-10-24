@@ -246,12 +246,25 @@ namespace cg::flow
 		// 素材共同校验:非自身、不重复、同控制者、怪兽区、表侧表示
 		[[nodiscard]] auto all_summon_materials_valid(const state::CardInstance& card, std::span<const state::CardInstanceId> materials) const noexcept -> bool;
 
+		[[nodiscard]] auto all_summon_materials_valid(
+			const state::CardInstance& card,
+			std::span<const state::CardInstanceId> materials,
+			utility::EnumMask<domain::Zone> allowed_zones
+		) const noexcept -> bool;
+
 		// 用 procedure 的素材谓词筛选素材($ = 候选)
 		[[nodiscard]] auto match_summon_materials(
 			const state::CardInstance& card,
 			const dsl::Expression& predicate,
 			std::span<const state::CardInstanceId> materials
 		) noexcept -> std::optional<execution::Group>;
+
+		// 融合:满足MaterialSpec条件
+		[[nodiscard]] auto validate_fusion_materials(
+			const state::CardInstance& summon_card,
+			const dsl::FusionProcedure& procedure,
+			std::span<const state::CardInstanceId> materials
+		) noexcept -> bool;
 
 		// 同调:至少 2 素材;tuner/non_tuner 谓词各命中且可用不同素材;等级合计 = 目标
 		[[nodiscard]] auto validate_synchro_materials(
@@ -264,6 +277,20 @@ namespace cg::flow
 		[[nodiscard]] auto validate_xyz_materials(
 			const state::CardInstance& summon_card,
 			const dsl::XyzProcedure& procedure,
+			std::span<const state::CardInstanceId> materials
+		) noexcept -> bool;
+
+		// 链接:TODO
+		[[nodiscard]] auto validate_link_materials(
+			const state::CardInstance& summon_card,
+			const dsl::LinkProcedure& procedure,
+			std::span<const state::CardInstanceId> materials
+		) noexcept -> bool;
+
+		// 仪式: 
+		[[nodiscard]] auto validate_ritual_materials(
+			const state::CardInstance& summon_card,
+			const dsl::RitualProcedure& procedure,
 			std::span<const state::CardInstanceId> materials
 		) noexcept -> bool;
 
@@ -441,6 +468,42 @@ namespace cg::flow
 		}
 
 		auto xyz_summon(state::CardInstanceId card, domain::AnyMonsterPlacement placement, std::span<const state::CardInstanceId> materials) noexcept -> bool;
+
+		template<typename P>
+			requires(utility::variant_index_v<P, domain::AnyMonsterPlacement> != utility::invalid_variant_index)
+		auto fusion_summon(const state::CardInstanceId card, const P placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
+		{
+			return this->fusion_summon(card, {placement}, materials);
+		}
+
+		auto fusion_summon(state::CardInstanceId card, domain::AnyMonsterPlacement placement, std::span<const state::CardInstanceId> materials) noexcept -> bool;
+
+		template<typename P>
+			requires(utility::variant_index_v<P, domain::AnyMonsterPlacement> != utility::invalid_variant_index)
+		auto link_summon(const state::CardInstanceId card, const P placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
+		{
+			return this->link_summon(card, {placement}, materials);
+		}
+
+		auto link_summon(state::CardInstanceId card, domain::AnyMonsterPlacement placement, std::span<const state::CardInstanceId> materials) noexcept -> bool;
+
+		template<typename P>
+			requires(utility::variant_index_v<P, domain::AnyMonsterPlacement> != utility::invalid_variant_index)
+		auto ritual_summon(const state::CardInstanceId card, const P placement, const std::span<const state::CardInstanceId> materials) noexcept -> bool
+		{
+			return this->ritual_summon(card, {placement}, materials);
+		}
+
+		auto ritual_summon(state::CardInstanceId card, domain::AnyMonsterPlacement placement, std::span<const state::CardInstanceId> materials) noexcept -> bool;
+
+		template<typename P>
+			requires(utility::variant_index_v<P, domain::AnyMonsterPlacement> != utility::invalid_variant_index)
+		auto self_special_summon(const state::CardInstanceId card, const P placement) noexcept -> bool
+		{
+			return this->self_special_summon(card, {placement});
+		}
+
+		auto self_special_summon(state::CardInstanceId card, domain::AnyMonsterPlacement placement) noexcept -> bool;
 
 		// ================================================================
 		// 驱动动作: 卡牌发动(魔法/陷阱)

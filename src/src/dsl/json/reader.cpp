@@ -1843,7 +1843,7 @@ namespace cg::dsl::json
 					return std::nullopt;
 				}
 
-				const auto& text = it.value().get_ref<const nlohmann::json::string_t&>();
+				const auto& text = item.get_ref<const nlohmann::json::string_t&>();
 				const auto zone = utility::from_string<domain::Zone>(text);
 				if (!zone.has_value())
 				{
