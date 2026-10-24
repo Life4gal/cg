@@ -3196,6 +3196,13 @@ TEST_CASE("flow::Duel takes control with an effect Special Summon from the oppon
 	CHECK(game.find_instance(monster)->summon_record().player == domain::Player::FIRST);
 	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::SPECIAL);
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+
+	// 离开场上后控制权回到持有者,并进入持有者墓地
+	game.move_to_graveyard(*game.find_instance_mutable(monster), {domain::Reason::RULE});
+	CHECK(game.find_instance(monster)->move_provenance().controller == domain::Player::FIRST);
+	CHECK(game.find_instance(monster)->controller() == domain::Player::SECOND);
+	CHECK(game.zone_of(monster) == domain::Zone::GRAVEYARD);
+	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::GRAVEYARD) == 1);
 }
 
 TEST_CASE("flow::Duel sets and activates a trap")

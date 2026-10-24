@@ -358,7 +358,7 @@ namespace cg::state
 		const auto index = count_zone_card(card.owner(), domain::Zone::DECK);
 		const domain::DeckPlacement placement{.index = index};
 
-		move_to(card, card.controller(), reason, placement);
+		move_to(card, card.owner(), reason, placement);
 	}
 
 	auto Game::move_to_extra_deck(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::Position position) noexcept -> void
@@ -366,7 +366,7 @@ namespace cg::state
 		const auto index = count_zone_card(card.owner(), domain::Zone::EXTRA_DECK);
 		const domain::ExtraDeckPlacement placement{.index = index, .position = position};
 
-		move_to(card, card.controller(), reason, placement);
+		move_to(card, card.owner(), reason, placement);
 	}
 
 	auto Game::move_to_hand(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::Position position) noexcept -> void
@@ -374,7 +374,7 @@ namespace cg::state
 		const auto index = count_zone_card(card.owner(), domain::Zone::HAND);
 		const domain::HandPlacement placement{.index = index, .position = position};
 
-		move_to(card, card.controller(), reason, placement);
+		move_to(card, card.owner(), reason, placement);
 	}
 
 	auto Game::move_to_graveyard(CardInstance& card, const utility::EnumMask<domain::Reason> reason) noexcept -> void
@@ -382,7 +382,7 @@ namespace cg::state
 		const auto index = count_zone_card(card.owner(), domain::Zone::GRAVEYARD);
 		const domain::GraveyardPlacement placement{.index = index};
 
-		move_to(card, card.controller(), reason, placement);
+		move_to(card, card.owner(), reason, placement);
 	}
 
 	auto Game::move_to_banished(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::Position position) noexcept -> void
@@ -390,7 +390,7 @@ namespace cg::state
 		const auto index = count_zone_card(card.owner(), domain::Zone::BANISHED);
 		const domain::BanishedPlacement placement{.index = index, .position = position};
 
-		move_to(card, card.controller(), reason, placement);
+		move_to(card, card.owner(), reason, placement);
 	}
 
 	auto Game::move_to_monster(CardInstance& card, const utility::EnumMask<domain::Reason> reason, const domain::MonsterPlacement placement) noexcept -> void
