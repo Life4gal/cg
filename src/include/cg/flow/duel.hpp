@@ -507,6 +507,9 @@ namespace cg::flow
 		// 胜者(无人获胜/未结束返回空)
 		[[nodiscard]] auto winner() const noexcept -> std::optional<domain::Player>;
 
+		// 投降
+		auto concede(domain::Player player) noexcept -> bool;
+
 		// ================================================================
 		// 驱动动作: 回合/阶段
 		// ================================================================

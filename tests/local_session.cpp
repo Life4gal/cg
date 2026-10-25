@@ -236,3 +236,30 @@ TEST_CASE("driver::LocalDuelSession applies an Extra Deck fusion action")
 	CHECK(game.zone_of(materials[2]) == domain::Zone::GRAVEYARD);
 	CHECK(game.find_instance(fusion)->summon_record().method == domain::SummonMethod::FUSION);
 }
+
+TEST_CASE("driver::LocalDuelSession reports surrender")
+{
+	auto first = std::make_unique<driver::ScriptedController>(
+		std::vector<driver::LocalAction>{driver::SurrenderAction{}}
+	);
+	auto second = std::make_unique<driver::ScriptedController>();
+
+	driver::LocalDuelSession session{std::move(first), std::move(second)};
+
+	const auto loaded = session.load_scripts(CG_TEST_CARDS_DIR);
+	if (!loaded)
+	{
+		for (const auto& error: session.duel().take_script_errors())
+		{
+			MESSAGE(error);
+		}
+	}
+	REQUIRE(loaded);
+	REQUIRE(session.initialize(make_vanilla_config()));
+
+	const auto result = session.run();
+
+	CHECK(result.status == driver::LocalDuelSession::Status::MATCH_OVER);
+	REQUIRE(result.winner.has_value());
+	CHECK(*result.winner == domain::Player::SECOND);
+}

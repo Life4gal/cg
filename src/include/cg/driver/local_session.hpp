@@ -32,6 +32,8 @@ namespace cg::driver
 
 	class EndTurnAction {};
 
+	class SurrenderAction {};
+
 	class NormalSummonAction
 	{
 	public:
@@ -100,6 +102,7 @@ namespace cg::driver
 				PassAction,
 				AdvancePhaseAction,
 				EndTurnAction,
+				SurrenderAction,
 				NormalSummonAction,
 				SetMonsterAction,
 				TributeSummonAction,
@@ -324,7 +327,7 @@ namespace cg::driver
 		[[nodiscard]] auto controller_of(domain::Player player) noexcept -> LocalController&;
 		[[nodiscard]] auto controller_of(domain::Player player) const noexcept -> const LocalController&;
 
-		auto apply(const LocalAction& action) noexcept -> bool;
+		auto apply(const LocalAction& action, domain::Player actor) noexcept -> bool;
 
 	public:
 		LocalDuelSession(std::unique_ptr<LocalController> first, std::unique_ptr<LocalController> second) noexcept;

@@ -2195,6 +2195,17 @@ namespace cg::flow
 		return std::nullopt;
 	}
 
+	auto Duel::concede(const domain::Player player) noexcept -> bool
+	{
+		if (loser_.has_value())
+		{
+			return false;
+		}
+
+		loser_ = player;
+		return true;
+	}
+
 	auto Duel::draw_for_turn() noexcept -> bool
 	{
 		if (!chain_.empty())

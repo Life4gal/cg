@@ -144,7 +144,7 @@ namespace cg::driver
 		return *controllers_[std::to_underlying(player)];
 	}
 
-	auto LocalDuelSession::apply(const LocalAction& action) noexcept -> bool
+	auto LocalDuelSession::apply(const LocalAction& action, const domain::Player actor) noexcept -> bool
 	{
 		return std::visit(
 			utility::Overloaded
@@ -162,6 +162,10 @@ namespace cg::driver
 					[&]([[maybe_unused]] const EndTurnAction& a) noexcept -> bool
 					{
 						return duel_.end_turn();
+					},
+					[&]([[maybe_unused]] const SurrenderAction& a) noexcept -> bool
+					{
+						return duel_.concede(actor);
 					},
 					[&](const NormalSummonAction& a) noexcept -> bool
 					{
@@ -414,7 +418,7 @@ namespace cg::driver
 				};
 			}
 
-			if (!apply(*action))
+			if (!apply(*action, player))
 			{
 				return
 				{
