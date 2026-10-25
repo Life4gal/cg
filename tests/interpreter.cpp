@@ -70,6 +70,7 @@ namespace
 	}
 
 	driver::LocalTestSelector g_selector{};
+	std::mt19937_64 g_random{std::random_device{}()};
 }
 
 TEST_CASE("execution::Interpreter resolves Raigeki")
@@ -99,7 +100,7 @@ TEST_CASE("execution::Interpreter resolves Raigeki")
 	const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 	REQUIRE(activated != nullptr);
 
-	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 	execution::Context context{domain::Player::FIRST, raigeki};
 
 	CHECK(interpreter.execute(*activated, context));
@@ -137,7 +138,7 @@ TEST_CASE("execution::Interpreter resolves Tribute to the Doomed")
 	const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 	REQUIRE(activated != nullptr);
 
-	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 	execution::Context context{domain::Player::FIRST, state::CardInstanceId{state::CardInstanceId::invalid_id}};
 
 	CHECK(interpreter.execute(*activated, context));
@@ -170,7 +171,7 @@ TEST_CASE("execution::Interpreter evaluates boolean operators")
 		const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 		REQUIRE(activated != nullptr);
 
-		execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+		execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 		execution::Context context{domain::Player::FIRST, state::CardInstanceId{state::CardInstanceId::invalid_id}};
 
 		return interpreter.execute(*activated, context);
@@ -219,7 +220,7 @@ TEST_CASE("execution::Interpreter searches a subtype from the deck")
 	const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 	REQUIRE(activated != nullptr);
 
-	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 	execution::Context context{domain::Player::FIRST, terraforming};
 
 	CHECK(interpreter.execute(*activated, context));
@@ -256,7 +257,7 @@ TEST_CASE("execution::Interpreter draws cards")
 	const auto* activated = std::get_if<dsl::ActivatedEffect>(&script->effects[0].body);
 	REQUIRE(activated != nullptr);
 
-	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 	execution::Context context{domain::Player::FIRST, pot};
 
 	CHECK(interpreter.execute(*activated, context));
@@ -283,7 +284,7 @@ TEST_CASE("execution::Interpreter changes life points")
 	game.change_life_points(domain::Player::FIRST, 8000);
 	game.change_life_points(domain::Player::SECOND, 8000);
 
-	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 
 	{
 		const auto script = read_card_script("76103675.json");
@@ -362,7 +363,7 @@ TEST_CASE("execution::Interpreter matches a FLIP trigger and resolves")
 	const auto* trigger = std::get_if<dsl::Trigger>(&activated->activation);
 	REQUIRE(trigger != nullptr);
 
-	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 	execution::Context context
 	{
 			domain::Player::FIRST,
@@ -437,7 +438,7 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 		}
 	);
 
-	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 	interpreter.add_script(jar_code, *std::move(jar));
 	interpreter.add_script(optional_code, std::move(optional_script));
 
@@ -481,7 +482,7 @@ TEST_CASE("execution::Interpreter builds and resolves a chain")
 	auto rat = read_card_script("97017120.json");
 	REQUIRE(rat.has_value());
 
-	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 	interpreter.add_script(rat_code, *std::move(rat));
 
 	constexpr execution::EventWindow window{.source = dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, .card = std::nullopt, .player = std::nullopt, .amount = std::nullopt};
@@ -536,7 +537,7 @@ TEST_CASE("execution::Interpreter applies static numeric modifiers")
 	auto mountain_script = read_card_script("50913601.json");
 	REQUIRE(mountain_script.has_value());
 
-	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 	interpreter.add_script(mountain_code, *std::move(mountain_script));
 
 	const auto* dragon_instance = game.find_instance(dragon);
@@ -597,7 +598,7 @@ TEST_CASE("execution::CardStateResolver sees effective attributes in static effe
 	);
 	REQUIRE(source_script.has_value());
 
-	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 	interpreter.add_script(field_code, *std::move(field_script));
 	interpreter.add_script(light_source_code, *std::move(source_script));
 
@@ -628,7 +629,7 @@ TEST_CASE("execution::CardStateResolver contains_card_types includes origin type
 	REQUIRE(trap.valid());
 	REQUIRE(monster.valid());
 
-	execution::Interpreter interpreter{game, g_types, g_vocabulary, g_selector};
+	execution::Interpreter interpreter{game, g_random, g_types, g_vocabulary, g_selector};
 	const auto& resolver = interpreter.state_resolver();
 
 	CHECK(resolver.contains_card_types(*game.find_instance(spell), {domain::CardType::SPELL, domain::CardType::TRAP}));

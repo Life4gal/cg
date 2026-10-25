@@ -453,6 +453,17 @@ namespace cg::dsl
 			"送入墓地(不触发舍弃;与 discard 语义不同)"
 		);
 		do_register(
+			"return_to_deck",
+			PrimitiveKind::ACTION,
+			{Phase::COST, Phase::RESOLVE},
+			{
+					{.name = "cards", .kind = ParamDef::Value{.type = type_id("group")}, .required = true},
+					{.name = "shuffle", .kind = ParamDef::Value{.type = type_id("bool")}, .required = false},
+			},
+			type_id("void"),
+			"返回卡组(默认洗牌)"
+		);
+		do_register(
 			"draw",
 			PrimitiveKind::ACTION,
 			{Phase::RESOLVE},

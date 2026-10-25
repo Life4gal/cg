@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <random>
 #include <ranges>
 #include <unordered_map>
 
@@ -1965,16 +1964,17 @@ namespace cg::flow
 	Duel::Duel(execution::Selector& selector) noexcept
 		:
 		// game_{},
-		first_turn_draw_{false},
+		random_{0}, // NOLINT(cert-msc51-cpp)
 		// turn_{},
 		// priority_{},
 		// battle_{},
 		// state_{},
-		loser_{std::nullopt},
+		first_turn_draw_{false},
 		// types_{},
+		loser_{std::nullopt},
 		vocabulary_{types_},
 		selector_{selector},
-		interpreter_{game_, types_, vocabulary_, selector_} {}
+		interpreter_{game_, random_, types_, vocabulary_, selector_} {}
 
 	Duel::~Duel() noexcept = default;
 
@@ -2087,13 +2087,12 @@ namespace cg::flow
 				}
 			}
 
-			// TODO: 随机数生成器持久化
-			std::mt19937_64 random{config.seed};
+			random_.seed(config.seed);
 
 			// 切洗双方卡组
 			for (const auto player: {domain::Player::FIRST, domain::Player::SECOND})
 			{
-				game_.shuffle_deck(player, random);
+				game_.shuffle_deck(player, random_);
 			}
 		}
 

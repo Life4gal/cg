@@ -6361,3 +6361,122 @@ TEST_CASE("flow::Duel resolves Protector with Eyes of Blue send effect")
 	CHECK(game.zone_of(blue_eyes) == domain::Zone::MONSTER);
 	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::SPECIAL);
 }
+
+TEST_CASE("flow::Duel resolves Master with Eyes of Blue normal-summon effect")
+{
+	constexpr domain::CardCode master_code{45644898};
+	constexpr domain::CardCode white_stone_code{79814787};
+
+	driver::LocalTestSelector selector
+	{
+			select_up_to_max,
+			nullptr,
+			nullptr,
+			choose_all_triggers,
+	};
+
+	flow::Duel duel{selector};
+	auto& game = duel.game();
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	const auto* master_script = duel.find_script(master_code);
+	REQUIRE(master_script != nullptr);
+	const auto* white_stone_script = duel.find_script(white_stone_code);
+	REQUIRE(white_stone_script != nullptr);
+
+	game.register_definition(master_script->identity);
+	game.register_definition(white_stone_script->identity);
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto master = game.create_instance(master_code, domain::Player::FIRST);
+	REQUIRE(master.valid());
+	game.place(*game.find_instance_mutable(master), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto white_stone = game.create_instance(white_stone_code, domain::Player::FIRST);
+	REQUIRE(white_stone.valid());
+	game.place(*game.find_instance_mutable(white_stone), domain::GraveyardPlacement{.index = 0});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.normal_summon(master, domain::FieldColumn::C1));
+	resolve_summon(duel);
+	settle(duel);
+
+	CHECK(game.zone_of(master) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(white_stone) == domain::Zone::HAND);
+}
+
+TEST_CASE("flow::Duel resolves Master with Eyes of Blue graveyard effect")
+{
+	constexpr domain::CardCode master_code{45644898};
+	constexpr domain::CardCode blue_eyes_code{89631139};
+	constexpr domain::CardCode effect_monster_code{97001020};
+	constexpr domain::CardCode deck_filler_code{97001021};
+
+	driver::LocalTestSelector selector
+	{
+			select_up_to_max,
+			nullptr,
+			nullptr,
+			choose_all_triggers,
+	};
+
+	flow::Duel duel{selector};
+	auto& game = duel.game();
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	const auto* master_script = duel.find_script(master_code);
+	REQUIRE(master_script != nullptr);
+	const auto* blue_eyes_script = duel.find_script(blue_eyes_code);
+	REQUIRE(blue_eyes_script != nullptr);
+
+	game.register_definition(master_script->identity);
+	game.register_definition(blue_eyes_script->identity);
+
+	auto effect_monster_definition = make_monster(effect_monster_code, 1000, 1000, 4);
+	effect_monster_definition.subtypes = {domain::CardSubtype::EFFECT};
+	game.register_definition(effect_monster_definition);
+	const auto deck_filler_definition = make_monster(deck_filler_code, 1000, 1000, 4);
+	game.register_definition(deck_filler_definition);
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto master = game.create_instance(master_code, domain::Player::FIRST);
+	REQUIRE(master.valid());
+	game.place(*game.find_instance_mutable(master), domain::GraveyardPlacement{.index = 0});
+
+	const auto effect_monster = game.create_instance(effect_monster_code, domain::Player::FIRST);
+	REQUIRE(effect_monster.valid());
+	game.place(*game.find_instance_mutable(effect_monster), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto blue_eyes = game.create_instance(blue_eyes_code, domain::Player::FIRST);
+	REQUIRE(blue_eyes.valid());
+	game.place(*game.find_instance_mutable(blue_eyes), domain::GraveyardPlacement{.index = 1});
+
+	const auto first_filler = game.create_instance(deck_filler_code, domain::Player::FIRST);
+	REQUIRE(first_filler.valid());
+	game.place(*game.find_instance_mutable(first_filler), domain::DeckPlacement{.index = 0});
+
+	const auto second_filler = game.create_instance(deck_filler_code, domain::Player::FIRST);
+	REQUIRE(second_filler.valid());
+	game.place(*game.find_instance_mutable(second_filler), domain::DeckPlacement{.index = 1});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_effect(master, 1));
+	settle(duel);
+
+	CHECK(game.zone_of(master) == domain::Zone::DECK);
+	CHECK(game.zone_of(effect_monster) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(blue_eyes) == domain::Zone::MONSTER);
+	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::SPECIAL);
+}

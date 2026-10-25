@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <random>
 #include <span>
 #include <vector>
 
@@ -117,6 +118,7 @@ namespace cg::flow
 		// ================================================================
 
 		state::Game game_;
+		std::mt19937_64 random_;
 		// 第一回合是否抽卡
 		bool first_turn_draw_;
 

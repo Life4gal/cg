@@ -273,6 +273,10 @@ namespace cg::execution
 		{
 			return send_to_graveyard(*definition, call, context);
 		}
+		if (definition->name == "return_to_deck")
+		{
+			return return_to_deck(*definition, call, context);
+		}
 		if (definition->name == "release")
 		{
 			return release(*definition, call, context);
@@ -742,6 +746,60 @@ namespace cg::execution
 			game.move_to_graveyard(*instance, {domain::Reason::EFFECT});
 
 			pending_events_.emplace_back(domain::EventCode::SENT_TO_GRAVEYARD, card);
+		}
+
+		return Void{};
+	}
+
+	auto Interpreter::return_to_deck(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* cards = as_argument<dsl::ValueClass::GROUP>(*args, 0);
+		if (cards == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		auto shuffle = true;
+		if (const auto* value = as_argument<dsl::ValueClass::BOOL>(*args, 1);
+			value != nullptr)
+		{
+			shuffle = static_cast<bool>(*value);
+		}
+
+		std::vector<domain::Player> owners{};
+		for (const auto card: *cards)
+		{
+			auto* instance = game.find_instance_mutable(card);
+			if (instance == nullptr)
+			{
+				return std::nullopt;
+			}
+
+			const auto owner = instance->owner();
+			game.move_to_deck(*instance, {domain::Reason::EFFECT});
+
+			pending_events_.emplace_back(domain::EventCode::RETURNED_TO_DECK, card);
+
+			if (!std::ranges::contains(owners, owner))
+			{
+				owners.push_back(owner);
+			}
+		}
+
+		if (shuffle)
+		{
+			for (const auto owner: owners)
+			{
+				game.shuffle_deck(owner, random_.get());
+			}
 		}
 
 		return Void{};
@@ -1944,11 +2002,13 @@ namespace cg::execution
 
 	Interpreter::Interpreter(
 		state::Game& game,
+		std::mt19937_64& random,
 		const dsl::TypeRegistry& types,
 		const dsl::Vocabulary& vocabulary,
 		Selector& selector
 	) noexcept
 		: game_{game},
+		  random_{random},
 		  types_
 		  {types},
 		  vocabulary_{vocabulary},

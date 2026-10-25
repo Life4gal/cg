@@ -1,5 +1,6 @@
 #pragma once
 
+#include <random>
 #include <span>
 
 #include <cg/domain/card.hpp>
@@ -44,6 +45,8 @@ namespace cg::execution
 	private:
 		// 引用flow::Duel的state::Game
 		std::reference_wrapper<state::Game> game_;
+		// 引用flow::Duel的std::mt19937_64
+		std::reference_wrapper<std::mt19937_64> random_;
 		// 引用flow::Duel的dsl::TypeRegistry
 		std::reference_wrapper<const dsl::TypeRegistry> types_;
 		// 引用flow::Duel的dsl::Vocabulary
@@ -82,6 +85,7 @@ namespace cg::execution
 		[[nodiscard]] auto destroy(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 		[[nodiscard]] auto discard(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 		[[nodiscard]] auto send_to_graveyard(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
+		[[nodiscard]] auto return_to_deck(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 		[[nodiscard]] auto release(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>;
 
 		// 谓词
@@ -128,6 +132,7 @@ namespace cg::execution
 	public:
 		explicit Interpreter(
 			state::Game& game,
+			std::mt19937_64& random,
 			const dsl::TypeRegistry& types,
 			const dsl::Vocabulary& vocabulary,
 			Selector& selector
