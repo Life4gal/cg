@@ -268,6 +268,7 @@ namespace cg::driver
 				.priority_player = duel_.priority().holder_player(duel_.turn().turn_player()),
 				.priority_both_passed = duel_.priority().both_passed(),
 				.pending_attack = duel_.pending_attack(),
+				.pending_replay = duel_.pending_replay(),
 				.pending_summon = duel_.pending_summon(),
 				.chain_pending = !duel_.chain().empty(),
 		};

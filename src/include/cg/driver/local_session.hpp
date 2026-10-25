@@ -154,6 +154,7 @@ namespace cg::driver
 		bool priority_both_passed;
 		// Duel
 		bool pending_attack;
+		bool pending_replay;
 		bool pending_summon;
 		bool chain_pending;
 	};

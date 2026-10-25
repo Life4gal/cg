@@ -491,6 +491,9 @@ namespace cg::flow
 		// 是否有攻击正在进行
 		[[nodiscard]] auto pending_attack() const noexcept -> bool;
 
+		// 是否等待攻击目标 replay(目标离场后重新选择)
+		[[nodiscard]] auto pending_replay() const noexcept -> bool;
+
 		// 是否有召唤正在宣言/等待结算
 		[[nodiscard]] auto pending_summon() const noexcept -> bool;
 

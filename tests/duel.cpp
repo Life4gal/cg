@@ -250,7 +250,9 @@ TEST_CASE("flow::Duel replays an attack when the target leaves before damage")
 	CHECK(duel.pass_priority());
 
 	CHECK(duel.pending_attack());
+	CHECK(duel.pending_replay());
 	CHECK(duel.replay_attack(std::nullopt));
+	CHECK_FALSE(duel.pending_replay());
 	resolve_attack(duel);
 
 	CHECK_FALSE(duel.pending_attack());
@@ -866,6 +868,177 @@ TEST_CASE("flow::Duel enforces damage-step activation categories")
 	CHECK(game.zone_of(quick) == domain::Zone::MONSTER);
 	CHECK(game.life_points(domain::Player::FIRST) == 8000);
 	CHECK(game.life_points(domain::Player::SECOND) == 6500);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel filters auto-collected damage-step triggers by declared properties")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_damage_step_auto_triggers";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"97000061.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"BATTLE_DESTROYED"},"timing":"WHEN","optional":false},"properties":["ATK_DEF_CHANGE"],"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":100}}]}]})"
+	);
+	write(
+		"97000062.json",
+		R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"BATTLE_DESTROYED"},"timing":"WHEN","optional":false},"properties":["DAMAGE_STEP"],"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":100}}]}]})"
+	);
+
+	constexpr domain::CardCode atk_property_code{97000061};
+	constexpr domain::CardCode damage_step_property_code{97000062};
+	constexpr domain::CardCode attacker_code{97000063};
+	constexpr domain::CardCode defender_code{97000064};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	const auto atk_property_definition = make_monster(atk_property_code, 1000, 1000);
+	const auto damage_step_property_definition = make_monster(damage_step_property_code, 1000, 1000);
+	const auto attacker_definition = make_monster(attacker_code, 2000, 2000);
+	const auto defender_definition = make_monster(defender_code, 1000, 1000);
+	game.register_definition(atk_property_definition);
+	game.register_definition(damage_step_property_definition);
+	game.register_definition(attacker_definition);
+	game.register_definition(defender_definition);
+
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto atk_property = game.create_instance(atk_property_code, domain::Player::FIRST);
+	REQUIRE(atk_property.valid());
+	game.place(*game.find_instance_mutable(atk_property), domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto damage_step_property = game.create_instance(damage_step_property_code, domain::Player::FIRST);
+	REQUIRE(damage_step_property.valid());
+	game.place(*game.find_instance_mutable(damage_step_property), domain::MonsterPlacement{.column = domain::FieldColumn::C3, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto defender = game.create_instance(defender_code, domain::Player::FIRST);
+	REQUIRE(defender.valid());
+	game.place(*game.find_instance_mutable(defender), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto attacker = game.create_instance(attacker_code, domain::Player::SECOND);
+	REQUIRE(attacker.valid());
+	game.place(*game.find_instance_mutable(attacker), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	enter_second_player_battle(duel);
+	REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+	CHECK(duel.declare_attack(attacker, defender));
+	resolve_attack(duel);
+
+	// 战斗伤害 1000 -> FIRST 7000
+	CHECK(game.life_points(domain::Player::FIRST) == 7000);
+	// ATK_DEF_CHANGE 属性在伤害步骤结束时不可发动, 只有 DAMAGE_STEP 属性的诱发生效
+	CHECK(game.life_points(domain::Player::SECOND) == 7900);
+	CHECK(game.zone_of(atk_property) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(damage_step_property) == domain::Zone::MONSTER);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel opens a CARD_DRAWN timing for draw triggers")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_draw_trigger";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	std::ofstream stream{directory / "97000071.json", std::ios::binary};
+	stream <<
+			R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"CARD_DRAWN"},"timing":"WHEN","optional":false},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":100}}]}]})";
+	stream.close();
+
+	constexpr domain::CardCode trigger_code{97000071};
+	constexpr domain::CardCode filler_code{97000072};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	const auto trigger_definition = make_monster(trigger_code, 1000, 1000);
+	const auto filler_definition = make_monster(filler_code, 1000, 1000);
+	game.register_definition(trigger_definition);
+	game.register_definition(filler_definition);
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto trigger = game.create_instance(trigger_code, domain::Player::FIRST);
+	REQUIRE(trigger.valid());
+	game.place(*game.find_instance_mutable(trigger), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto filler = game.create_instance(filler_code, domain::Player::SECOND);
+	REQUIRE(filler.valid());
+	game.place(*game.find_instance_mutable(filler), domain::DeckPlacement{.index = 0});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+	REQUIRE(duel.turn().phase() == domain::Phase::DRAW);
+
+	CHECK(duel.draw_for_turn());
+	CHECK(duel.chain().size() == 1);
+	settle(duel);
+
+	CHECK(game.life_points(domain::Player::SECOND) == 7900);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel opens a SPELL_TRAP_SET timing for set triggers")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_set_trigger";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	std::ofstream stream{directory / "97000073.json", std::ios::binary};
+	stream <<
+			R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"trigger","source":{"event":"SPELL_TRAP_SET"},"timing":"WHEN","optional":false},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":100}}]}]})";
+	stream.close();
+
+	constexpr domain::CardCode trigger_code{97000073};
+	constexpr domain::CardCode set_card_code{97000074};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	const auto trigger_definition = make_monster(trigger_code, 1000, 1000);
+	const auto set_card_definition = make_spell(set_card_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(trigger_definition);
+	game.register_definition(set_card_definition);
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto trigger = game.create_instance(trigger_code, domain::Player::FIRST);
+	REQUIRE(trigger.valid());
+	game.place(*game.find_instance_mutable(trigger), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto set_card = game.create_instance(set_card_code, domain::Player::FIRST);
+	REQUIRE(set_card.valid());
+	game.place(*game.find_instance_mutable(set_card), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.set_spell_trap(set_card, domain::FieldColumn::C2));
+	CHECK(duel.chain().size() == 1);
+	settle(duel);
+
+	CHECK(game.life_points(domain::Player::SECOND) == 7900);
+	CHECK(game.zone_of(set_card) == domain::Zone::SPELL_TRAP);
 
 	std::filesystem::remove_all(directory);
 }

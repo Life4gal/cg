@@ -180,6 +180,16 @@ namespace cg::flow
 				{
 					continue;
 				}
+				// 诱发效果由触发源本身决定时点; 只有显式声明伤害步骤属性时
+				// 才额外检查当前伤害步骤窗口是否允许发动.
+				// 无属性的战斗破坏诱发(如 Giant Rat)仍然可以在伤害步骤触发.
+				if (
+					!entry.effect.get().properties.empty() &&
+					!can_activate_in_damage_step(entry.instance.get(), &entry.effect.get())
+				)
+				{
+					continue;
+				}
 				// 召唤宣言窗口的第一环必须是召唤无效效果
 				if (has_pending_summon() && !entry.effect.get().properties.contains(dsl::EffectProperty::SUMMON_NEGATE))
 				{
@@ -236,6 +246,13 @@ namespace cg::flow
 
 				// 前面组可能已占用次数
 				if (!can_use(entry.effect.get(), instance))
+				{
+					continue;
+				}
+				if (
+					!entry.effect.get().properties.empty() &&
+					!can_activate_in_damage_step(instance, &entry.effect.get())
+				)
 				{
 					continue;
 				}
@@ -2137,6 +2154,11 @@ namespace cg::flow
 		return attack_.has_value();
 	}
 
+	auto Duel::pending_replay() const noexcept -> bool
+	{
+		return attack_.has_value() && attack_->replay_required;
+	}
+
 	auto Duel::pending_summon() const noexcept -> bool
 	{
 		return has_pending_summon();
@@ -2209,8 +2231,15 @@ namespace cg::flow
 		// 移动到手牌
 		game_.move_to_hand(*instance, {domain::Reason::DRAW}, domain::Position::FACE_DOWN_DEFENSE);
 
-		// 抽卡后旧的事件时点不再有效(抽卡本身是否开时点待补)
-		windows_.clear();
+		// 抽卡完成: 开 CARD_DRAWN 时点, 让"抽到时"诱发效果进入连锁
+		const execution::EventWindow window
+		{
+				.source = dsl::TriggerSource{domain::EventCode::CARD_DRAWN},
+				.card = instance->id(),
+				.player = player,
+				.amount = std::nullopt,
+		};
+		std::ignore = open_timing({&window, 1});
 
 		// 已抽牌
 		state_.drew_in_draw_phase = true;
@@ -3078,8 +3107,15 @@ namespace cg::flow
 
 		set_turns_.insert_or_assign(card, turn_.turn_id());
 
-		// 盖放后旧的事件时点不再有效(盖放是否开时点待补)
-		windows_.clear();
+		// 盖放完成: 开 SPELL_TRAP_SET 时点
+		const execution::EventWindow window
+		{
+				.source = dsl::TriggerSource{domain::EventCode::SPELL_TRAP_SET},
+				.card = card,
+				.player = controller,
+				.amount = std::nullopt,
+		};
+		std::ignore = open_timing({&window, 1});
 
 		return true;
 	}
