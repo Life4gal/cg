@@ -929,6 +929,11 @@ namespace
 			{
 				(void)controller_.submit(driver::LocalAction{driver::EndTurnAction{}});
 			}
+			ImGui::SameLine();
+			if (ImGui::Button("Surrender"))
+			{
+				(void)controller_.submit(driver::LocalAction{driver::SurrenderAction{}});
+			}
 
 			ImGui::SetNextItemWidth(90.0f);
 			ImGui::Combo("Column", &column_, "1\0""2\0""3\0""4\0""5\0");
