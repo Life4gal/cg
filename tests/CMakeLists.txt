@@ -4,9 +4,12 @@ add_executable(
 	${PROJECT_NAME}
 
 	${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
+
 	${CMAKE_CURRENT_SOURCE_DIR}/dsl.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/interpreter.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/state.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/local.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/local_session.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/duel.cpp
 )
 
@@ -16,6 +19,7 @@ target_compile_definitions(
 
 	CG_CARDS_DIR="${CMAKE_SOURCE_DIR}/cards"
 	CG_TEST_CARDS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/cards"
+	CG_TEST_CONFIG_DIR="${CMAKE_SOURCE_DIR}/configs"
 )
 
 target_compile_options(

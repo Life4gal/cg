@@ -8,9 +8,9 @@
 #include <cg/domain/summon.hpp>
 
 #include <cg/dsl/id.hpp>
+#include <cg/dsl/identity.hpp>
 
 #include <cg/state/id.hpp>
-#include <cg/state/card_definition.hpp>
 
 namespace cg::state
 {
@@ -77,7 +77,7 @@ namespace cg::state
 
 	private:
 		// 卡牌定义的引用
-		std::reference_wrapper<const CardDefinition> definition_;
+		std::reference_wrapper<const dsl::CardIdentity> definition_;
 
 		// 实例ID
 		CardInstanceId id_;
@@ -102,7 +102,7 @@ namespace cg::state
 		bool token_;
 
 	public:
-		CardInstance(CardInstanceId id, domain::Player owner, const CardDefinition& definition) noexcept;
+		CardInstance(CardInstanceId id, domain::Player owner, const dsl::CardIdentity& definition) noexcept;
 
 		// ================================================================
 		// 实例信息
@@ -130,16 +130,16 @@ namespace cg::state
 		[[nodiscard]] auto origin_code() const noexcept -> domain::CardCode;
 
 		// 卡牌类型
-		[[nodiscard]] auto origin_kind() const noexcept -> utility::EnumMask<domain::CardType>;
-
-		// 卡牌子类型
-		[[nodiscard]] auto origin_subtypes() const noexcept -> utility::EnumMask<domain::CardSubtype>;
+		[[nodiscard]] auto origin_kind() const noexcept -> domain::CardType;
 
 		// 是否是指定卡类型
 		[[nodiscard]] auto origin_is_card_type(domain::CardType type) const noexcept -> bool;
 		[[nodiscard]] auto origin_is_monster_card() const noexcept -> bool;
 		[[nodiscard]] auto origin_is_spell_card() const noexcept -> bool;
 		[[nodiscard]] auto origin_is_trap_card() const noexcept -> bool;
+
+		// 卡牌子类型
+		[[nodiscard]] auto origin_subtypes() const noexcept -> utility::EnumMask<domain::CardSubtype>;
 
 		// 是否是指定卡子类型
 		[[nodiscard]] auto origin_is_card_subtype(domain::CardSubtype subtype) const noexcept -> bool;
@@ -166,7 +166,7 @@ namespace cg::state
 		[[nodiscard]] auto origin_is_defense(std::underlying_type_t<domain::AttackDefense> defense) const noexcept -> bool;
 
 		// 灵摆刻度 -- 假定是灵摆怪兽
-		[[nodiscard]] auto origin_pendulum_scale() const noexcept -> CardDefinition::Monster::PendulumScale;
+		[[nodiscard]] auto origin_pendulum_scale() const noexcept -> dsl::CardIdentity::Monster::PendulumScale;
 		[[nodiscard]] auto origin_has_pendulum_scale() const noexcept -> bool;
 		[[nodiscard]] auto origin_is_pendulum_scale(domain::PendulumSide side, std::underlying_type_t<domain::PendulumScale> scale) const noexcept -> bool;
 

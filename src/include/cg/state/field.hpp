@@ -1,5 +1,6 @@
 #pragma once
 
+#include <random>
 #include <vector>
 
 #include <cg/utility/enum.hpp>
@@ -65,12 +66,21 @@ namespace cg::state
 		Field() noexcept;
 
 		// ==================================================================================
-		// 生命值
+		// 场地
 		// ==================================================================================
 
+		// 初始化:设置初始LP
 		auto set_life_points(domain::Player player, std::underlying_type_t<domain::AttackDefense> value) noexcept -> void;
+
+		// 获取当前LP
 		[[nodiscard]] auto life_points(domain::Player player) const noexcept -> std::underlying_type_t<domain::AttackDefense>;
+
+		// 改变LP
 		auto change_life_points(domain::Player player, std::underlying_type_t<domain::AttackDefense> delta) noexcept -> void;
+
+		// 洗牌(对局初始化/效果洗牌)
+		// TODO: 自定义random
+		auto shuffle_deck(domain::Player player, std::mt19937_64& random) noexcept -> void;
 
 		// ==================================================================================
 		// 指定卡牌的区域/位置

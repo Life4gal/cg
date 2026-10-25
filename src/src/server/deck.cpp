@@ -18,7 +18,7 @@ namespace cg::server
 		{
 			try
 			{
-				if (!json.contains(key) && !optional)
+				if (!json.contains(key))
 				{
 					if (!optional)
 					{

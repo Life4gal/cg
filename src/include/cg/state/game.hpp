@@ -4,6 +4,8 @@
 #include <span>
 #include <vector>
 
+#include <cg/dsl/identity.hpp>
+
 #include <cg/state/id.hpp>
 #include <cg/state/card.hpp>
 #include <cg/state/field.hpp>
@@ -20,7 +22,7 @@ namespace cg::state
 	class Game
 	{
 	public:
-		using card_definitions_type = std::map<domain::CardCode, CardDefinition>;
+		using card_definitions_type = std::map<domain::CardCode, std::reference_wrapper<const dsl::CardIdentity>>;
 		using card_instances_type = std::vector<CardInstance>;
 
 	private:
@@ -34,18 +36,21 @@ namespace cg::state
 		[[nodiscard]] auto generate_instance_id() const noexcept -> CardInstanceId;
 		[[nodiscard]] auto is_valid_instance_id(CardInstanceId card) const noexcept -> bool;
 
-		[[nodiscard]] auto find_definition(domain::CardCode code) const noexcept -> const CardDefinition*;
+		[[nodiscard]] auto find_definition(domain::CardCode code) const noexcept -> const dsl::CardIdentity*;
 
 	public:
 		// =========================================================================================================
 		// 定义 / 实例
 		// =========================================================================================================
 
-		// 装配:注册卡牌定义
-		auto register_definition(domain::CardCode code, const CardDefinition& definition) noexcept -> const CardDefinition&;
+		// 注册卡牌定义
+		auto register_definition(const dsl::CardIdentity& definition) noexcept -> const dsl::CardIdentity&;
 
 		// 指定卡密所属卡牌是否存在定义
 		[[nodiscard]] auto has_definition(domain::CardCode code) const noexcept -> bool;
+
+		// 全部定义(只读)
+		[[nodiscard]] auto definitions() const noexcept -> const card_definitions_type&;
 
 		// 创建实例,如果指定卡密未注册定义则无效ID
 		// 这个接口必须返回ID,指针可能因为重分配失效
@@ -88,10 +93,17 @@ namespace cg::state
 		// 场地
 		// =========================================================================================================
 
-		// 初始化:设置初始 LP(对局前/测试夹具)
+		// 初始化:设置初始LP
 		auto set_life_points(domain::Player player, std::underlying_type_t<domain::AttackDefense> value) noexcept -> void;
+
+		// 获取当前LP
 		[[nodiscard]] auto life_points(domain::Player player) const noexcept -> std::underlying_type_t<domain::AttackDefense>;
+
+		// 改变LP
 		auto change_life_points(domain::Player player, std::underlying_type_t<domain::AttackDefense> delta) noexcept -> void;
+
+		// 洗牌(对局初始化/效果洗牌)
+		auto shuffle_deck(domain::Player player, std::mt19937_64& random) noexcept -> void;
 
 		// ================================================================
 		// 指定卡牌的区域/位置

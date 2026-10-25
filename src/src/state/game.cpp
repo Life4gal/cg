@@ -17,25 +17,30 @@ namespace cg::state
 		return card.valid() && card.raw() < card_instances_.size();
 	}
 
-	auto Game::find_definition(const domain::CardCode code) const noexcept -> const CardDefinition*
+	auto Game::find_definition(const domain::CardCode code) const noexcept -> const dsl::CardIdentity*
 	{
 		if (const auto it = card_definitions_.find(code);
 			it != card_definitions_.end())
 		{
-			return &it->second;
+			return &it->second.get();
 		}
 
 		return nullptr;
 	}
 
-	auto Game::register_definition(const domain::CardCode code, const CardDefinition& definition) noexcept -> const CardDefinition&
+	auto Game::register_definition(const dsl::CardIdentity& definition) noexcept -> const dsl::CardIdentity&
 	{
-		return card_definitions_.insert_or_assign(code, definition).first->second;
+		return card_definitions_.insert_or_assign(definition.code, std::ref(definition)).first->second;
 	}
 
 	auto Game::has_definition(const domain::CardCode code) const noexcept -> bool
 	{
 		return card_definitions_.contains(code);
+	}
+
+	auto Game::definitions() const noexcept -> const card_definitions_type&
+	{
+		return card_definitions_;
 	}
 
 	auto Game::create_instance(const domain::CardCode code, const domain::Player owner) noexcept -> CardInstanceId
@@ -100,6 +105,11 @@ namespace cg::state
 	auto Game::change_life_points(const domain::Player player, const std::underlying_type_t<domain::AttackDefense> delta) noexcept -> void
 	{
 		return field_invoke(&Field::change_life_points, player, delta);
+	}
+
+	auto Game::shuffle_deck(const domain::Player player, std::mt19937_64& random) noexcept -> void
+	{
+		return field_invoke(&Field::shuffle_deck, player, random);
 	}
 
 	auto Game::zone_of(const CardInstanceId card) const noexcept -> domain::Zone

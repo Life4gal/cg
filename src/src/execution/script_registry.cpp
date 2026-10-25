@@ -79,6 +79,9 @@ namespace cg::execution
 
 	auto ScriptRegistry::add(const domain::CardCode code, dsl::CardScript script) noexcept -> bool
 	{
+		// 卡密由文件名决定; 脚本内容本身不携带卡密
+		script.identity.code = code;
+
 		return scripts_.insert_or_assign(code, std::move(script)).second;
 	}
 
@@ -127,5 +130,10 @@ namespace cg::execution
 		}
 
 		return nullptr;
+	}
+
+	auto ScriptRegistry::entries() const noexcept -> const scripts_type&
+	{
+		return scripts_;
 	}
 }

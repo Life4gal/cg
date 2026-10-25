@@ -19,6 +19,7 @@
 #include <cg/flow/battle.hpp>
 #include <cg/flow/priority.hpp>
 #include <cg/flow/turn.hpp>
+#include <cg/flow/duel_config.hpp>
 
 namespace cg::flow
 {
@@ -116,6 +117,8 @@ namespace cg::flow
 		// ================================================================
 
 		state::Game game_;
+		// 第一回合是否抽卡
+		bool first_turn_draw_;
 
 		// ================================================================
 		// 流程
@@ -416,7 +419,7 @@ namespace cg::flow
 		[[nodiscard]] auto is_on_field(state::CardInstanceId card) const noexcept -> bool;
 
 		// 目标是否可作为对手的攻击对象(空目标表示直接攻击)
-		[[nodiscard]] auto is_valid_attack_target(domain::Player opponent,std::optional<state::CardInstanceId> target) const noexcept -> bool;
+		[[nodiscard]] auto is_valid_attack_target(domain::Player opponent, std::optional<state::CardInstanceId> target) const noexcept -> bool;
 
 		// 打开 ATTACK_DECLARED 时点
 		auto open_attack_declared(state::CardInstanceId attacker) noexcept -> void;
@@ -453,11 +456,25 @@ namespace cg::flow
 		// 必须注入底层驱动;引擎不自动决策
 		explicit Duel(execution::Selector& selector) noexcept;
 
+		// Duel 内部保存对 Game/Selector 的引用, 禁止复制/移动以免悬空
+		Duel(const Duel&) noexcept = delete;
+		auto operator=(const Duel&) noexcept -> Duel& = delete;
+		Duel(Duel&&) noexcept = delete;
+		auto operator=(Duel&&) noexcept -> Duel& = delete;
+
+		~Duel() noexcept;
+
 		// 从目录加载卡脚本(文件名即卡密)
 		auto load_scripts(const std::filesystem::path& directory) noexcept -> bool;
 
 		// 加载卡脚本(文件名即卡密)
 		auto load_script(const std::filesystem::path& file) noexcept -> bool;
+
+		// 取出并清空脚本加载错误
+		[[nodiscard]] auto take_script_errors() noexcept -> std::vector<std::string>;
+
+		// 按配置建立初始对局: 卡组入区、洗牌、初始手牌、LP、先手
+		auto initialize(const DuelConfig& config) noexcept -> bool;
 
 		// ================================================================
 		// 状态查询(只读;供驱动/UI)

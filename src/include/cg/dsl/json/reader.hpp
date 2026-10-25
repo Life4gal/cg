@@ -80,9 +80,9 @@ namespace cg::dsl::json
 
 		[[nodiscard]] auto read_identity_kind(const nlohmann::json::const_iterator& kind, std::string_view path) noexcept -> std::optional<domain::CardType>;
 		[[nodiscard]] auto read_identity_subtypes(const nlohmann::json::const_iterator& subtypes, std::string_view path) noexcept -> std::optional<utility::EnumMask<domain::CardSubtype>>;
-		[[nodiscard]] auto read_identity_monster(const nlohmann::json::const_iterator& monster, std::string_view path) noexcept -> std::optional<MonsterIdentity>;
-		[[nodiscard]] auto read_identity_pendulum(const nlohmann::json::const_iterator& pendulum, std::string_view path) noexcept -> std::optional<PendulumIdentity>;
-		[[nodiscard]] auto read_identity_link_marker(const nlohmann::json::const_iterator& link_marker, std::string_view path) noexcept -> std::optional<LinkMarkerIdentity>;
+		[[nodiscard]] auto read_identity_monster(const nlohmann::json::const_iterator& monster, std::string_view path) noexcept -> std::optional<CardIdentity::Monster>;
+		[[nodiscard]] auto read_identity_monster_pendulum(const nlohmann::json::const_iterator& pendulum, std::string_view path) noexcept -> std::optional<CardIdentity::Monster::PendulumScale>;
+		[[nodiscard]] auto read_identity_monster_link_marker(const nlohmann::json::const_iterator& link_marker, std::string_view path) noexcept -> std::optional<utility::EnumMask<domain::LinkMarker>>;
 		[[nodiscard]] auto read_identity_archetypes(const nlohmann::json::const_iterator& archetypes, std::string_view path) noexcept -> std::optional<std::vector<ArchetypeId>>;
 		[[nodiscard]] auto read_identity_code_list(const nlohmann::json::const_iterator& code_list, std::string_view path) noexcept -> std::optional<std::vector<domain::CardCode>>;
 

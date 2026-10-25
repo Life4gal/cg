@@ -1,0 +1,21 @@
+{
+	"cards": "../cards",
+	"seed": 20261025,
+	"first_player": "FIRST",
+	"players": [
+		{ "name": "FIRST", "deck": "../decks/bootstrap.json" },
+		{ "name": "SECOND", "deck": "../decks/bootstrap.json" }
+	],
+	"rules": {
+		"life_points": 8000,
+		"opening_hand": 5,
+		"first_turn_draw": false,
+		"deck": {
+			"main_min": 40,
+			"main_max": 60,
+			"extra_max": 15,
+			"side_max": 15,
+			"max_copies": 3
+		}
+	}
+}

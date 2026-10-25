@@ -13,7 +13,6 @@
 
 #include <cg/domain/player.hpp>
 
-#include <cg/state/db.hpp>
 
 #include <cg/driver/request.hpp>
 #include <cg/driver/response.hpp>
@@ -92,7 +91,6 @@ namespace cg::server
 
 		RoomOptions options_;
 
-		state::Db card_db_;
 		std::vector<Deck> catalog_decks_;
 
 		mutable std::mutex mutex_;
@@ -122,11 +120,7 @@ namespace cg::server
 		// 初始化
 		// ====================================
 
-		[[nodiscard]] auto load_db() noexcept -> bool;
 		[[nodiscard]] auto load_catalog() noexcept -> bool;
-
-		[[nodiscard]] auto is_cached_card(domain::CardCode code) const noexcept -> bool;
-		[[nodiscard]] auto is_cached_deck(std::span<const domain::CardCode> deck) noexcept -> bool;
 
 		// ====================================
 		// 状态构造(调用时需持有mutex_)

@@ -68,7 +68,7 @@ namespace cg::state
 		return std::erase(ref().overlays_, material.id()) != 0;
 	}
 
-	CardInstance::CardInstance(const CardInstanceId id, const domain::Player owner, const CardDefinition& definition) noexcept
+	CardInstance::CardInstance(const CardInstanceId id, const domain::Player owner, const dsl::CardIdentity& definition) noexcept
 		: definition_{definition},
 		  id_{id},
 		  owner_{owner},
@@ -116,19 +116,14 @@ namespace cg::state
 		return definition_.get().code;
 	}
 
-	auto CardInstance::origin_kind() const noexcept -> utility::EnumMask<domain::CardType>
+	auto CardInstance::origin_kind() const noexcept -> domain::CardType
 	{
 		return definition_.get().kind;
 	}
 
-	auto CardInstance::origin_subtypes() const noexcept -> utility::EnumMask<domain::CardSubtype>
-	{
-		return definition_.get().subtypes;
-	}
-
 	auto CardInstance::origin_is_card_type(const domain::CardType type) const noexcept -> bool
 	{
-		return definition_.get().kind.contains(type);
+		return origin_kind() == type;
 	}
 
 	auto CardInstance::origin_is_monster_card() const noexcept -> bool
@@ -146,14 +141,19 @@ namespace cg::state
 		return origin_is_card_type(domain::CardType::TRAP);
 	}
 
+	auto CardInstance::origin_subtypes() const noexcept -> utility::EnumMask<domain::CardSubtype>
+	{
+		return definition_.get().subtypes;
+	}
+
 	auto CardInstance::origin_is_card_subtype(const domain::CardSubtype subtype) const noexcept -> bool
 	{
-		return definition_.get().subtypes.contains(subtype);
+		return origin_subtypes().contains(subtype);
 	}
 
 	auto CardInstance::origin_is_card_subtype(const utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool
 	{
-		return !definition_.get().subtypes.intersect(subtypes).empty();
+		return !origin_subtypes().intersect(subtypes).empty();
 	}
 
 	auto CardInstance::origin_attribute() const noexcept -> domain::Attribute
@@ -187,7 +187,7 @@ namespace cg::state
 		LIBASSERT_DEBUG_ASSERT(origin_is_monster_card());
 		LIBASSERT_DEBUG_ASSERT(definition_.get().monster.has_value());
 
-		return definition_.get().monster->level; // NOLINT(bugprone-unchecked-optional-access)
+		return std::to_underlying(definition_.get().monster->level); // NOLINT(bugprone-unchecked-optional-access)
 	}
 
 	auto CardInstance::origin_is_level(const std::underlying_type_t<domain::LevelRank> level) const noexcept -> bool
@@ -200,7 +200,7 @@ namespace cg::state
 		LIBASSERT_DEBUG_ASSERT(origin_is_monster_card());
 		LIBASSERT_DEBUG_ASSERT(definition_.get().monster.has_value());
 
-		return definition_.get().monster->attack; // NOLINT(bugprone-unchecked-optional-access)
+		return std::to_underlying(definition_.get().monster->attack); // NOLINT(bugprone-unchecked-optional-access)
 	}
 
 	auto CardInstance::origin_is_attack(const std::underlying_type_t<domain::AttackDefense> attack) const noexcept -> bool
@@ -213,7 +213,7 @@ namespace cg::state
 		LIBASSERT_DEBUG_ASSERT(origin_is_monster_card());
 		LIBASSERT_DEBUG_ASSERT(definition_.get().monster.has_value());
 
-		return definition_.get().monster->defense; // NOLINT(bugprone-unchecked-optional-access)
+		return std::to_underlying(definition_.get().monster->defense); // NOLINT(bugprone-unchecked-optional-access)
 	}
 
 	auto CardInstance::origin_is_defense(const std::underlying_type_t<domain::AttackDefense> defense) const noexcept -> bool
@@ -221,7 +221,7 @@ namespace cg::state
 		return origin_defense() == defense;
 	}
 
-	auto CardInstance::origin_pendulum_scale() const noexcept -> CardDefinition::Monster::PendulumScale
+	auto CardInstance::origin_pendulum_scale() const noexcept -> dsl::CardIdentity::Monster::PendulumScale
 	{
 		LIBASSERT_DEBUG_ASSERT(origin_is_monster_card());
 		LIBASSERT_DEBUG_ASSERT(definition_.get().monster.has_value());
@@ -242,11 +242,11 @@ namespace cg::state
 		const auto [left, right] = origin_pendulum_scale();
 		if (side == domain::PendulumSide::LEFT)
 		{
-			return left == scale;
+			return std::to_underlying(left) == scale;
 		}
 		if (side == domain::PendulumSide::RIGHT)
 		{
-			return right == scale;
+			return std::to_underlying(right) == scale;
 		}
 		std::unreachable();
 	}

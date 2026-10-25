@@ -142,6 +142,12 @@ namespace cg::execution
 
 		[[nodiscard]] auto find_script(domain::CardCode code) const noexcept -> const dsl::CardScript*;
 
+		// 全部已加载脚本
+		[[nodiscard]] auto scripts() const noexcept -> const ScriptRegistry&;
+
+		// 取出并清空脚本加载错误
+		[[nodiscard]] auto take_script_errors() noexcept -> std::vector<std::string>;
+
 		// 获取CardStateResolver
 		[[nodiscard]] auto state_resolver() const noexcept -> const CardStateResolver&;
 

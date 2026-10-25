@@ -26,29 +26,29 @@ namespace
 	const dsl::Vocabulary g_vocabulary{g_types};
 	dsl::json::Reader g_reader{g_types, g_vocabulary};
 
-	[[nodiscard]] auto make_definition(const domain::CardCode code, const domain::CardType type) -> state::CardDefinition
+	[[nodiscard]] auto make_definition(const domain::CardCode code, const domain::CardType type) -> dsl::CardIdentity
 	{
-		state::CardDefinition definition{};
+		dsl::CardIdentity definition{};
 		definition.code = code;
-		definition.kind = {type};
+		definition.kind = type;
 		definition.subtypes = {domain::CardSubtype::NORMAL};
 
 		if (type == domain::CardType::MONSTER)
 		{
-			definition.monster = state::CardDefinition::Monster
+			definition.monster = dsl::CardIdentity::Monster
 			{
 					.attribute = domain::Attribute::EARTH,
 					.race = domain::Race::DRAGON,
-					.level = 4,
-					.attack = 1000,
-					.defense = 1000,
+					.level = domain::LevelRank{4},
+					.attack = domain::AttackDefense{1000},
+					.defense = domain::AttackDefense{1000},
 					.pendulum_scale = std::nullopt,
 					.link_marker = std::nullopt,
 			};
 		}
 		else
 		{
-			definition.spell = state::CardDefinition::Spell{};
+			definition.spell = dsl::CardIdentity::Spell{};
 		}
 
 		return definition;
@@ -78,9 +78,10 @@ TEST_CASE("execution::Interpreter resolves Raigeki")
 	constexpr domain::CardCode monster_code{90000001};
 
 	state::Game game{};
-	game.register_definition(raigeki_code, make_definition(raigeki_code, domain::CardType::SPELL));
-	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
-
+	const auto raigeki_definition = make_definition(raigeki_code, domain::CardType::SPELL);
+	game.register_definition(raigeki_definition);
+	const auto monster_definition = make_definition(monster_code, domain::CardType::MONSTER);
+	game.register_definition(monster_definition);
 	const auto raigeki = game.create_instance(raigeki_code, domain::Player::FIRST);
 	REQUIRE(raigeki.valid());
 	const auto own_monster = game.create_instance(monster_code, domain::Player::FIRST);
@@ -115,9 +116,10 @@ TEST_CASE("execution::Interpreter resolves Tribute to the Doomed")
 	constexpr domain::CardCode monster_code{90000003};
 
 	state::Game game{};
-	game.register_definition(spell_code, make_definition(spell_code, domain::CardType::SPELL));
-	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
-
+	const auto spell_definition = make_definition(spell_code, domain::CardType::SPELL);
+	game.register_definition(spell_definition);
+	const auto monster_definition = make_definition(monster_code, domain::CardType::MONSTER);
+	game.register_definition(monster_definition);
 	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
 	REQUIRE(spell.valid());
 	const auto hand_card = game.create_instance(monster_code, domain::Player::FIRST);
@@ -189,15 +191,16 @@ TEST_CASE("execution::Interpreter searches a subtype from the deck")
 	constexpr domain::CardCode field_spell_code{90000012};
 
 	state::Game game{};
-	game.register_definition(terraforming_code, make_definition(terraforming_code, domain::CardType::SPELL));
-	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
-
-	state::CardDefinition field_spell{};
+	const auto terraforming_definition = make_definition(terraforming_code, domain::CardType::SPELL);
+	game.register_definition(terraforming_definition);
+	const auto monster_definition = make_definition(monster_code, domain::CardType::MONSTER);
+	game.register_definition(monster_definition);
+	dsl::CardIdentity field_spell{};
 	field_spell.code = field_spell_code;
-	field_spell.kind = {domain::CardType::SPELL};
+	field_spell.kind = domain::CardType::SPELL;
 	field_spell.subtypes = {domain::CardSubtype::FIELD};
-	field_spell.spell = state::CardDefinition::Spell{};
-	game.register_definition(field_spell_code, field_spell);
+	field_spell.spell = dsl::CardIdentity::Spell{};
+	game.register_definition(field_spell);
 
 	const auto terraforming = game.create_instance(terraforming_code, domain::Player::FIRST);
 	REQUIRE(terraforming.valid());
@@ -232,9 +235,10 @@ TEST_CASE("execution::Interpreter draws cards")
 	constexpr domain::CardCode monster_code{90000013};
 
 	state::Game game{};
-	game.register_definition(pot_code, make_definition(pot_code, domain::CardType::SPELL));
-	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
-
+	const auto pot_definition = make_definition(pot_code, domain::CardType::SPELL);
+	game.register_definition(pot_definition);
+	const auto monster_definition = make_definition(monster_code, domain::CardType::MONSTER);
+	game.register_definition(monster_definition);
 	const auto pot = game.create_instance(pot_code, domain::Player::FIRST);
 	REQUIRE(pot.valid());
 	const auto deck_a = game.create_instance(monster_code, domain::Player::FIRST);
@@ -267,9 +271,10 @@ TEST_CASE("execution::Interpreter changes life points")
 	constexpr domain::CardCode dian_keto_code{84257639};
 
 	state::Game game{};
-	game.register_definition(sparks_code, make_definition(sparks_code, domain::CardType::SPELL));
-	game.register_definition(dian_keto_code, make_definition(dian_keto_code, domain::CardType::SPELL));
-
+	const auto sparks_definition = make_definition(sparks_code, domain::CardType::SPELL);
+	game.register_definition(sparks_definition);
+	const auto dian_keto_definition = make_definition(dian_keto_code, domain::CardType::SPELL);
+	game.register_definition(dian_keto_definition);
 	const auto sparks = game.create_instance(sparks_code, domain::Player::FIRST);
 	REQUIRE(sparks.valid());
 	const auto dian_keto = game.create_instance(dian_keto_code, domain::Player::FIRST);
@@ -315,9 +320,10 @@ TEST_CASE("execution::Interpreter matches a FLIP trigger and resolves")
 	constexpr domain::CardCode monster_code{90000020};
 
 	state::Game game{};
-	game.register_definition(jar_code, make_definition(jar_code, domain::CardType::MONSTER));
-	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
-
+	const auto jar_definition = make_definition(jar_code, domain::CardType::MONSTER);
+	game.register_definition(jar_definition);
+	const auto monster_definition = make_definition(monster_code, domain::CardType::MONSTER);
+	game.register_definition(monster_definition);
 	const auto jar = game.create_instance(jar_code, domain::Player::FIRST);
 	REQUIRE(jar.valid());
 	game.place(*game.find_instance_mutable(jar), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE});
@@ -381,9 +387,10 @@ TEST_CASE("execution::Interpreter collects triggered effects in SEGOC order")
 	constexpr domain::CardCode optional_code{90000030};
 
 	state::Game game{};
-	game.register_definition(jar_code, make_definition(jar_code, domain::CardType::MONSTER));
-	game.register_definition(optional_code, make_definition(optional_code, domain::CardType::MONSTER));
-
+	const auto jar_definition = make_definition(jar_code, domain::CardType::MONSTER);
+	game.register_definition(jar_definition);
+	const auto optional_definition = make_definition(optional_code, domain::CardType::MONSTER);
+	game.register_definition(optional_definition);
 	// 对手的壶实例ID更小,用于证明排序不是简单按实例顺序
 	const auto opponent_jar = game.create_instance(jar_code, domain::Player::SECOND);
 	REQUIRE(opponent_jar.valid());
@@ -449,9 +456,10 @@ TEST_CASE("execution::Interpreter builds and resolves a chain")
 	constexpr domain::CardCode monster_code{90000040};
 
 	state::Game game{};
-	game.register_definition(rat_code, make_definition(rat_code, domain::CardType::MONSTER));
-	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
-
+	const auto rat_definition = make_definition(rat_code, domain::CardType::MONSTER);
+	game.register_definition(rat_definition);
+	const auto monster_definition = make_definition(monster_code, domain::CardType::MONSTER);
+	game.register_definition(monster_definition);
 	// 两只巨大老鼠在墓地(触发条件:在墓地)
 	const auto first_rat = game.create_instance(rat_code, domain::Player::FIRST);
 	REQUIRE(first_rat.valid());
@@ -495,7 +503,7 @@ TEST_CASE("execution::Interpreter builds and resolves a chain")
 
 TEST_CASE("execution::Interpreter applies static numeric modifiers")
 {
-	const auto make_monster = [](const domain::CardCode code, const domain::Race race) -> state::CardDefinition
+	const auto make_monster = [](const domain::CardCode code, const domain::Race race) -> dsl::CardIdentity
 	{
 		auto definition = make_definition(code, domain::CardType::MONSTER);
 		definition.monster->race = race;
@@ -508,10 +516,12 @@ TEST_CASE("execution::Interpreter applies static numeric modifiers")
 	constexpr domain::CardCode warrior_code{90000051};
 
 	state::Game game{};
-	game.register_definition(mountain_code, make_definition(mountain_code, domain::CardType::SPELL));
-	game.register_definition(dragon_code, make_monster(dragon_code, domain::Race::DRAGON));
-	game.register_definition(warrior_code, make_monster(warrior_code, domain::Race::WARRIOR));
-
+	const auto mountain_definition = make_definition(mountain_code, domain::CardType::SPELL);
+	game.register_definition(mountain_definition);
+	const auto dragon_definition = make_monster(dragon_code, domain::Race::DRAGON);
+	game.register_definition(dragon_definition);
+	const auto warrior_definition = make_monster(warrior_code, domain::Race::WARRIOR);
+	game.register_definition(warrior_definition);
 	const auto mountain = game.create_instance(mountain_code, domain::Player::FIRST);
 	REQUIRE(mountain.valid());
 	const auto dragon = game.create_instance(dragon_code, domain::Player::FIRST);
@@ -549,15 +559,15 @@ TEST_CASE("execution::CardStateResolver sees effective attributes in static effe
 
 	auto field_definition = make_definition(field_code, domain::CardType::SPELL);
 	field_definition.subtypes = {domain::CardSubtype::FIELD};
-	game.register_definition(field_code, field_definition);
+	game.register_definition(field_definition);
 
 	auto source_definition = make_definition(light_source_code, domain::CardType::MONSTER);
 	source_definition.subtypes = {domain::CardSubtype::EFFECT};
-	game.register_definition(light_source_code, source_definition);
+	game.register_definition(source_definition);
 
 	auto target_definition = make_definition(target_code, domain::CardType::MONSTER);
 	target_definition.monster->attribute = domain::Attribute::DARK;
-	game.register_definition(target_code, target_definition);
+	game.register_definition(target_definition);
 
 	const auto field = game.create_instance(field_code, domain::Player::FIRST);
 	const auto source = game.create_instance(light_source_code, domain::Player::FIRST);
@@ -605,10 +615,12 @@ TEST_CASE("execution::CardStateResolver contains_card_types includes origin type
 	constexpr domain::CardCode monster_code{90000112};
 
 	state::Game game{};
-	game.register_definition(spell_code, make_definition(spell_code, domain::CardType::SPELL));
-	game.register_definition(trap_code, make_definition(trap_code, domain::CardType::TRAP));
-	game.register_definition(monster_code, make_definition(monster_code, domain::CardType::MONSTER));
-
+	const auto spell_definition = make_definition(spell_code, domain::CardType::SPELL);
+	game.register_definition(spell_definition);
+	const auto trap_definition = make_definition(trap_code, domain::CardType::TRAP);
+	game.register_definition(trap_definition);
+	const auto monster_definition = make_definition(monster_code, domain::CardType::MONSTER);
+	game.register_definition(monster_definition);
 	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
 	const auto trap = game.create_instance(trap_code, domain::Player::FIRST);
 	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);

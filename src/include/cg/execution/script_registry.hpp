@@ -46,5 +46,8 @@ namespace cg::execution
 		{
 			return scripts_.size();
 		}
+
+		// 全部脚本(卡密 -> 脚本)
+		[[nodiscard]] auto entries() const noexcept -> const scripts_type&;
 	};
 }

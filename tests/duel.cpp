@@ -18,19 +18,19 @@ namespace
 		const std::underlying_type_t<domain::AttackDefense> defense = 1000,
 		const std::underlying_type_t<domain::LevelRank> level = 4,
 		const domain::Race race = domain::Race::DRAGON
-	) -> state::CardDefinition
+	) -> dsl::CardIdentity
 	{
-		state::CardDefinition definition{};
+		dsl::CardIdentity definition{};
 		definition.code = code;
-		definition.kind = {domain::CardType::MONSTER};
+		definition.kind = domain::CardType::MONSTER;
 		definition.subtypes = {domain::CardSubtype::NORMAL};
-		definition.monster = state::CardDefinition::Monster
+		definition.monster = dsl::CardIdentity::Monster
 		{
 				.attribute = domain::Attribute::EARTH,
 				.race = race,
-				.level = level,
-				.attack = attack,
-				.defense = defense,
+				.level = domain::LevelRank{level},
+				.attack = domain::AttackDefense{attack},
+				.defense = domain::AttackDefense{defense},
 				.pendulum_scale = std::nullopt,
 				.link_marker = std::nullopt,
 		};
@@ -38,24 +38,24 @@ namespace
 		return definition;
 	}
 
-	[[nodiscard]] auto make_spell(const domain::CardCode code, const std::initializer_list<domain::CardSubtype> subtypes) -> state::CardDefinition
+	[[nodiscard]] auto make_spell(const domain::CardCode code, const std::initializer_list<domain::CardSubtype> subtypes) -> dsl::CardIdentity
 	{
-		state::CardDefinition definition{};
+		dsl::CardIdentity definition{};
 		definition.code = code;
-		definition.kind = {domain::CardType::SPELL};
+		definition.kind = domain::CardType::SPELL;
 		definition.subtypes = subtypes;
-		definition.spell = state::CardDefinition::Spell{};
+		definition.spell = dsl::CardIdentity::Spell{};
 
 		return definition;
 	}
 
-	[[nodiscard]] auto make_trap(const domain::CardCode code, const std::initializer_list<domain::CardSubtype> subtypes) -> state::CardDefinition
+	[[nodiscard]] auto make_trap(const domain::CardCode code, const std::initializer_list<domain::CardSubtype> subtypes) -> dsl::CardIdentity
 	{
-		state::CardDefinition definition{};
+		dsl::CardIdentity definition{};
 		definition.code = code;
-		definition.kind = {domain::CardType::TRAP};
+		definition.kind = domain::CardType::TRAP;
 		definition.subtypes = subtypes;
-		definition.trap = state::CardDefinition::Trap{};
+		definition.trap = dsl::CardIdentity::Trap{};
 
 		return definition;
 	}
@@ -131,7 +131,8 @@ TEST_CASE("flow::Duel performs core actions")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(monster_code, make_monster(monster_code));
+	const auto monster_definition = make_monster(monster_code);
+	game.register_definition(monster_definition);
 
 	const auto deck_card = game.create_instance(monster_code, domain::Player::FIRST);
 	REQUIRE(deck_card.valid());
@@ -141,10 +142,10 @@ TEST_CASE("flow::Duel performs core actions")
 	game.place(*game.find_instance_mutable(deck_card), domain::DeckPlacement{.index = 0});
 	game.place(*game.find_instance_mutable(hand_card), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
 
-	// 抽卡阶段
+	// 抽卡阶段: 先手第一回合不抽卡
 	CHECK(duel.turn().phase() == domain::Phase::DRAW);
-	CHECK(duel.draw_for_turn());
-	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 2);
+	CHECK_FALSE(duel.draw_for_turn());
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::HAND) == 1);
 	CHECK_FALSE(duel.draw_for_turn());
 
 	// 进入主要阶段
@@ -200,7 +201,8 @@ TEST_CASE("flow::Duel rejects Flip Summon on the turn the monster was Set")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(monster_code, make_monster(monster_code));
+	const auto monster_definition = make_monster(monster_code);
+	game.register_definition(monster_definition);
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -222,8 +224,11 @@ TEST_CASE("flow::Duel replays an attack when the target leaves before damage")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 800, 1000));
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 800, 1000);
+	game.register_definition(attacker_definition);
+	game.register_definition(defender_definition);
+
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -262,8 +267,11 @@ TEST_CASE("flow::Duel aborts an attack when the attacker leaves attack position"
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 800, 1000));
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 800, 1000);
+	game.register_definition(attacker_definition);
+	game.register_definition(defender_definition);
+
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -323,14 +331,17 @@ TEST_CASE("flow::Duel performs a Pendulum Summon")
 
 	auto left_scale = make_monster(left_scale_code, 1000, 1000, 4);
 	left_scale.subtypes = {domain::CardSubtype::PENDULUM};
-	left_scale.monster->pendulum_scale = state::CardDefinition::Monster::PendulumScale{.left = 1, .right = 1};
+	left_scale.monster->pendulum_scale = dsl::CardIdentity::Monster::PendulumScale{.left = domain::PendulumScale{1}, .right = domain::PendulumScale{1}};
 	auto right_scale = make_monster(right_scale_code, 1000, 1000, 4);
 	right_scale.subtypes = {domain::CardSubtype::PENDULUM};
-	right_scale.monster->pendulum_scale = state::CardDefinition::Monster::PendulumScale{.left = 8, .right = 8};
-	game.register_definition(left_scale_code, left_scale);
-	game.register_definition(right_scale_code, right_scale);
-	game.register_definition(low_code, make_monster(low_code, 1000, 1000, 4));
-	game.register_definition(high_code, make_monster(high_code, 1000, 1000, 6));
+	right_scale.monster->pendulum_scale = dsl::CardIdentity::Monster::PendulumScale{.left = domain::PendulumScale{8}, .right = domain::PendulumScale{8}};
+	const auto low_definition = make_monster(low_code, 1000, 1000, 4);
+	const auto high_definition = make_monster(high_code, 1000, 1000, 6);
+	game.register_definition(left_scale);
+	game.register_definition(right_scale);
+	game.register_definition(low_definition);
+	game.register_definition(high_definition);
+
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -393,18 +404,21 @@ TEST_CASE("flow::Duel: Solemn Judgment negates a Pendulum Summon")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+	const auto solemn_definition = make_trap(solemn_code, {domain::CardSubtype::COUNTER});
+	game.register_definition(solemn_definition);
 
 	auto left_scale = make_monster(left_scale_code, 1000, 1000, 4);
 	left_scale.subtypes = {domain::CardSubtype::PENDULUM};
-	left_scale.monster->pendulum_scale = state::CardDefinition::Monster::PendulumScale{.left = 1, .right = 1};
+	left_scale.monster->pendulum_scale = dsl::CardIdentity::Monster::PendulumScale{.left = domain::PendulumScale{1}, .right = domain::PendulumScale{1}};
 	auto right_scale = make_monster(right_scale_code, 1000, 1000, 4);
 	right_scale.subtypes = {domain::CardSubtype::PENDULUM};
-	right_scale.monster->pendulum_scale = state::CardDefinition::Monster::PendulumScale{.left = 8, .right = 8};
-	game.register_definition(left_scale_code, left_scale);
-	game.register_definition(right_scale_code, right_scale);
-	game.register_definition(low_code, make_monster(low_code, 1000, 1000, 4));
-	game.register_definition(high_code, make_monster(high_code, 1000, 1000, 6));
+	right_scale.monster->pendulum_scale = dsl::CardIdentity::Monster::PendulumScale{.left = domain::PendulumScale{8}, .right = domain::PendulumScale{8}};
+	game.register_definition(left_scale);
+	game.register_definition(right_scale);
+	const auto low_definition = make_monster(low_code, 1000, 1000, 4);
+	const auto high_definition = make_monster(high_code, 1000, 1000, 6);
+	game.register_definition(low_definition);
+	game.register_definition(high_definition);
 
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -471,7 +485,9 @@ TEST_CASE("flow::Duel performs a Flip Summon")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(monster_code, make_monster(monster_code));
+	const auto monster_definition = make_monster(monster_code);
+	game.register_definition(monster_definition);
+
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
@@ -505,8 +521,10 @@ TEST_CASE("flow::Duel resolves an attack-position battle")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 800, 1500));
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 800, 1500);
+	game.register_definition(attacker_definition);
+	game.register_definition(defender_definition);
 
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -548,8 +566,10 @@ TEST_CASE("flow::Duel delays battle resolution until the attack declaration wind
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 800, 1000));
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 800, 1000);
+	game.register_definition(attacker_definition);
+	game.register_definition(defender_definition);
 
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -599,8 +619,10 @@ TEST_CASE("flow::Duel resolves attack-declaration triggers before damage calcula
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(watcher_code, make_monster(watcher_code, 800, 1000));
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+	const auto watcher_definition = make_monster(watcher_code, 800, 1000);
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	game.register_definition(watcher_definition);
+	game.register_definition(attacker_definition);
 
 	REQUIRE(duel.load_scripts(directory));
 
@@ -642,8 +664,10 @@ TEST_CASE("flow::Duel sends battle-destroyed monsters at the end of the damage s
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 800, 1000));
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 800, 1000);
+	game.register_definition(attacker_definition);
+	game.register_definition(defender_definition);
 
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -706,8 +730,10 @@ TEST_CASE("flow::Duel allows another monster to attack after the first attack en
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 800, 1000));
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 800, 1000);
+	game.register_definition(attacker_definition);
+	game.register_definition(defender_definition);
 
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -762,9 +788,12 @@ TEST_CASE("flow::Duel enforces damage-step activation categories")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(quick_code, make_monster(quick_code, 1000, 1000));
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 1000, 1000));
+	const auto quick_definition = make_monster(quick_code, 1000, 1000);
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 1000, 1000);
+	game.register_definition(quick_definition);
+	game.register_definition(attacker_definition);
+	game.register_definition(defender_definition);
 
 	REQUIRE(duel.load_scripts(directory));
 
@@ -859,9 +888,12 @@ TEST_CASE("flow::Duel allows Counter Traps in the damage step")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(counter_code, make_trap(counter_code, {domain::CardSubtype::COUNTER}));
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 1000, 1000));
+	const auto counter_definition = make_trap(counter_code, {domain::CardSubtype::COUNTER});
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 1000, 1000);
+	game.register_definition(counter_definition);
+	game.register_definition(attacker_definition);
+	game.register_definition(defender_definition);
 
 	REQUIRE(duel.load_scripts(directory));
 
@@ -934,9 +966,12 @@ TEST_CASE("flow::Duel emits BATTLE_DAMAGE with player and amount")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-	game.register_definition(watcher_code, make_monster(watcher_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 800, 800));
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	const auto watcher_definition = make_monster(watcher_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 800, 800);
+	game.register_definition(attacker_definition);
+	game.register_definition(watcher_definition);
+	game.register_definition(defender_definition);
 
 	REQUIRE(duel.load_scripts(directory));
 
@@ -994,9 +1029,12 @@ TEST_CASE("flow::Duel emits BATTLE_DAMAGE when the attacker's controller takes d
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code, 800, 800));
-	game.register_definition(watcher_code, make_monster(watcher_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 1000, 1000));
+	const auto attacker_definition = make_monster(attacker_code, 800, 800);
+	const auto watcher_definition = make_monster(watcher_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 1000, 1000);
+	game.register_definition(attacker_definition);
+	game.register_definition(watcher_definition);
+	game.register_definition(defender_definition);
 
 	REQUIRE(duel.load_scripts(directory));
 
@@ -1039,8 +1077,10 @@ TEST_CASE("flow::Duel resolves a defense-position battle")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 800, 1500));
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 800, 1500);
+	game.register_definition(attacker_definition);
+	game.register_definition(defender_definition);
 
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -1073,7 +1113,8 @@ TEST_CASE("flow::Duel direct attack and winner")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	game.register_definition(attacker_definition);
 
 	game.set_life_points(domain::Player::FIRST, 1000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -1101,8 +1142,10 @@ TEST_CASE("flow::Duel flips a face-down defender before damage calculation")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-	game.register_definition(defender_code, make_monster(defender_code, 800, 800));
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	const auto defender_definition = make_monster(defender_code, 800, 800);
+	game.register_definition(attacker_definition);
+	game.register_definition(defender_definition);
 
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -1135,9 +1178,10 @@ TEST_CASE("flow::Duel tribute summons a level 5 monster")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(high_code, make_monster(high_code, 2000, 2000, 5));
-	game.register_definition(low_code, make_monster(low_code, 1000, 1000));
-
+	const auto high_definition = make_monster(high_code, 2000, 2000, 5);
+	game.register_definition(high_definition);
+	const auto low_definition = make_monster(low_code, 1000, 1000);
+	game.register_definition(low_definition);
 	advance_phase(duel); // STANDBY
 	advance_phase(duel); // MAIN_1
 	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
@@ -1175,9 +1219,10 @@ TEST_CASE("flow::Duel requires two tributes for a level 7 monster")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(high_code, make_monster(high_code, 2500, 2500, 7));
-	game.register_definition(low_code, make_monster(low_code, 1000, 1000));
-
+	const auto high_definition = make_monster(high_code, 2500, 2500, 7);
+	game.register_definition(high_definition);
+	const auto low_definition = make_monster(low_code, 1000, 1000);
+	game.register_definition(low_definition);
 	advance_phase(duel); // STANDBY
 	advance_phase(duel); // MAIN_1
 
@@ -1208,8 +1253,18 @@ TEST_CASE("flow::Duel loses when drawing from an empty deck")
 {
 	flow::Duel duel{g_selector};
 
+	// 先手第一回合不抽卡, 因而不判负
 	CHECK_FALSE(duel.draw_for_turn());
-	CHECK(duel.winner() == domain::Player::SECOND);
+	CHECK_FALSE(duel.winner().has_value());
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	// 后手第一抽时卡组为空 -> 后手判负
+	CHECK_FALSE(duel.draw_for_turn());
+	CHECK(duel.winner() == domain::Player::FIRST);
 }
 
 TEST_CASE("flow::Duel requires both players to pass before advancing phase")
@@ -1243,9 +1298,10 @@ TEST_CASE("flow::Duel triggers effects from scripts")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(jar_code, make_monster(jar_code));
-	game.register_definition(monster_code, make_monster(monster_code));
-
+	const auto jar_definition = make_monster(jar_code);
+	game.register_definition(jar_definition);
+	const auto monster_definition = make_monster(monster_code);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 
 	const auto jar = game.create_instance(jar_code, domain::Player::FIRST);
@@ -1298,16 +1354,17 @@ TEST_CASE("flow::Duel applies static modifiers in battle")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	state::CardDefinition mountain{};
+	dsl::CardIdentity mountain{};
 	mountain.code = mountain_code;
-	mountain.kind = {domain::CardType::SPELL};
+	mountain.kind = domain::CardType::SPELL;
 	mountain.subtypes = {domain::CardSubtype::FIELD};
-	mountain.spell = state::CardDefinition::Spell{};
-	game.register_definition(mountain_code, mountain);
+	mountain.spell = dsl::CardIdentity::Spell{};
+	game.register_definition(mountain);
 
-	game.register_definition(dragon_code, make_monster(dragon_code, 1000, 1000, 4, domain::Race::DRAGON));
-	game.register_definition(warrior_code, make_monster(warrior_code, 1000, 1000, 4, domain::Race::WARRIOR));
-
+	const auto dragon_definition = make_monster(dragon_code, 1000, 1000, 4, domain::Race::DRAGON);
+	game.register_definition(dragon_definition);
+	const auto warrior_definition = make_monster(warrior_code, 1000, 1000, 4, domain::Race::WARRIOR);
+	game.register_definition(warrior_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -1367,9 +1424,10 @@ TEST_CASE("flow::CardStateResolver feeds effective stats to scripts")
 		flow::Duel duel{g_selector};
 		auto& game = duel.game();
 
-		game.register_definition(mountain_code, make_spell(mountain_code, {domain::CardSubtype::FIELD}));
-		game.register_definition(monster_code, make_monster(monster_code, 1000, 1000, 4, domain::Race::DRAGON));
-
+		const auto mountain_definition = make_spell(mountain_code, {domain::CardSubtype::FIELD});
+		game.register_definition(mountain_definition);
+		const auto monster_definition = make_monster(monster_code, 1000, 1000, 4, domain::Race::DRAGON);
+		game.register_definition(monster_definition);
 		REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 		REQUIRE(duel.load_scripts(directory));
 
@@ -1438,23 +1496,23 @@ TEST_CASE("flow::CardStateResolver applies static discrete properties")
 		flow::Duel duel{g_selector};
 		auto& game = duel.game();
 
-		game.register_definition(field_code, make_spell(field_code, {domain::CardSubtype::FIELD}));
-
-		state::CardDefinition monster{};
+		const auto field_definition = make_spell(field_code, {domain::CardSubtype::FIELD});
+		game.register_definition(field_definition);
+		dsl::CardIdentity monster{};
 		monster.code = monster_code;
-		monster.kind = {domain::CardType::MONSTER};
+		monster.kind = domain::CardType::MONSTER;
 		monster.subtypes = {domain::CardSubtype::EFFECT};
-		monster.monster = state::CardDefinition::Monster
+		monster.monster = dsl::CardIdentity::Monster
 		{
 				.attribute = domain::Attribute::WIND,
 				.race = domain::Race::DRAGON,
-				.level = 4,
-				.attack = 1000,
-				.defense = 1000,
+				.level = domain::LevelRank{4},
+				.attack = domain::AttackDefense{1000},
+				.defense = domain::AttackDefense{1000},
 				.pendulum_scale = std::nullopt,
 				.link_marker = std::nullopt,
 		};
-		game.register_definition(monster_code, monster);
+		game.register_definition(monster);
 
 		REQUIRE(duel.load_scripts(directory));
 
@@ -1558,14 +1616,14 @@ TEST_CASE("flow::Duel validates Synchro and Xyz summon procedures")
 	auto xyz_restricted = make_monster(xyz_restricted_code, 2000, 2000, 4);
 	xyz_restricted.subtypes = {domain::CardSubtype::XYZ};
 
-	game.register_definition(tuner_code, tuner);
-	game.register_definition(non_tuner_code, non_tuner);
-	game.register_definition(synchro_code, synchro);
-	game.register_definition(xyz_code, xyz);
-	game.register_definition(material_a_code, material_a);
-	game.register_definition(material_b_code, material_b);
-	game.register_definition(synchro_restricted_code, synchro_restricted);
-	game.register_definition(xyz_restricted_code, xyz_restricted);
+	game.register_definition(tuner);
+	game.register_definition(non_tuner);
+	game.register_definition(synchro);
+	game.register_definition(xyz);
+	game.register_definition(material_a);
+	game.register_definition(material_b);
+	game.register_definition(synchro_restricted);
+	game.register_definition(xyz_restricted);
 
 	REQUIRE(duel.load_scripts(directory));
 
@@ -1691,49 +1749,56 @@ TEST_CASE("flow::Duel resolves Fusion, Link, Ritual, and SelfSpecial summons")
 	constexpr domain::CardCode self_code{99700040};
 	constexpr domain::CardCode self_false_code{99700041};
 
+	auto fusion_definition = make_monster(fusion_code, 2000, 2000, 4);
+	fusion_definition.subtypes = {domain::CardSubtype::FUSION};
+	auto fusion_alternate_definition = make_monster(fusion_alternate_code, 2000, 2000, 4);
+	fusion_alternate_definition.subtypes = {domain::CardSubtype::FUSION};
+	auto link_definition = make_monster(link_code, 2000, 2000, 4);
+	link_definition.subtypes = {domain::CardSubtype::LINK};
+	link_definition.monster->link_marker = utility::EnumMask
+	{
+			domain::LinkMarker::TOP,
+			domain::LinkMarker::BOTTOM,
+	};
+	auto link_bad_rating_definition = make_monster(link_bad_rating_code, 2000, 2000, 4);
+	link_bad_rating_definition.subtypes = {domain::CardSubtype::LINK};
+	link_bad_rating_definition.monster->link_marker = utility::EnumMask
+	{
+			domain::LinkMarker::TOP,
+			domain::LinkMarker::BOTTOM,
+			domain::LinkMarker::LEFT,
+	};
+	auto ritual_definition = make_monster(ritual_code, 2000, 2000, 4);
+	ritual_definition.subtypes = {domain::CardSubtype::RITUAL};
+	auto self_definition = make_monster(self_code, 2000, 2000, 4);
+	self_definition.subtypes = {domain::CardSubtype::SPECIAL_SUMMON};
+	auto self_false_definition = make_monster(self_false_code, 2000, 2000, 4);
+	self_false_definition.subtypes = {domain::CardSubtype::SPECIAL_SUMMON};
+
+	const auto fusion_material_a_definition = make_monster(fusion_material_a, 1000, 1000, 2);
+	const auto fusion_material_b_definition = make_monster(fusion_material_b, 1000, 1000, 2);
+	const auto link_material_a_definition = make_monster(link_material_a, 1000, 1000, 2);
+	const auto link_material_b_definition = make_monster(link_material_b, 1000, 1000, 2);
+	const auto ritual_material_a_definition = make_monster(ritual_material_a, 1000, 1000, 2);
+	const auto ritual_material_b_definition = make_monster(ritual_material_b, 1000, 1000, 2);
+
 	const auto prepare = [&](flow::Duel& duel) -> void
 	{
 		auto& game = duel.game();
 
-		auto fusion = make_monster(fusion_code, 2000, 2000, 4);
-		fusion.subtypes = {domain::CardSubtype::FUSION};
-		auto fusion_alternate = make_monster(fusion_alternate_code, 2000, 2000, 4);
-		fusion_alternate.subtypes = {domain::CardSubtype::FUSION};
-		auto link = make_monster(link_code, 2000, 2000, 4);
-		link.subtypes = {domain::CardSubtype::LINK};
-		link.monster->link_marker = utility::EnumMask
-		{
-				domain::LinkMarker::TOP,
-				domain::LinkMarker::BOTTOM,
-		};
-		auto link_bad_rating = make_monster(link_bad_rating_code, 2000, 2000, 4);
-		link_bad_rating.subtypes = {domain::CardSubtype::LINK};
-		link_bad_rating.monster->link_marker = utility::EnumMask
-		{
-				domain::LinkMarker::TOP,
-				domain::LinkMarker::BOTTOM,
-				domain::LinkMarker::LEFT,
-		};
-		auto ritual = make_monster(ritual_code, 2000, 2000, 4);
-		ritual.subtypes = {domain::CardSubtype::RITUAL};
-		auto self = make_monster(self_code, 2000, 2000, 4);
-		self.subtypes = {domain::CardSubtype::SPECIAL_SUMMON};
-		auto self_false = make_monster(self_false_code, 2000, 2000, 4);
-		self_false.subtypes = {domain::CardSubtype::SPECIAL_SUMMON};
-
-		game.register_definition(fusion_code, fusion);
-		game.register_definition(fusion_alternate_code, fusion_alternate);
-		game.register_definition(fusion_material_a, make_monster(fusion_material_a, 1000, 1000, 2));
-		game.register_definition(fusion_material_b, make_monster(fusion_material_b, 1000, 1000, 2));
-		game.register_definition(link_code, link);
-		game.register_definition(link_bad_rating_code, link_bad_rating);
-		game.register_definition(link_material_a, make_monster(link_material_a, 1000, 1000, 2));
-		game.register_definition(link_material_b, make_monster(link_material_b, 1000, 1000, 2));
-		game.register_definition(ritual_code, ritual);
-		game.register_definition(ritual_material_a, make_monster(ritual_material_a, 1000, 1000, 2));
-		game.register_definition(ritual_material_b, make_monster(ritual_material_b, 1000, 1000, 2));
-		game.register_definition(self_code, self);
-		game.register_definition(self_false_code, self_false);
+		game.register_definition(fusion_definition);
+		game.register_definition(fusion_alternate_definition);
+		game.register_definition(fusion_material_a_definition);
+		game.register_definition(fusion_material_b_definition);
+		game.register_definition(link_definition);
+		game.register_definition(link_bad_rating_definition);
+		game.register_definition(link_material_a_definition);
+		game.register_definition(link_material_b_definition);
+		game.register_definition(ritual_definition);
+		game.register_definition(ritual_material_a_definition);
+		game.register_definition(ritual_material_b_definition);
+		game.register_definition(self_definition);
+		game.register_definition(self_false_definition);
 
 		REQUIRE(duel.load_scripts(directory));
 		game.set_life_points(domain::Player::FIRST, 8000);
@@ -1930,10 +1995,12 @@ TEST_CASE("flow::Duel: Solemn Judgment negates a Normal Summon")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
-	game.register_definition(monster_code, make_monster(monster_code));
-	game.register_definition(second_code, make_monster(second_code));
-
+	const auto solemn_definition = make_trap(solemn_code, {domain::CardSubtype::COUNTER});
+	game.register_definition(solemn_definition);
+	const auto monster_definition = make_monster(monster_code);
+	game.register_definition(monster_definition);
+	const auto second_definition = make_monster(second_code);
+	game.register_definition(second_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -2003,13 +2070,15 @@ TEST_CASE("flow::Duel: Solemn Judgment negates an Xyz Summon")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+	const auto solemn_definition = make_trap(solemn_code, {domain::CardSubtype::COUNTER});
+	game.register_definition(solemn_definition);
 	auto xyz_definition = make_monster(xyz_code, 2000, 2000, 4);
 	xyz_definition.subtypes = {domain::CardSubtype::XYZ};
-	game.register_definition(xyz_code, xyz_definition);
-	game.register_definition(material_a_code, make_monster(material_a_code, 1000, 1000, 4));
-	game.register_definition(material_b_code, make_monster(material_b_code, 1000, 1000, 4));
-
+	game.register_definition(xyz_definition);
+	const auto material_a_definition = make_monster(material_a_code, 1000, 1000, 4);
+	game.register_definition(material_a_definition);
+	const auto material_b_definition = make_monster(material_b_code, 1000, 1000, 4);
+	game.register_definition(material_b_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 	REQUIRE(duel.load_scripts(directory));
 
@@ -2084,13 +2153,15 @@ TEST_CASE("flow::Duel: Solemn Judgment negates a Fusion Summon")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
+	const auto solemn_definition = make_trap(solemn_code, {domain::CardSubtype::COUNTER});
+	game.register_definition(solemn_definition);
 	auto fusion_definition = make_monster(fusion_code, 2000, 2000, 4);
 	fusion_definition.subtypes = {domain::CardSubtype::FUSION};
-	game.register_definition(fusion_code, fusion_definition);
-	game.register_definition(material_a_code, make_monster(material_a_code, 1000, 1000, 2));
-	game.register_definition(material_b_code, make_monster(material_b_code, 1000, 1000, 2));
-
+	game.register_definition(fusion_definition);
+	const auto material_a_definition = make_monster(material_a_code, 1000, 1000, 2);
+	game.register_definition(material_a_definition);
+	const auto material_b_definition = make_monster(material_b_code, 1000, 1000, 2);
+	game.register_definition(material_b_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 	REQUIRE(duel.load_scripts(directory));
 
@@ -2174,32 +2245,38 @@ TEST_CASE("flow::Duel: Solemn Judgment negates Link, Ritual, and SelfSpecial Sum
 	constexpr domain::CardCode ritual_material_b_code{97000112};
 	constexpr domain::CardCode self_code{97000120};
 
+	const auto solemn_definition = make_trap(solemn_code, {domain::CardSubtype::COUNTER});
+
+	auto link_definition = make_monster(link_code, 2000, 2000, 4);
+	link_definition.subtypes = {domain::CardSubtype::LINK};
+	link_definition.monster->link_marker = utility::EnumMask
+	{
+			domain::LinkMarker::TOP,
+			domain::LinkMarker::BOTTOM,
+	};
+	const auto link_material_a_definition = make_monster(link_material_a_code, 1000, 1000, 2);
+	const auto link_material_b_definition = make_monster(link_material_b_code, 1000, 1000, 2);
+
+	auto ritual_definition = make_monster(ritual_code, 2000, 2000, 4);
+	ritual_definition.subtypes = {domain::CardSubtype::RITUAL};
+	const auto ritual_material_a_definition = make_monster(ritual_material_a_code, 1000, 1000, 2);
+	const auto ritual_material_b_definition = make_monster(ritual_material_b_code, 1000, 1000, 2);
+
+	auto self_definition = make_monster(self_code, 2000, 2000, 4);
+	self_definition.subtypes = {domain::CardSubtype::SPECIAL_SUMMON};
+
 	const auto prepare = [&](flow::Duel& duel) -> void
 	{
 		auto& game = duel.game();
 
-		game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
-
-		auto link = make_monster(link_code, 2000, 2000, 4);
-		link.subtypes = {domain::CardSubtype::LINK};
-		link.monster->link_marker = utility::EnumMask
-		{
-				domain::LinkMarker::TOP,
-				domain::LinkMarker::BOTTOM,
-		};
-		game.register_definition(link_code, link);
-		game.register_definition(link_material_a_code, make_monster(link_material_a_code, 1000, 1000, 2));
-		game.register_definition(link_material_b_code, make_monster(link_material_b_code, 1000, 1000, 2));
-
-		auto ritual = make_monster(ritual_code, 2000, 2000, 4);
-		ritual.subtypes = {domain::CardSubtype::RITUAL};
-		game.register_definition(ritual_code, ritual);
-		game.register_definition(ritual_material_a_code, make_monster(ritual_material_a_code, 1000, 1000, 2));
-		game.register_definition(ritual_material_b_code, make_monster(ritual_material_b_code, 1000, 1000, 2));
-
-		auto self = make_monster(self_code, 2000, 2000, 4);
-		self.subtypes = {domain::CardSubtype::SPECIAL_SUMMON};
-		game.register_definition(self_code, self);
+		game.register_definition(solemn_definition);
+		game.register_definition(link_definition);
+		game.register_definition(link_material_a_definition);
+		game.register_definition(link_material_b_definition);
+		game.register_definition(ritual_definition);
+		game.register_definition(ritual_material_a_definition);
+		game.register_definition(ritual_material_b_definition);
+		game.register_definition(self_definition);
 
 		REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 		REQUIRE(duel.load_scripts(directory));
@@ -2333,10 +2410,12 @@ TEST_CASE("flow::Duel: Solemn Judgment negates and destroys a Spell activation")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
-	game.register_definition(raigeki_code, make_spell(raigeki_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(monster_code, make_monster(monster_code));
-
+	const auto solemn_definition = make_trap(solemn_code, {domain::CardSubtype::COUNTER});
+	game.register_definition(solemn_definition);
+	const auto raigeki_definition = make_spell(raigeki_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(raigeki_definition);
+	const auto monster_definition = make_monster(monster_code);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -2403,9 +2482,10 @@ TEST_CASE("flow::Duel: Solemn Judgment negates and destroys a monster effect")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
-	game.register_definition(monster_code, make_monster(monster_code));
-
+	const auto solemn_definition = make_trap(solemn_code, {domain::CardSubtype::COUNTER});
+	game.register_definition(solemn_definition);
+	const auto monster_definition = make_monster(monster_code);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 	REQUIRE(duel.load_scripts(directory));
 
@@ -2472,10 +2552,12 @@ TEST_CASE("flow::Duel keeps battle-protected monsters")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(field_code, make_spell(field_code, {domain::CardSubtype::FIELD}));
-	game.register_definition(defender_code, make_monster(defender_code, 800, 800));
-	game.register_definition(attacker_code, make_monster(attacker_code, 1000, 1000));
-
+	const auto field_definition = make_spell(field_code, {domain::CardSubtype::FIELD});
+	game.register_definition(field_definition);
+	const auto defender_definition = make_monster(defender_code, 800, 800);
+	game.register_definition(defender_definition);
+	const auto attacker_definition = make_monster(attacker_code, 1000, 1000);
+	game.register_definition(attacker_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -2528,10 +2610,12 @@ TEST_CASE("flow::Duel lets the driver choose battle destruction triggers")
 	flow::Duel duel{auto_selector};
 	auto& game = duel.game();
 
-	game.register_definition(rat_code, make_monster(rat_code, 1400, 1450, 4, domain::Race::BEAST));
-	game.register_definition(attacker_code, make_monster(attacker_code, 1600, 1000));
-	game.register_definition(recruit_code, make_monster(recruit_code, 1000, 1000));
-
+	const auto rat_definition = make_monster(rat_code, 1400, 1450, 4, domain::Race::BEAST);
+	game.register_definition(rat_definition);
+	const auto attacker_definition = make_monster(attacker_code, 1600, 1000);
+	game.register_definition(attacker_definition);
+	const auto recruit_definition = make_monster(recruit_code, 1000, 1000);
+	game.register_definition(recruit_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -2589,10 +2673,12 @@ TEST_CASE("flow::Duel processes destruction events from effects")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(igniter_code, make_monster(igniter_code));
-	game.register_definition(victim_code, make_monster(victim_code));
-	game.register_definition(draw_code, make_monster(draw_code));
-
+	const auto igniter_definition = make_monster(igniter_code);
+	game.register_definition(igniter_definition);
+	const auto victim_definition = make_monster(victim_code);
+	game.register_definition(victim_definition);
+	const auto draw_definition = make_monster(draw_code);
+	game.register_definition(draw_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	const auto igniter = game.create_instance(igniter_code, domain::Player::FIRST);
@@ -2643,7 +2729,8 @@ TEST_CASE("flow::Duel shares usage counters within a group")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(card_code, make_monster(card_code));
+	const auto card_definition = make_monster(card_code);
+	game.register_definition(card_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -2691,7 +2778,8 @@ TEST_CASE("flow::Duel applies mutex independently of usage counts")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(card_code, make_monster(card_code));
+	const auto card_definition = make_monster(card_code);
+	game.register_definition(card_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -2758,8 +2846,8 @@ TEST_CASE("flow::Duel rejects invalid mutex links")
 	constexpr domain::CardCode card_code{99500003};
 
 	flow::Duel duel{g_selector};
-	duel.game().register_definition(card_code, make_monster(card_code));
-
+	const auto card_definition = make_monster(card_code);
+	duel.game().register_definition(card_definition);
 	// mutex 只能指向更早效果 → 加载失败
 	CHECK_FALSE(duel.load_scripts(directory));
 
@@ -2794,10 +2882,12 @@ TEST_CASE("flow::Duel enforces triggered effect usage limits")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(destroyer_code, make_monster(destroyer_code));
-	game.register_definition(victim_code, make_monster(victim_code));
-	game.register_definition(draw_code, make_monster(draw_code));
-
+	const auto destroyer_definition = make_monster(destroyer_code);
+	game.register_definition(destroyer_definition);
+	const auto victim_definition = make_monster(victim_code);
+	game.register_definition(victim_definition);
+	const auto draw_definition = make_monster(draw_code);
+	game.register_definition(draw_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
@@ -2841,9 +2931,10 @@ TEST_CASE("flow::Duel activates traps with an event timing")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(torrential_code, make_trap(torrential_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(monster_code, make_monster(monster_code));
-
+	const auto torrential_definition = make_trap(torrential_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(torrential_definition);
+	const auto monster_definition = make_monster(monster_code);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -2911,9 +3002,10 @@ TEST_CASE("flow::Duel activates ignition and quick effects")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(domain::CardCode{94000001}, make_monster(domain::CardCode{94000001}));
-	game.register_definition(domain::CardCode{94000002}, make_monster(domain::CardCode{94000002}));
-
+	const auto card_94000001_definition = make_monster(domain::CardCode{94000001});
+	game.register_definition(card_94000001_definition);
+	const auto card_94000002_definition = make_monster(domain::CardCode{94000002});
+	game.register_definition(card_94000002_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -2964,7 +3056,8 @@ TEST_CASE("flow::Duel enforces per-turn usage restrictions")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(domain::CardCode{95000001}, make_monster(domain::CardCode{95000001}));
+	const auto card_95000001_definition = make_monster(domain::CardCode{95000001});
+	game.register_definition(card_95000001_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -3015,10 +3108,12 @@ TEST_CASE("flow::Duel activates spell cards")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(raigeki_code, make_spell(raigeki_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(mountain_code, make_spell(mountain_code, {domain::CardSubtype::FIELD}));
-	game.register_definition(monster_code, make_monster(monster_code));
-
+	const auto raigeki_definition = make_spell(raigeki_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(raigeki_definition);
+	const auto mountain_definition = make_spell(mountain_code, {domain::CardSubtype::FIELD});
+	game.register_definition(mountain_definition);
+	const auto monster_definition = make_monster(monster_code);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 
 	const auto raigeki = game.create_instance(raigeki_code, domain::Player::FIRST);
@@ -3096,13 +3191,15 @@ TEST_CASE("flow::Duel resolves a Ritual Spell through effect summon")
 	flow::Duel duel{selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::RITUAL}));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::RITUAL});
+	game.register_definition(spell_definition);
 	auto ritual = make_monster(ritual_code, 2000, 2000, 4);
 	ritual.subtypes = {domain::CardSubtype::RITUAL};
-	game.register_definition(ritual_code, ritual);
-	game.register_definition(material_a_code, make_monster(material_a_code, 1000, 1000, 2));
-	game.register_definition(material_b_code, make_monster(material_b_code, 1000, 1000, 2));
-
+	game.register_definition(ritual);
+	const auto material_a_definition = make_monster(material_a_code, 1000, 1000, 2);
+	game.register_definition(material_a_definition);
+	const auto material_b_definition = make_monster(material_b_code, 1000, 1000, 2);
+	game.register_definition(material_b_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -3153,16 +3250,17 @@ TEST_CASE("flow::Duel filters the Ritual Spell monster choice")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::RITUAL}));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::RITUAL});
+	game.register_definition(spell_definition);
 	auto earth_ritual = make_monster(earth_ritual_code, 2000, 2000, 4);
 	earth_ritual.subtypes = {domain::CardSubtype::RITUAL};
-	game.register_definition(earth_ritual_code, earth_ritual);
+	game.register_definition(earth_ritual);
 	auto dark_ritual = make_monster(dark_ritual_code, 2000, 2000, 4);
 	dark_ritual.subtypes = {domain::CardSubtype::RITUAL};
 	dark_ritual.monster->attribute = domain::Attribute::DARK;
-	game.register_definition(dark_ritual_code, dark_ritual);
-	game.register_definition(material_code, make_monster(material_code, 1000, 1000, 4));
-
+	game.register_definition(dark_ritual);
+	const auto material_definition = make_monster(material_code, 1000, 1000, 4);
+	game.register_definition(material_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -3202,12 +3300,13 @@ TEST_CASE("flow::Duel fizzles a Ritual Spell with an invalid level sum")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::RITUAL}));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::RITUAL});
+	game.register_definition(spell_definition);
 	auto ritual = make_monster(ritual_code, 2000, 2000, 4);
 	ritual.subtypes = {domain::CardSubtype::RITUAL};
-	game.register_definition(ritual_code, ritual);
-	game.register_definition(material_code, make_monster(material_code, 1000, 1000, 2));
-
+	game.register_definition(ritual);
+	const auto material_definition = make_monster(material_code, 1000, 1000, 2);
+	game.register_definition(material_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -3244,12 +3343,13 @@ TEST_CASE("flow::Duel negates a Ritual Spell activation")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::RITUAL}));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::RITUAL});
+	game.register_definition(spell_definition);
 	auto ritual = make_monster(ritual_code, 2000, 2000, 4);
 	ritual.subtypes = {domain::CardSubtype::RITUAL};
-	game.register_definition(ritual_code, ritual);
-	game.register_definition(negator_code, make_monster(negator_code));
-
+	game.register_definition(ritual);
+	const auto negator_definition = make_monster(negator_code);
+	game.register_definition(negator_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -3290,13 +3390,15 @@ TEST_CASE("flow::Duel cannot summon-negate an effect-driven Ritual Summon")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::RITUAL}));
+	const auto solemn_definition = make_trap(solemn_code, {domain::CardSubtype::COUNTER});
+	game.register_definition(solemn_definition);
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::RITUAL});
+	game.register_definition(spell_definition);
 	auto ritual = make_monster(ritual_code, 2000, 2000, 4);
 	ritual.subtypes = {domain::CardSubtype::RITUAL};
-	game.register_definition(ritual_code, ritual);
-	game.register_definition(material_code, make_monster(material_code, 1000, 1000, 4));
-
+	game.register_definition(ritual);
+	const auto material_definition = make_monster(material_code, 1000, 1000, 4);
+	game.register_definition(material_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -3358,9 +3460,10 @@ TEST_CASE("flow::Duel resolves an effect-driven Special Summon from the Graveyar
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
-
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
+	const auto monster_definition = make_monster(monster_code, 1800, 1200, 4);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -3431,8 +3534,10 @@ TEST_CASE("flow::Duel uses the selector for effect special summon placement")
 	flow::Duel duel{selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
+	const auto monster_definition = make_monster(monster_code, 1800, 1200, 4);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -3478,8 +3583,10 @@ TEST_CASE("flow::Duel does not fall back when effect special summon location is 
 	flow::Duel duel{selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
+	const auto monster_definition = make_monster(monster_code, 1800, 1200, 4);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -3529,8 +3636,10 @@ TEST_CASE("flow::Duel uses the selector for spell trap placement")
 	flow::Duel duel{selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
+	const auto monster_definition = make_monster(monster_code, 1800, 1200, 4);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -3565,10 +3674,12 @@ TEST_CASE("flow::Duel negates an effect-driven Special Summon effect")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
-	game.register_definition(negator_code, make_monster(negator_code));
-
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
+	const auto monster_definition = make_monster(monster_code, 1800, 1200, 4);
+	game.register_definition(monster_definition);
+	const auto negator_definition = make_monster(negator_code);
+	game.register_definition(negator_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -3607,10 +3718,11 @@ TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck mon
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
 	auto fusion_definition = make_monster(fusion_code, 2000, 2000, 4);
 	fusion_definition.subtypes = {domain::CardSubtype::FUSION};
-	game.register_definition(fusion_code, fusion_definition);
+	game.register_definition(fusion_definition);
 
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -3686,8 +3798,10 @@ TEST_CASE("flow::Duel rejects a non-monster target for an effect Special Summon"
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(summon_spell_code, make_spell(summon_spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(target_spell_code, make_spell(target_spell_code, {domain::CardSubtype::RITUAL}));
+	const auto summon_spell_definition = make_spell(summon_spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(summon_spell_definition);
+	const auto target_spell_definition = make_spell(target_spell_code, {domain::CardSubtype::RITUAL});
+	game.register_definition(target_spell_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 
 	const auto summon_spell = game.create_instance(summon_spell_code, domain::Player::FIRST);
@@ -3717,10 +3831,11 @@ TEST_CASE("flow::Duel rejects an unproper Ritual Monster from hand")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(summon_spell_code, make_spell(summon_spell_code, {domain::CardSubtype::RITUAL}));
+	const auto summon_spell_definition = make_spell(summon_spell_code, {domain::CardSubtype::RITUAL});
+	game.register_definition(summon_spell_definition);
 	auto ritual = make_monster(ritual_code, 2000, 2000, 4);
 	ritual.subtypes = {domain::CardSubtype::RITUAL};
-	game.register_definition(ritual_code, ritual);
+	game.register_definition(ritual);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 
 	const auto summon_spell = game.create_instance(summon_spell_code, domain::Player::FIRST);
@@ -3751,9 +3866,12 @@ TEST_CASE("flow::Duel negates an effect-driven Special Summon activation")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
-	game.register_definition(negator_code, make_monster(negator_code));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
+	const auto monster_definition = make_monster(monster_code, 1800, 1200, 4);
+	game.register_definition(monster_definition);
+	const auto negator_definition = make_monster(negator_code);
+	game.register_definition(negator_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 
 	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
@@ -3789,9 +3907,12 @@ TEST_CASE("flow::Duel cannot summon-negate an effect-driven Special Summon")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(solemn_code, make_trap(solemn_code, {domain::CardSubtype::COUNTER}));
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+	const auto solemn_definition = make_trap(solemn_code, {domain::CardSubtype::COUNTER});
+	game.register_definition(solemn_definition);
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
+	const auto monster_definition = make_monster(monster_code, 1800, 1200, 4);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -3845,8 +3966,10 @@ TEST_CASE("flow::Duel resolves an effect Special Summon from the Banished zone")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
+	const auto monster_definition = make_monster(monster_code, 1800, 1200, 4);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 
 	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
@@ -3876,9 +3999,10 @@ TEST_CASE("flow::Duel takes control with an effect Special Summon from the oppon
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
-
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
+	const auto monster_definition = make_monster(monster_code, 1800, 1200, 4);
+	game.register_definition(monster_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -3924,10 +4048,11 @@ TEST_CASE("flow::Duel matches Fusion materials by code_list")
 
 	auto fusion = make_monster(fusion_code, 2000, 2000, 4);
 	fusion.subtypes = {domain::CardSubtype::FUSION};
-	game.register_definition(fusion_code, fusion);
-	game.register_definition(alias_material_code, make_monster(alias_material_code, 1000, 1000, 4));
-	game.register_definition(plain_material_code, make_monster(plain_material_code, 1000, 1000, 4));
-
+	game.register_definition(fusion);
+	const auto alias_material_definition = make_monster(alias_material_code, 1000, 1000, 4);
+	game.register_definition(alias_material_definition);
+	const auto plain_material_definition = make_monster(plain_material_code, 1000, 1000, 4);
+	game.register_definition(plain_material_definition);
 	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
@@ -3973,7 +4098,8 @@ TEST_CASE("flow::Duel sets and activates a trap")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(domain::CardCode{97000001}, make_trap(domain::CardCode{97000001}, {domain::CardSubtype::NORMAL}));
+	const auto card_97000001_definition = make_trap(domain::CardCode{97000001}, {domain::CardSubtype::NORMAL});
+	game.register_definition(card_97000001_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -4035,8 +4161,10 @@ TEST_CASE("flow::Duel resolves a chain in reverse order and negates effects")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(attacker_code, make_monster(attacker_code));
-	game.register_definition(negator_code, make_monster(negator_code));
+	const auto attacker_definition = make_monster(attacker_code);
+	game.register_definition(attacker_definition);
+	const auto negator_definition = make_monster(negator_code);
+	game.register_definition(negator_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -4103,8 +4231,10 @@ TEST_CASE("flow::Duel negates an activation and sends the spell to the graveyard
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(negator_code, make_monster(negator_code));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
+	const auto negator_definition = make_monster(negator_code);
+	game.register_definition(negator_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -4174,9 +4304,12 @@ TEST_CASE("flow::Duel rolls back usage for negated activations")
 		flow::Duel duel{g_selector};
 		auto& game = duel.game();
 
-		game.register_definition(activate_code, make_spell(activate_code, {domain::CardSubtype::NORMAL}));
-		game.register_definition(use_code, make_spell(use_code, {domain::CardSubtype::NORMAL}));
-		game.register_definition(negator_code, make_monster(negator_code));
+		const auto activate_definition = make_spell(activate_code, {domain::CardSubtype::NORMAL});
+		game.register_definition(activate_definition);
+		const auto use_definition = make_spell(use_code, {domain::CardSubtype::NORMAL});
+		game.register_definition(use_definition);
+		const auto negator_definition = make_monster(negator_code);
+		game.register_definition(negator_definition);
 		REQUIRE(duel.load_scripts(directory));
 
 		game.set_life_points(domain::Player::FIRST, 8000);
@@ -4251,9 +4384,12 @@ TEST_CASE("flow::Duel enforces spell speed when chaining")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(first_quick_code, make_monster(first_quick_code));
-	game.register_definition(counter_code, make_trap(counter_code, {domain::CardSubtype::COUNTER}));
-	game.register_definition(second_quick_code, make_monster(second_quick_code));
+	const auto first_quick_definition = make_monster(first_quick_code);
+	game.register_definition(first_quick_definition);
+	const auto counter_definition = make_trap(counter_code, {domain::CardSubtype::COUNTER});
+	game.register_definition(counter_definition);
+	const auto second_quick_definition = make_monster(second_quick_code);
+	game.register_definition(second_quick_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -4330,8 +4466,10 @@ TEST_CASE("flow::Duel collects simultaneous triggers into one chain")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(destroyer_code, make_monster(destroyer_code));
-	game.register_definition(victim_code, make_monster(victim_code));
+	const auto destroyer_definition = make_monster(destroyer_code);
+	game.register_definition(destroyer_definition);
+	const auto victim_definition = make_monster(victim_code);
+	game.register_definition(victim_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
@@ -4405,8 +4543,10 @@ TEST_CASE("flow::Duel allows different effects of one card in one chain")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(double_code, make_monster(double_code));
-	game.register_definition(opponent_code, make_monster(opponent_code));
+	const auto double_definition = make_monster(double_code);
+	game.register_definition(double_definition);
+	const auto opponent_definition = make_monster(opponent_code);
+	game.register_definition(opponent_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -4477,8 +4617,10 @@ TEST_CASE("flow::Duel collects multiple effects of one card into one chain")
 	flow::Duel duel{g_selector};
 	auto& game = duel.game();
 
-	game.register_definition(victim_code, make_monster(victim_code));
-	game.register_definition(destroyer_code, make_monster(destroyer_code));
+	const auto victim_definition = make_monster(victim_code);
+	game.register_definition(victim_definition);
+	const auto destroyer_definition = make_monster(destroyer_code);
+	game.register_definition(destroyer_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	game.set_life_points(domain::Player::FIRST, 8000);
@@ -4547,8 +4689,10 @@ TEST_CASE("flow::Duel asks the driver for optional triggers")
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
-	game.register_definition(victim_code, make_monster(victim_code));
-	game.register_definition(destroyer_code, make_monster(destroyer_code));
+	const auto victim_definition = make_monster(victim_code);
+	game.register_definition(victim_definition);
+	const auto destroyer_definition = make_monster(destroyer_code);
+	game.register_definition(destroyer_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
@@ -4609,8 +4753,10 @@ TEST_CASE("flow::Duel lets the driver decline optional triggers")
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
-	game.register_definition(victim_code, make_monster(victim_code));
-	game.register_definition(destroyer_code, make_monster(destroyer_code));
+	const auto victim_definition = make_monster(victim_code);
+	game.register_definition(victim_definition);
+	const auto destroyer_definition = make_monster(destroyer_code);
+	game.register_definition(destroyer_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
@@ -4692,8 +4838,10 @@ TEST_CASE("flow::Duel lets the driver order optional triggers")
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
-	game.register_definition(victim_code, make_monster(victim_code));
-	game.register_definition(destroyer_code, make_monster(destroyer_code));
+	const auto victim_definition = make_monster(victim_code);
+	game.register_definition(victim_definition);
+	const auto destroyer_definition = make_monster(destroyer_code);
+	game.register_definition(destroyer_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	const auto destroyer = game.create_instance(destroyer_code, domain::Player::FIRST);
@@ -4776,8 +4924,10 @@ TEST_CASE("flow::Duel requires an external selector for target choice")
 	game.set_life_points(domain::Player::FIRST, 8000);
 	game.set_life_points(domain::Player::SECOND, 8000);
 
-	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
-	game.register_definition(target_code, make_monster(target_code));
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(spell_definition);
+	const auto target_definition = make_monster(target_code);
+	game.register_definition(target_definition);
 	REQUIRE(duel.load_scripts(directory));
 
 	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);

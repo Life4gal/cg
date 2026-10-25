@@ -963,34 +963,12 @@ namespace cg::dsl::json
 			subtypes = *result;
 		}
 
-		std::optional<MonsterIdentity> monster;
+		std::optional<CardIdentity::Monster> monster;
 		if (const auto it = identity.value().find("monster");
 			it != identity.value().end())
 		{
 			monster = read_identity_monster(it, path);
 			if (!monster.has_value())
-			{
-				return std::nullopt;
-			}
-		}
-
-		std::optional<PendulumIdentity> pendulum;
-		if (const auto it = identity.value().find("pendulum");
-			it != identity.value().end())
-		{
-			pendulum = read_identity_pendulum(it, path);
-			if (!pendulum.has_value())
-			{
-				return std::nullopt;
-			}
-		}
-
-		std::optional<LinkMarkerIdentity> link_marker;
-		if (const auto it = identity.value().find("link_marker");
-			it != identity.value().end())
-		{
-			link_marker = read_identity_link_marker(it, path);
-			if (!link_marker.has_value())
 			{
 				return std::nullopt;
 			}
@@ -1028,8 +1006,6 @@ namespace cg::dsl::json
 				.kind = kind,
 				.subtypes = subtypes,
 				.monster = monster,
-				.pendulum = pendulum,
-				.link_marker = link_marker,
 				.archetypes = std::move(archetypes),
 				.code_list = std::move(code_list),
 		};
@@ -1100,7 +1076,7 @@ namespace cg::dsl::json
 	auto Reader::read_identity_monster(
 		const nlohmann::json::const_iterator& monster,
 		const std::string_view path
-	) noexcept -> std::optional<MonsterIdentity>
+	) noexcept -> std::optional<CardIdentity::Monster>
 	{
 		auto monster_path = std::format("{}.monster", path);
 		auto attribute_path = std::format("{}.attribute", monster_path);
@@ -1108,6 +1084,8 @@ namespace cg::dsl::json
 		auto level_path = std::format("{}.level", monster_path);
 		auto attack_path = std::format("{}.attack", monster_path);
 		auto defense_path = std::format("{}.defense", monster_path);
+		auto pendulum_scale_path = std::format("{}.pendulum", monster_path);
+		auto link_marker_path = std::format("{}.link_marker", monster_path);
 
 		if (!monster.value().is_object())
 		{
@@ -1115,7 +1093,7 @@ namespace cg::dsl::json
 			return std::nullopt;
 		}
 
-		if (!only_specified_keys(monster.value(), {"attribute", "race", "level", "attack", "defense"}))
+		if (!only_specified_keys(monster.value(), {"attribute", "race", "level", "attack", "defense", "pendulum", "link_marker"}))
 		{
 			fail(std::move(monster_path), "invalid monster block");
 			return std::nullopt;
@@ -1190,20 +1168,44 @@ namespace cg::dsl::json
 			return std::nullopt;
 		}
 
-		return MonsterIdentity
+		std::optional<CardIdentity::Monster::PendulumScale> pendulum_scale;
+		if (const auto it = monster.value().find("pendulum");
+			it != monster.value().end())
+		{
+			pendulum_scale = read_identity_monster_pendulum(it, pendulum_scale_path);
+			if (!pendulum_scale.has_value())
+			{
+				return std::nullopt;
+			}
+		}
+
+		std::optional<utility::EnumMask<domain::LinkMarker>> link_marker;
+		if (const auto it = monster.value().find("link_marker");
+			it != monster.value().end())
+		{
+			link_marker = read_identity_monster_link_marker(it, link_marker_path);
+			if (!link_marker.has_value())
+			{
+				return std::nullopt;
+			}
+		}
+
+		return CardIdentity::Monster
 		{
 				.attribute = *attribute,
 				.race = *race,
 				.level = static_cast<domain::LevelRank>(static_cast<std::underlying_type_t<domain::LevelRank>>(level)),
 				.attack = static_cast<domain::AttackDefense>(static_cast<std::underlying_type_t<domain::AttackDefense>>(attack)),
 				.defense = static_cast<domain::AttackDefense>(static_cast<std::underlying_type_t<domain::AttackDefense>>(defense)),
+				.pendulum_scale = pendulum_scale,
+				.link_marker = link_marker,
 		};
 	}
 
-	auto Reader::read_identity_pendulum(
+	auto Reader::read_identity_monster_pendulum(
 		const nlohmann::json::const_iterator& pendulum,
 		const std::string_view path
-	) noexcept -> std::optional<PendulumIdentity>
+	) noexcept -> std::optional<CardIdentity::Monster::PendulumScale>
 	{
 		auto pendulum_path = std::format("{}.pendulum", path);
 
@@ -1245,17 +1247,17 @@ namespace cg::dsl::json
 			return std::nullopt;
 		}
 
-		return PendulumIdentity
+		return CardIdentity::Monster::PendulumScale
 		{
 				.left = static_cast<domain::PendulumScale>(static_cast<std::underlying_type_t<domain::PendulumScale>>(left)),
 				.right = static_cast<domain::PendulumScale>(static_cast<std::underlying_type_t<domain::PendulumScale>>(right)),
 		};
 	}
 
-	auto Reader::read_identity_link_marker(
+	auto Reader::read_identity_monster_link_marker(
 		const nlohmann::json::const_iterator& link_marker,
 		const std::string_view path
-	) noexcept -> std::optional<LinkMarkerIdentity>
+	) noexcept -> std::optional<utility::EnumMask<domain::LinkMarker>>
 	{
 		auto link_marker_path = std::format("{}.link_marker", path);
 
@@ -1287,7 +1289,7 @@ namespace cg::dsl::json
 			markers.add_with(*marker);
 		}
 
-		return LinkMarkerIdentity{.markers = markers};
+		return markers;
 	}
 
 	auto Reader::read_identity_archetypes(

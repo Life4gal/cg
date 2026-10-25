@@ -8,6 +8,7 @@ add_library(
 	# ===================================
 
 	src/server/deck.cpp
+	src/server/match_config.cpp
 	src/server/room.cpp
 	src/server/net_server.cpp
 	src/server/native_server.cpp
@@ -19,7 +20,6 @@ add_library(
 	src/state/card.cpp
 	src/state/field.cpp
 	src/state/game.cpp
-	src/state/db.cpp
 	
 	# ===================================
 	# DSL
@@ -54,6 +54,7 @@ add_library(
 	# ===================================
 
 	src/driver/local_test_selector.cpp
+	src/driver/local_session.cpp
 
 	src/driver/network_selector.cpp
 )
@@ -98,6 +99,7 @@ target_sources(
 	# ===================================
 
 	include/cg/server/deck.hpp
+	include/cg/server/match_config.hpp
 	include/cg/server/message.hpp
 	include/cg/server/server.hpp
 	include/cg/server/room.hpp
@@ -122,11 +124,9 @@ target_sources(
 	# ===================================
 
 	include/cg/state/id.hpp
-	include/cg/state/card_definition.hpp
 	include/cg/state/card.hpp
 	include/cg/state/field.hpp
 	include/cg/state/game.hpp
-	include/cg/state/db.hpp
 	
 	# ===================================
 	# DSL
@@ -154,6 +154,7 @@ target_sources(
 	include/cg/flow/turn.hpp
 	include/cg/flow/battle.hpp
 	include/cg/flow/priority.hpp
+	include/cg/flow/duel_config.hpp
 	include/cg/flow/duel.hpp
 	
 	# ===================================
@@ -176,6 +177,7 @@ target_sources(
 	# ===================================
 
 	include/cg/driver/local_test_selector.hpp
+	include/cg/driver/local_session.hpp
 
 	include/cg/driver/action.hpp
 	include/cg/driver/request.hpp

@@ -59,6 +59,9 @@ namespace cg::flow
 	public:
 		explicit Turn() noexcept;
 
+		// 指定先手玩家
+		explicit Turn(domain::Player first_player) noexcept;
+
 		// 当前回合玩家
 		[[nodiscard]] auto turn_player() const noexcept -> domain::Player;
 

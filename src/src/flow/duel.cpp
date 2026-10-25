@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <random>
 #include <ranges>
+#include <unordered_map>
 
+#include <cg/dsl/identity.hpp>
 #include <cg/utility/functional.hpp>
 #include <cg/execution/chain.hpp>
 
@@ -11,6 +14,124 @@
 
 namespace cg::flow
 {
+	namespace
+	{
+		// 额外卡组卡: 融合/同调/超量/连接怪兽
+		[[nodiscard]] auto is_extra_deck_monster(const dsl::CardIdentity& identity) noexcept -> bool
+		{
+			if (identity.kind != domain::CardType::MONSTER || !identity.monster.has_value())
+			{
+				return false;
+			}
+
+			return
+					identity.subtypes.contains(domain::CardSubtype::FUSION) ||
+					identity.subtypes.contains(domain::CardSubtype::SYNCHRO) ||
+					identity.subtypes.contains(domain::CardSubtype::XYZ) ||
+					identity.subtypes.contains(domain::CardSubtype::LINK);
+		}
+
+		// 检查卡组数量/同名卡/卡牌存在性/主额外区域兼容性
+		[[nodiscard]] auto validate_deck(const execution::ScriptRegistry::scripts_type& scripts, const DuelDeck& duel_deck, const DeckRules& rules) noexcept -> bool
+		{
+			if (duel_deck.main_deck.size() < rules.main_min || duel_deck.main_deck.size() > rules.main_max)
+			{
+				return false;
+			}
+			if (duel_deck.extra_deck.size() > rules.extra_max)
+			{
+				return false;
+			}
+			if (duel_deck.side_deck.size() > rules.side_max)
+			{
+				return false;
+			}
+
+			std::unordered_map<domain::CardCode, std::size_t> counter{};
+
+			const auto checker = [&]<std::predicate<domain::CardCode> Predicate>(std::vector<domain::CardCode> deck, Predicate predicate) noexcept -> bool
+			{
+				std::ranges::sort(deck);
+				for (const auto group: deck | std::views::chunk_by(std::equal_to{}))
+				{
+					const auto count = static_cast<std::size_t>(std::ranges::distance(group));
+					if (count > rules.max_copies)
+					{
+						return false;
+					}
+
+					const auto code = *group.begin();
+					if (!predicate(code))
+					{
+						return false;
+					}
+
+					counter[code] = count;
+				}
+
+				return true;
+			};
+
+			// 主卡组
+			if (const auto r =
+						checker(
+							duel_deck.main_deck,
+							[&](const domain::CardCode code) noexcept -> bool
+							{
+								const auto it = scripts.find(code);
+								if (it == scripts.end())
+								{
+									return false;
+								}
+
+								const auto& identity = it->second.identity;
+								return !is_extra_deck_monster(identity);
+							}
+						);
+				!r)
+			{
+				return false;
+			}
+			// 额外卡组
+			if (const auto r =
+						checker(
+							duel_deck.extra_deck,
+							[&](const domain::CardCode code) noexcept -> bool
+							{
+								const auto it = scripts.find(code);
+								if (it == scripts.end())
+								{
+									return false;
+								}
+
+								const auto& identity = it->second.identity;
+								return is_extra_deck_monster(identity);
+							}
+						);
+				!r)
+			{
+				return false;
+			}
+			// 副卡组: 可以包含主/额外卡组未使用的卡,但必须存在且仍受同名卡总数限制
+			for (const auto code: duel_deck.side_deck)
+			{
+				if (!scripts.contains(code))
+				{
+					return false;
+				}
+
+				auto& count = counter[code];
+				count += 1;
+				if (count > rules.max_copies)
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+	}
+
 	auto Duel::open_timing(const std::span<const execution::EventWindow> windows) noexcept -> bool
 	{
 		if (!chain_.empty())
@@ -1826,6 +1947,7 @@ namespace cg::flow
 	Duel::Duel(execution::Selector& selector) noexcept
 		:
 		// game_{},
+		first_turn_draw_{false},
 		// turn_{},
 		// priority_{},
 		// battle_{},
@@ -1836,6 +1958,8 @@ namespace cg::flow
 		selector_{selector},
 		interpreter_{game_, types_, vocabulary_, selector_} {}
 
+	Duel::~Duel() noexcept = default;
+
 	auto Duel::load_scripts(const std::filesystem::path& directory) noexcept -> bool
 	{
 		return interpreter_.load_scripts(directory);
@@ -1844,6 +1968,148 @@ namespace cg::flow
 	auto Duel::load_script(const std::filesystem::path& file) noexcept -> bool
 	{
 		return interpreter_.load_script(file);
+	}
+
+	auto Duel::take_script_errors() noexcept -> std::vector<std::string>
+	{
+		return interpreter_.take_script_errors();
+	}
+
+	auto Duel::initialize(const DuelConfig& config) noexcept -> bool
+	{
+		// 一局只初始化一次; 重开对局应创建新的Duel
+		if (!game_.instances().empty())
+		{
+			return false;
+		}
+
+		// 初始LP必须大于0
+		if (config.life_points <= 0)
+		{
+			return false;
+		}
+
+		// 校验双方卡组
+		{
+			const auto& first_deck = config.decks[std::to_underlying(domain::Player::FIRST)];
+			const auto& second_deck = config.decks[std::to_underlying(domain::Player::SECOND)];
+
+			// 开局抽牌不能超过卡组,避免检查通过后在建局中途失败
+			if (
+				config.opening_hand > first_deck.main_deck.size() ||
+				config.opening_hand > second_deck.main_deck.size()
+			)
+			{
+				return false;
+			}
+
+			if (
+				!validate_deck(interpreter_.scripts().entries(), first_deck, config.deck_rules) ||
+				!validate_deck(interpreter_.scripts().entries(), second_deck, config.deck_rules)
+			)
+			{
+				return false;
+			}
+		}
+
+		// 初始化game
+		{
+			// 注册卡牌定义
+			for (const auto& script: interpreter_.scripts().entries() | std::views::values)
+			{
+				game_.register_definition(script.identity);
+			}
+
+			const auto instance_creator = [&](const domain::Player player, const domain::CardCode code) noexcept -> state::CardInstance*
+			{
+				const auto id = game_.create_instance(code, player);
+				if (!id.valid())
+				{
+					return nullptr;
+				}
+
+				auto* card = game_.find_instance_mutable(id);
+				if (card == nullptr)
+				{
+					return nullptr;
+				}
+
+				return card;
+			};
+
+			// 创建双方卡牌实例
+			for (const auto player: {domain::Player::FIRST, domain::Player::SECOND})
+			{
+				game_.set_life_points(player, config.life_points);
+
+				const auto& deck = config.decks[std::to_underlying(player)];
+
+				// 主卡组卡牌实例
+				for (const auto code: deck.main_deck)
+				{
+					auto* instance = instance_creator(player, code);
+					if (instance == nullptr)
+					{
+						return false;
+					}
+
+					game_.move_to_deck(*instance, {domain::Reason::RULE});
+				}
+
+				// 额外卡组卡牌实例
+				for (const auto code: deck.extra_deck)
+				{
+					auto* instance = instance_creator(player, code);
+					if (instance == nullptr)
+					{
+						return false;
+					}
+
+					game_.move_to_extra_deck(*instance, {domain::Reason::RULE});
+				}
+			}
+
+			// TODO: 随机数生成器持久化
+			std::mt19937_64 random{config.seed};
+
+			// 切洗双方卡组
+			for (const auto player: {domain::Player::FIRST, domain::Player::SECOND})
+			{
+				game_.shuffle_deck(player, random);
+			}
+		}
+
+		first_turn_draw_ = config.first_turn_draw;
+
+		// 初始化Turn
+		turn_ = Turn{config.first_player};
+		// 初始化Priority
+		priority_.reset();
+		// 初始化Battle
+		battle_.reset();
+
+		// 开局抽牌
+		for (const auto player: {domain::Player::FIRST, domain::Player::SECOND})
+		{
+			for (std::size_t count = 0; count < config.opening_hand; ++count)
+			{
+				const auto deck = game_.collect_zone_card(player, domain::Zone::DECK);
+				if (deck.empty())
+				{
+					return false;
+				}
+
+				auto* instance = game_.find_instance_mutable(deck.front());
+				if (instance == nullptr)
+				{
+					return false;
+				}
+
+				game_.move_to_hand(*instance, {domain::Reason::RULE});
+			}
+		}
+
+		return true;
 	}
 
 	auto Duel::game() const noexcept -> const state::Game&
@@ -1915,6 +2181,12 @@ namespace cg::flow
 		}
 
 		if (turn_.phase() != domain::Phase::DRAW || state_.drew_in_draw_phase)
+		{
+			return false;
+		}
+
+		// 官方规则: 先手第一回合不抽卡
+		if (turn_.is_first_turn() && !first_turn_draw_)
 		{
 			return false;
 		}
@@ -2456,7 +2728,7 @@ namespace cg::flow
 			seen_cards.push_back(card);
 
 			if (const auto level = interpreter_.state_resolver().level(*instance);
-				level <= left_scale || level >= right_scale)
+				level <= std::to_underlying(left_scale) || level >= std::to_underlying(right_scale))
 			{
 				return false;
 			}

@@ -383,7 +383,7 @@ namespace cg::execution
 		Context context{card.controller(), card.id()};
 
 		auto result = static_card_types(card, context);
-		result.unite_with(card.origin_kind());
+		result.add_with(card.origin_kind());
 
 		return result;
 	}

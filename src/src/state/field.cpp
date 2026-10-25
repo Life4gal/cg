@@ -50,6 +50,13 @@ namespace cg::state
 		player_zone.life_points += delta;
 	}
 
+	auto Field::shuffle_deck(const domain::Player player, std::mt19937_64& random) noexcept -> void
+	{
+		auto& player_zone = player_zone_of(player);
+
+		std::ranges::shuffle(player_zone.deck_zones, random);
+	}
+
 	auto Field::zone_of(const CardInstanceId card) const noexcept -> domain::Zone
 	{
 		// 先检查在不在额外怪兽区

@@ -1741,6 +1741,16 @@ namespace cg::execution
 		return scripts_.find(code);
 	}
 
+	auto Interpreter::scripts() const noexcept -> const ScriptRegistry&
+	{
+		return scripts_;
+	}
+
+	auto Interpreter::take_script_errors() noexcept -> std::vector<std::string>
+	{
+		return scripts_.take_errors();
+	}
+
 	auto Interpreter::state_resolver() const noexcept -> const CardStateResolver&
 	{
 		return state_resolver_;

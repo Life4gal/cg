@@ -6,19 +6,19 @@ namespace
 {
 	using namespace cg;
 
-	[[nodiscard]] auto make_definition(const domain::CardCode code) -> state::CardDefinition
+	[[nodiscard]] auto make_definition(const domain::CardCode code) -> dsl::CardIdentity
 	{
-		state::CardDefinition definition{};
+		dsl::CardIdentity definition{};
 		definition.code = code;
-		definition.kind = {domain::CardType::MONSTER};
+		definition.kind = domain::CardType::MONSTER;
 		definition.subtypes = {domain::CardSubtype::NORMAL};
-		definition.monster = state::CardDefinition::Monster
+		definition.monster = dsl::CardIdentity::Monster
 		{
 				.attribute = domain::Attribute::EARTH,
 				.race = domain::Race::DRAGON,
-				.level = 4,
-				.attack = 1000,
-				.defense = 1000,
+				.level = domain::LevelRank{4},
+				.attack = domain::AttackDefense{1000},
+				.defense = domain::AttackDefense{1000},
 				.pendulum_scale = std::nullopt,
 				.link_marker = std::nullopt,
 		};
@@ -45,7 +45,9 @@ TEST_CASE("state::Game moves cards into the requested zones")
 	constexpr domain::CardCode monster_code{90000002};
 
 	state::Game game{};
-	game.register_definition(monster_code, make_definition(monster_code));
+
+	const auto monster_definition = make_definition(monster_code);
+	game.register_definition(monster_definition);
 
 	const auto own = game.create_instance(monster_code, domain::Player::FIRST);
 	REQUIRE(own.valid());

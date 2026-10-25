@@ -243,7 +243,11 @@ namespace cg::domain
 				// 场地魔法区
 				FieldSpellLocation
 				//
-			> {};
+			>
+	{
+	public:
+		using variant::variant;
+	};
 
 	class AnyFieldLocation : public std::variant<
 				// 怪兽区
@@ -255,7 +259,11 @@ namespace cg::domain
 				// 场地魔法区
 				FieldSpellLocation
 				//
-			> {};
+			>
+	{
+	public:
+		using variant::variant;
+	};
 
 	class AnyMonsterLocation : public std::variant<
 				// 怪兽区
@@ -263,7 +271,11 @@ namespace cg::domain
 				// 额外怪兽区
 				ExtraMonsterLocation
 				//
-			> {};
+			>
+	{
+	public:
+		using variant::variant;
+	};
 
 	// ===========================================================================
 	// LOCATION ==> ZONE
@@ -494,7 +506,11 @@ namespace cg::domain
 				// 场地魔法区
 				FieldSpellPlacement
 				//
-			> {};
+			>
+	{
+	public:
+		using variant::variant;
+	};
 
 	class AnyFieldPlacement : public std::variant<
 				// 怪兽区域
@@ -506,7 +522,11 @@ namespace cg::domain
 				// 场地魔法区
 				FieldSpellPlacement
 				//
-			> {};
+			>
+	{
+	public:
+		using variant::variant;
+	};
 
 	class AnyMonsterPlacement : public std::variant<
 				// 怪兽区
@@ -514,7 +534,11 @@ namespace cg::domain
 				// 额外怪兽区
 				ExtraMonsterPlacement
 				//
-			> {};
+			>
+	{
+	public:
+		using variant::variant;
+	};
 
 	// ===========================================================================
 	// PLACEMENT ==> ZONE

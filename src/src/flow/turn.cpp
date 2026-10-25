@@ -5,7 +5,10 @@
 namespace cg::flow
 {
 	Turn::Turn() noexcept
-		: turn_player_{domain::Player::FIRST},
+		: Turn{domain::Player::FIRST} {}
+
+	Turn::Turn(const domain::Player first_player) noexcept
+		: turn_player_{first_player},
 		  turn_id_{1},
 		  phase_{domain::Phase::DRAW} {}
 
