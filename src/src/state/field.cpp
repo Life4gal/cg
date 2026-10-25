@@ -858,7 +858,7 @@ namespace cg::state
 
 	auto Field::collect_zones_card(const Game& game, const domain::Player player, const utility::EnumMask<domain::Zone> zones) const noexcept -> std::vector<CardInstanceId>
 	{
-		const auto count = count_zones_card(player, zones);
+		const auto count = count_zones_card(game, player, zones);
 		std::vector<CardInstanceId> out{};
 		out.reserve(count);
 
