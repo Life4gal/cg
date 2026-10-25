@@ -54,6 +54,15 @@ namespace cg::driver
 		std::vector<state::CardInstanceId> tributes;
 	};
 
+	class ExtraSummonAction
+	{
+	public:
+		domain::ExtraDeckSummonType kind;
+		state::CardInstanceId card;
+		domain::AnyMonsterPlacement placement;
+		std::vector<state::CardInstanceId> materials;
+	};
+
 	class ActivateCardAction
 	{
 	public:
@@ -94,6 +103,7 @@ namespace cg::driver
 				NormalSummonAction,
 				SetMonsterAction,
 				TributeSummonAction,
+				ExtraSummonAction,
 				ActivateCardAction,
 				SetSpellTrapAction,
 				DeclareAttackAction,

@@ -175,6 +175,32 @@ namespace cg::driver
 					{
 						return duel_.tribute_summon(a.card, a.column, a.tributes);
 					},
+					[&](const ExtraSummonAction& a) noexcept -> bool
+					{
+						switch (a.kind)
+						{
+							case domain::ExtraDeckSummonType::FUSION:
+							{
+								return duel_.fusion_summon(a.card, a.placement, a.materials);
+							}
+							case domain::ExtraDeckSummonType::SYNCHRO:
+							{
+								return duel_.synchro_summon(a.card, a.placement, a.materials);
+							}
+							case domain::ExtraDeckSummonType::XYZ:
+							{
+								return duel_.xyz_summon(a.card, a.placement, a.materials);
+							}
+							case domain::ExtraDeckSummonType::LINK:
+							{
+								return duel_.link_summon(a.card, a.placement, a.materials);
+							}
+							default: // NOLINT(clang-diagnostic-covered-switch-default)
+							{
+								std::unreachable();
+							}
+						}
+					},
 					[&](const ActivateCardAction& a) noexcept -> bool
 					{
 						return duel_.activate_card(a.card);

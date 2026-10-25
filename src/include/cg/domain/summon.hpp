@@ -38,6 +38,19 @@ namespace cg::domain
 		SET,
 	};
 
+	// 额外卡组召唤类型
+	enum class ExtraDeckSummonType : std::uint8_t
+	{
+		// 融合召唤
+		FUSION,
+		// 同调召唤
+		SYNCHRO,
+		// 超量召唤
+		XYZ,
+		// 连接召唤
+		LINK,
+	};
+
 	// 召唤素材来源
 	enum class SummonMaterialSource : std::uint8_t
 	{

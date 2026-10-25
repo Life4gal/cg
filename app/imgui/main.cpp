@@ -701,6 +701,9 @@ namespace
 		int column_{};
 		std::optional<state::CardInstanceId> tribute_card_;
 		std::vector<state::CardInstanceId> tribute_cards_;
+		std::optional<state::CardInstanceId> extra_card_;
+		std::vector<state::CardInstanceId> extra_materials_;
+		int extra_kind_{};
 		bool shutdown_{};
 
 		auto render_header(const driver::PlayerView& view) -> void
@@ -813,6 +816,82 @@ namespace
 			}
 		}
 
+		auto render_extra_panel(const driver::PlayerView& view, const bool queued) -> void
+		{
+			if (!extra_card_.has_value())
+			{
+				return;
+			}
+
+			ImGui::SeparatorText("Extra Deck Summon");
+			ImGui::Text("Summon %s into column %d", card_text(view, *extra_card_).c_str(), column_ + 1);
+			ImGui::SetNextItemWidth(150.0f);
+			ImGui::Combo("Summon Type", &extra_kind_, "Fusion\0""Synchro\0""Xyz\0""Link\0");
+			ImGui::TextDisabled("Select the materials from your field, then confirm.");
+
+			for (const auto card: view.self_side.monsters)
+			{
+				const bool checked = std::ranges::contains(extra_materials_, card);
+				bool next = checked;
+				ImGui::PushID(static_cast<int>(card.raw()));
+				if (ImGui::Checkbox("##extra_material", &next) && next != checked)
+				{
+					if (next)
+					{
+						extra_materials_.push_back(card);
+					}
+					else if (const auto it = std::ranges::find(extra_materials_, card); it != extra_materials_.end())
+					{
+						extra_materials_.erase(it);
+					}
+				}
+				ImGui::SameLine();
+				ImGui::Text("%s", card_text(view, card).c_str());
+				ImGui::PopID();
+			}
+
+			const bool can_confirm = !queued && !extra_materials_.empty();
+			ImGui::BeginDisabled(!can_confirm);
+			if (ImGui::Button("Confirm Extra Summon"))
+			{
+				const auto kind = static_cast<driver::ExtraSummonKind>(extra_kind_);
+				const auto column = static_cast<domain::FieldColumn>(column_);
+				domain::AnyMonsterPlacement placement = kind == driver::ExtraSummonKind::LINK
+						? domain::AnyMonsterPlacement{
+								domain::ExtraMonsterPlacement{
+										.column = column,
+										.position = domain::Position::FACE_UP_ATTACK,
+								}
+						}
+						: domain::AnyMonsterPlacement{
+								domain::MonsterPlacement{
+										.column = column,
+										.position = domain::Position::FACE_UP_ATTACK,
+								}
+						};
+
+				(void)controller_.submit(
+					driver::LocalAction{
+						driver::ExtraSummonAction{
+							.kind = kind,
+							.card = *extra_card_,
+							.placement = placement,
+							.materials = extra_materials_,
+						}
+					}
+				);
+				extra_card_.reset();
+				extra_materials_.clear();
+			}
+			ImGui::EndDisabled();
+			ImGui::SameLine();
+			if (ImGui::Button("Cancel Extra Summon"))
+			{
+				extra_card_.reset();
+				extra_materials_.clear();
+			}
+		}
+
 		auto render_actions(const driver::PlayerView& view, const ImGuiController::Snapshot& snapshot) -> void
 		{
 			ImGui::SeparatorText("Actions");
@@ -826,6 +905,11 @@ namespace
 			{
 				tribute_card_.reset();
 				tribute_cards_.clear();
+			}
+			if (extra_card_.has_value() && !std::ranges::contains(view.self_side.extra_deck, *extra_card_))
+			{
+				extra_card_.reset();
+				extra_materials_.clear();
 			}
 
 			const bool queued = snapshot.action_queued;
@@ -902,6 +986,26 @@ namespace
 				ImGui::PopID();
 			}
 
+			ImGui::SeparatorText("Extra Deck");
+			if (view.self_side.extra_deck.empty())
+			{
+				ImGui::TextDisabled("  (empty)");
+			}
+			for (const auto card: view.self_side.extra_deck)
+			{
+				ImGui::PushID(static_cast<int>(card.raw()));
+				ImGui::Text("%s", card_text(view, card).c_str());
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Extra Summon"))
+				{
+					extra_card_ = card;
+					extra_materials_.clear();
+					extra_kind_ = 0;
+				}
+				ImGui::PopID();
+			}
+
+			render_extra_panel(view, queued);
 			render_tribute_panel(view, queued);
 
 			if (view.pending_replay)
