@@ -28,6 +28,9 @@ namespace cg::state
 		return nullptr;
 	}
 
+	Game::Game() noexcept
+		: turn_id_{static_cast<domain::TurnId>(std::numeric_limits<std::underlying_type_t<domain::TurnId>>::max())} {}
+
 	auto Game::register_definition(const dsl::CardIdentity& definition) noexcept -> const dsl::CardIdentity&
 	{
 		return card_definitions_.insert_or_assign(definition.code, std::ref(definition)).first->second;
@@ -90,6 +93,16 @@ namespace cg::state
 		}
 
 		return nullptr;
+	}
+
+	auto Game::set_turn_id(const domain::TurnId turn_id) noexcept -> void
+	{
+		turn_id_ = turn_id;
+	}
+
+	auto Game::turn_id() const noexcept -> domain::TurnId
+	{
+		return turn_id_;
 	}
 
 	auto Game::set_life_points(const domain::Player player, const std::underlying_type_t<domain::AttackDefense> value) noexcept -> void
@@ -371,6 +384,7 @@ namespace cg::state
 			{
 					.controller = card.controller(),
 					.reason = reason,
+					.turn_id = turn_id_,
 					.placement = card.placement(),
 					.effect = dsl::EffectId{dsl::EffectId::invalid_id}
 			}
@@ -444,12 +458,24 @@ namespace cg::state
 		move_to(card, card.controller(), reason, placement);
 	}
 
-	auto Game::set_summon_record(CardInstance& card, CardInstance::SummonRecord record) noexcept -> void
+	auto Game::set_summon_record(
+		CardInstance& card,
+		const domain::Player controller,
+		const domain::SummonMethod method,
+		const domain::Placement from,
+		std::vector<CardInstanceId> materials
+	) const noexcept -> void
 	{
-		std::ignore = this;
-
 		CardInstance::Modifier modifier{card};
-		modifier.set_summon_record(std::move(record));
+		modifier.set_summon_record(
+			{
+					.controller = controller,
+					.method = method,
+					.turn_id = turn_id_,
+					.from = from,
+					.materials = std::move(materials),
+			}
+		);
 	}
 
 	auto Game::add_overlay(CardInstance& card, const CardInstance& material) noexcept -> void

@@ -17,10 +17,18 @@ namespace cg::dsl
 	// ================================================================
 
 	// 期间引用(阶段/战斗步骤/伤害步骤)
-	class PeriodRef : public std::variant<domain::Phase, domain::BattleStep, domain::DamageStep> {};
+	class PeriodRef : public std::variant<domain::Phase, domain::BattleStep, domain::DamageStep>
+	{
+	public:
+		using variant::variant;
+	};
 
 	// 触发源 = 事件 | 期间
-	class TriggerSource : public std::variant<domain::EventCode, PeriodRef> {};
+	class TriggerSource : public std::variant<domain::EventCode, PeriodRef>
+	{
+	public:
+		using variant::variant;
+	};
 
 	// 触发源列表(或关系;至少一个;如「召唤·特殊召唤成功时」)
 	class TriggerSourceList : public std::vector<TriggerSource> {};

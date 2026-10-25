@@ -302,9 +302,9 @@ TEST_CASE("driver::LocalDuelSession initializes the Blue-Eyes pilot deck")
 
 	const auto view = session.view(domain::Player::FIRST);
 	CHECK(view.self_side.hand.size() == 5);
-	CHECK(view.self_side.deck_count == 49);
+	CHECK(view.self_side.deck_count == 52);
 	CHECK(view.self_side.extra_deck.size() == 3);
 	CHECK(view.opponent_side.hand_count == 5);
-	CHECK(view.opponent_side.deck_count == 49);
+	CHECK(view.opponent_side.deck_count == 52);
 	CHECK(view.opponent_side.extra_deck_count == 3);
 }

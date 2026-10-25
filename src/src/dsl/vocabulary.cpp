@@ -155,6 +155,16 @@ namespace cg::dsl
 		// ---------------- 区域查询(非取对象) ----------------
 
 		do_register(
+			"sent_to_graveyard_this_turn",
+			PrimitiveKind::PREDICATE,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+			},
+			type_id("bool"),
+			"是否在本回合被送入墓地"
+		);
+		do_register(
 			"find_cards",
 			PrimitiveKind::QUERY,
 			all_phases,
@@ -487,7 +497,7 @@ namespace cg::dsl
 		do_register(
 			"banish",
 			PrimitiveKind::ACTION,
-			{Phase::RESOLVE},
+			{Phase::COST, Phase::RESOLVE},
 			{
 					{.name = "cards", .kind = ParamDef::Value{.type = type_id("group")}, .required = true},
 					{.name = "face_down", .kind = ParamDef::Value{.type = type_id("bool")}, .required = true},

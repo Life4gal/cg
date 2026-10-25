@@ -9,7 +9,7 @@ namespace cg::flow
 
 	Turn::Turn(const domain::Player first_player) noexcept
 		: turn_player_{first_player},
-		  turn_id_{1},
+		  turn_id_{static_cast<domain::TurnId>(1)},
 		  phase_{domain::Phase::DRAW} {}
 
 	auto Turn::turn_player() const noexcept -> domain::Player
@@ -17,14 +17,14 @@ namespace cg::flow
 		return turn_player_;
 	}
 
-	auto Turn::turn_id() const noexcept -> id_type
+	auto Turn::turn_id() const noexcept -> domain::TurnId
 	{
 		return turn_id_;
 	}
 
 	auto Turn::is_first_turn() const noexcept -> bool
 	{
-		return turn_id_ == 1;
+		return std::to_underlying(turn_id()) == 1;
 	}
 
 	auto Turn::phase() const noexcept -> domain::Phase
@@ -84,7 +84,7 @@ namespace cg::flow
 		}
 
 		turn_player_ = domain::opponent_of(turn_player_);
-		turn_id_ += 1;
+		turn_id_ = static_cast<domain::TurnId>(std::to_underlying(turn_id_) + 1);
 		phase_ = domain::Phase::DRAW;
 	}
 }

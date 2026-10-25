@@ -3,6 +3,7 @@
 #include <vector>
 
 #include <cg/domain/player.hpp>
+#include <cg/domain/phase.hpp>
 #include <cg/domain/field.hpp>
 #include <cg/domain/reason.hpp>
 #include <cg/domain/summon.hpp>
@@ -27,6 +28,8 @@ namespace cg::state
 			domain::Player controller;
 			// 移动原因
 			utility::EnumMask<domain::Reason> reason;
+			// 移动发生的回合
+			domain::TurnId turn_id;
 			// 移动前位置
 			domain::Placement placement;
 			// 导致移动的效果
@@ -36,10 +39,12 @@ namespace cg::state
 		class SummonRecord
 		{
 		public:
-			// 发起召唤的玩家
-			domain::Player player;
+			// 当前控制者
+			domain::Player controller;
 			// 召唤方式
 			domain::SummonMethod method;
+			// 召唤发生的回合
+			domain::TurnId turn_id;
 			// 召唤前的位置
 			domain::Placement from;
 			// 召唤使用的素材

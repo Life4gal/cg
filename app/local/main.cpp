@@ -116,7 +116,7 @@ namespace
 			std::println(
 				"\n=== {} | turn {} | phase {} | LP {}/{} ===",
 				player_text(view.player),
-				view.turn_id,
+				std::to_underlying(view.turn_id),
 				utility::to_string(view.phase),
 				view.life_points[0],
 				view.life_points[1]

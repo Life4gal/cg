@@ -163,7 +163,7 @@ namespace cg::driver
 		domain::Player player;
 		// Turn
 		domain::Player turn_player;
-		flow::Turn::id_type turn_id;
+		domain::TurnId turn_id;
 		domain::Phase phase;
 		bool first_turn;
 		// Priority

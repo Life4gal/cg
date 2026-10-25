@@ -321,6 +321,10 @@ namespace cg::execution
 		{
 			return is_face_up(*definition, call, context);
 		}
+		if (definition->name == "sent_to_graveyard_this_turn")
+		{
+			return sent_to_graveyard_this_turn(*definition, call, context);
+		}
 		if (definition->name == "attack")
 		{
 			return attack(*definition, call, context);
@@ -1153,6 +1157,31 @@ namespace cg::execution
 		return Boolean{std::holds_alternative<domain::GraveyardPlacement>(placement)};
 	}
 
+	auto Interpreter::sent_to_graveyard_this_turn(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		if (card == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto* instance = game.find_instance(*card);
+		if (instance == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		return Boolean{instance->move_provenance().turn_id == game.turn_id()};
+	}
+
 	auto Interpreter::level(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
 		const auto& game = game_.get();
@@ -1685,16 +1714,7 @@ namespace cg::execution
 		}
 
 		game.move_to_monster(*instance, context.controller, {domain::Reason::EFFECT}, domain::MonsterPlacement{.column = location->column, .position = value});
-		game.set_summon_record(
-			*instance,
-			state::CardInstance::SummonRecord
-			{
-					.player = context.controller,
-					.method = method_value,
-					.from = from,
-					.materials = {},
-			}
-		);
+		game.set_summon_record(*instance, context.controller, method_value, from, {});
 
 		pending_events_.emplace_back(domain::EventCode::SPECIAL_SUMMON_SUCCESS, *card);
 
@@ -1902,21 +1922,9 @@ namespace cg::execution
 			pending_events_.emplace_back(domain::EventCode::SENT_TO_GRAVEYARD, material);
 		}
 
-		game.move_to_monster(
-			*monster,
-			{domain::Reason::EFFECT},
-			{.column = location->column, .position = position}
-		);
-		game.set_summon_record(
-			*monster,
-			state::CardInstance::SummonRecord
-			{
-					.player = context.controller,
-					.method = domain::SummonMethod::RITUAL,
-					.from = from,
-					.materials = {selected_materials->begin(), selected_materials->end()},
-			}
-		);
+		game.move_to_monster(*monster, {domain::Reason::EFFECT}, {.column = location->column, .position = position});
+		game.set_summon_record(*monster, context.controller, domain::SummonMethod::RITUAL, from, {selected_materials->begin(), selected_materials->end()});
+
 		pending_events_.emplace_back(domain::EventCode::SPECIAL_SUMMON_SUCCESS, monster_id);
 
 		return Void{};

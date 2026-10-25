@@ -1084,15 +1084,7 @@ namespace cg::flow
 			material_ids.push_back(material.get().id());
 		}
 
-		game_.set_summon_record(
-			instance,
-			{
-					.player = controller,
-					.method = method,
-					.from = from,
-					.materials = std::move(material_ids),
-			}
-		);
+		game_.set_summon_record(instance, controller, method, from, std::move(material_ids));
 	}
 
 	auto Duel::begin_summon(SummonState summon, const domain::EventCode declared) noexcept -> bool
@@ -1963,11 +1955,11 @@ namespace cg::flow
 
 	Duel::Duel(execution::Selector& selector) noexcept
 		:
-		// game_{},
-		random_{0}, // NOLINT(cert-msc51-cpp)
 		// turn_{},
 		// priority_{},
 		// battle_{},
+		// game_{},
+		random_{0}, // NOLINT(cert-msc51-cpp)
 		// state_{},
 		first_turn_draw_{false},
 		// types_{},
@@ -2006,6 +1998,14 @@ namespace cg::flow
 		{
 			return false;
 		}
+
+
+		// 初始化Turn
+		turn_ = Turn{config.first_player};
+		// 初始化Priority
+		priority_.reset();
+		// 初始化Battle
+		battle_.reset();
 
 		// 校验双方卡组
 		{
@@ -2094,16 +2094,12 @@ namespace cg::flow
 			{
 				game_.shuffle_deck(player, random_);
 			}
+
+			// 设置初始回合ID
+			game_.set_turn_id(turn_.turn_id());
 		}
 
 		first_turn_draw_ = config.first_turn_draw;
-
-		// 初始化Turn
-		turn_ = Turn{config.first_player};
-		// 初始化Priority
-		priority_.reset();
-		// 初始化Battle
-		battle_.reset();
 
 		// 开局抽牌
 		for (const auto player: {domain::Player::FIRST, domain::Player::SECOND})
@@ -2278,6 +2274,19 @@ namespace cg::flow
 
 		priority_.reset();
 		windows_.clear();
+
+		if (turn_.phase() == domain::Phase::END)
+		{
+			constexpr execution::EventWindow window
+			{
+					.source = {dsl::PeriodRef{domain::Phase::END}},
+					.card = std::nullopt,
+					.player = std::nullopt,
+					.amount = std::nullopt,
+			};
+			std::ignore = open_timing({&window, 1});
+		}
+
 		return true;
 	}
 
@@ -2323,12 +2332,20 @@ namespace cg::flow
 			return false;
 		}
 
+		// Turn
 		turn_.end_turn();
+		// Priority
 		priority_.reset();
+		// Battle
 		battle_.reset();
+		// Game
+		game_.set_turn_id(turn_.turn_id());
+		// AttackState
 		attack_.reset();
+		// EventWindowList
 		windows_.clear();
-		state_ = TurnState{};
+		// TurnState
+		state_ = {};
 
 		// 清除本回合的使用记录(DUEL范围保留)
 		std::erase_if(

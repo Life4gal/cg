@@ -1,0 +1,165 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["EFFECT", "TUNER"],
+		"monster": {
+			"attribute": "LIGHT",
+			"race": "DRAGON",
+			"level": 1,
+			"attack": 600,
+			"defense": 500
+		}
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {
+				"mode": "trigger",
+				"source": {"phase": "END"},
+				"timing": "WHEN",
+				"optional": true
+			},
+			"usage": {"kind": "TURN_PER_NAME", "count": 1},
+			"condition": {
+				"and": [
+					{
+						"call": "is_in_zone",
+						"args": {
+							"card": {"call": "this_card", "args": {}},
+							"zones": ["GRAVEYARD"]
+						}
+					},
+					{
+						"call": "sent_to_graveyard_this_turn",
+						"args": {"card": {"call": "this_card", "args": {}}}
+					},
+					{
+						"call": "exists_matching",
+						"args": {
+							"players": ["SELF"],
+							"zones": ["DECK"],
+							"min": 1,
+							"filter": {
+								"call": "is_archetype",
+								"args": {
+									"card": {"call": "$"},
+									"archetype": "BLUE-EYES"
+								}
+							}
+						}
+					}
+				]
+			},
+			"effect": [
+				{
+					"call": "pick_resolution",
+					"args": {
+						"players": ["SELF"],
+						"zones": ["DECK"],
+						"min": 1,
+						"max": 1,
+						"filter": {
+							"call": "is_archetype",
+							"args": {
+								"card": {"call": "$"},
+								"archetype": "BLUE-EYES"
+							}
+						}
+					},
+					"bind": "selected"
+				},
+				{
+					"call": "special_summon",
+					"args": {
+						"card": {
+							"call": "sole_card",
+							"args": {"group": {"var": "selected"}}
+						},
+						"method": "SPECIAL",
+						"position": "FACE_UP_ATTACK"
+					}
+				}
+			]
+		},
+		{
+			"type": "activated",
+			"activation": {"mode": "ignition"},
+			"zones": ["GRAVEYARD"],
+			"usage": {"kind": "TURN_PER_NAME", "count": 1},
+			"condition": {
+				"and": [
+					{
+						"call": "is_in_zone",
+						"args": {
+							"card": {"call": "this_card", "args": {}},
+							"zones": ["GRAVEYARD"]
+						}
+					},
+					{
+						"call": "exists_matching",
+						"args": {
+							"players": ["SELF"],
+							"zones": ["GRAVEYARD"],
+							"min": 1,
+							"filter": {
+								"call": "is_archetype",
+								"args": {
+									"card": {"call": "$"},
+									"archetype": "BLUE-EYES"
+								}
+							}
+						}
+					}
+				]
+			},
+			"cost": [
+				{
+					"call": "pick_cost",
+					"args": {
+						"players": ["SELF"],
+						"zones": ["GRAVEYARD"],
+						"min": 1,
+						"max": 1,
+						"filter": {
+							"call": "is_code",
+							"args": {"card": {"call": "$"}, "code": 71039903}
+						}
+					},
+					"bind": "cost_cards"
+				},
+				{
+					"call": "banish",
+					"args": {
+						"cards": {"var": "cost_cards"},
+						"face_down": false
+					}
+				}
+			],
+			"target": [
+				{
+					"call": "pick_target",
+					"args": {
+						"players": ["SELF"],
+						"zones": ["GRAVEYARD"],
+						"min": 1,
+						"max": 1,
+						"filter": {
+							"call": "is_archetype",
+							"args": {
+								"card": {"call": "$"},
+								"archetype": "BLUE-EYES"
+							}
+						}
+					},
+					"bind": "target"
+				}
+			],
+			"effect": [
+				{
+					"call": "add_to_hand",
+					"args": {"cards": {"var": "target"}}
+				}
+			]
+		}
+	]
+}

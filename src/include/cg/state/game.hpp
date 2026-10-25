@@ -30,6 +30,10 @@ namespace cg::state
 		card_definitions_type card_definitions_;
 		// 游戏中创建的所有卡牌实例
 		card_instances_type card_instances_;
+
+		// 当前回合ID
+		domain::TurnId turn_id_;
+
 		// 游戏场地
 		Field field_;
 
@@ -39,6 +43,8 @@ namespace cg::state
 		[[nodiscard]] auto find_definition(domain::CardCode code) const noexcept -> const dsl::CardIdentity*;
 
 	public:
+		Game() noexcept;
+
 		// =========================================================================================================
 		// 定义 / 实例
 		// =========================================================================================================
@@ -67,6 +73,15 @@ namespace cg::state
 
 		// 可变访问仅限 flow/execution;外部驱动应使用const查询
 		[[nodiscard]] auto find_instance_mutable(CardInstanceId card) noexcept -> CardInstance*;
+
+		// =========================================================================================================
+		// 状态
+		// =========================================================================================================
+
+		// 设置当前回合ID(由 flow 层在回合切换时调用)
+		auto set_turn_id(domain::TurnId turn_id) noexcept -> void;
+
+		[[nodiscard]] auto turn_id() const noexcept -> domain::TurnId;
 
 	private:
 		// ===========================================================================================================================
@@ -348,7 +363,7 @@ namespace cg::state
 		auto move_to_field_spell(CardInstance& card, utility::EnumMask<domain::Reason> reason, domain::FieldSpellPlacement placement) noexcept -> void;
 
 		// 记录召唤信息
-		auto set_summon_record(CardInstance& card, CardInstance::SummonRecord record) noexcept -> void;
+		auto set_summon_record(CardInstance& card, domain::Player controller, domain::SummonMethod method, domain::Placement from, std::vector<CardInstanceId> materials) const noexcept -> void;
 
 		// 添加超量素材
 		auto add_overlay(CardInstance& card, const CardInstance& material) noexcept -> void;

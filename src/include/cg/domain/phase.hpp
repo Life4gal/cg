@@ -4,6 +4,9 @@
 
 namespace cg::domain
 {
+	// 回合ID
+	enum class TurnId : std::uint16_t {};
+
 	// 回合阶段
 	enum class Phase : std::uint8_t
 	{

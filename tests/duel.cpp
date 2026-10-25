@@ -3943,26 +3943,20 @@ TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck mon
 	// 非正规召唤记录不会置位正规召唤状态。
 	game.set_summon_record(
 		*game.find_instance_mutable(fusion),
-		state::CardInstance::SummonRecord
-		{
-				.player = domain::Player::FIRST,
-				.method = domain::SummonMethod::SPECIAL,
-				.from = {domain::GraveyardPlacement{.index = 0}},
-				.materials = {},
-		}
+		domain::Player::FIRST,
+		domain::SummonMethod::SPECIAL,
+		domain::GraveyardPlacement{.index = 0},
+		{}
 	);
 	CHECK_FALSE(game.find_instance(fusion)->properly_summoned());
 
 	// 模拟已正规融合召唤后送墓。
 	game.set_summon_record(
 		*game.find_instance_mutable(fusion),
-		state::CardInstance::SummonRecord
-		{
-				.player = domain::Player::FIRST,
-				.method = domain::SummonMethod::FUSION,
-				.from = {domain::ExtraDeckPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}},
-				.materials = {},
-		}
+		domain::Player::FIRST,
+		domain::SummonMethod::FUSION,
+		domain::ExtraDeckPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE},
+		{}
 	);
 
 	CHECK(duel.activate_card(second_spell));
@@ -4216,7 +4210,7 @@ TEST_CASE("flow::Duel takes control with an effect Special Summon from the oppon
 	CHECK(game.zone_of(monster) == domain::Zone::MONSTER);
 	CHECK(game.find_instance(monster)->controller() == domain::Player::FIRST);
 	CHECK(game.find_instance(monster)->owner() == domain::Player::SECOND);
-	CHECK(game.find_instance(monster)->summon_record().player == domain::Player::FIRST);
+	CHECK(game.find_instance(monster)->summon_record().controller == domain::Player::FIRST);
 	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::SPECIAL);
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
 
@@ -6479,4 +6473,114 @@ TEST_CASE("flow::Duel resolves Master with Eyes of Blue graveyard effect")
 	CHECK(game.zone_of(effect_monster) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(blue_eyes) == domain::Zone::MONSTER);
 	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::SPECIAL);
+}
+
+TEST_CASE("flow::Duel resolves The White Stone of Ancients end-phase effect")
+{
+	constexpr domain::CardCode white_stone_code{71039903};
+	constexpr domain::CardCode blue_eyes_code{89631139};
+	constexpr domain::CardCode foolish_burial_code{81439173};
+
+	driver::LocalTestSelector selector
+	{
+			select_up_to_max,
+			nullptr,
+			nullptr,
+			choose_all_triggers,
+	};
+
+	flow::Duel duel{selector};
+	auto& game = duel.game();
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	const auto* white_stone_script = duel.find_script(white_stone_code);
+	REQUIRE(white_stone_script != nullptr);
+	const auto* blue_eyes_script = duel.find_script(blue_eyes_code);
+	REQUIRE(blue_eyes_script != nullptr);
+	const auto* foolish_burial_script = duel.find_script(foolish_burial_code);
+	REQUIRE(foolish_burial_script != nullptr);
+
+	game.register_definition(white_stone_script->identity);
+	game.register_definition(blue_eyes_script->identity);
+	game.register_definition(foolish_burial_script->identity);
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto foolish_burial = game.create_instance(foolish_burial_code, domain::Player::FIRST);
+	REQUIRE(foolish_burial.valid());
+	game.place(*game.find_instance_mutable(foolish_burial), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto white_stone = game.create_instance(white_stone_code, domain::Player::FIRST);
+	REQUIRE(white_stone.valid());
+	game.place(*game.find_instance_mutable(white_stone), domain::DeckPlacement{.index = 0});
+
+	const auto blue_eyes = game.create_instance(blue_eyes_code, domain::Player::FIRST);
+	REQUIRE(blue_eyes.valid());
+	game.place(*game.find_instance_mutable(blue_eyes), domain::DeckPlacement{.index = 1});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_card(foolish_burial));
+	settle(duel);
+
+	REQUIRE(game.zone_of(white_stone) == domain::Zone::GRAVEYARD);
+
+	CHECK(advance_phase(duel)); // MAIN_1 -> END
+	settle(duel);
+
+	CHECK(game.zone_of(white_stone) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(blue_eyes) == domain::Zone::MONSTER);
+	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::SPECIAL);
+}
+
+TEST_CASE("flow::Duel resolves The White Stone of Ancients graveyard effect")
+{
+	constexpr domain::CardCode white_stone_code{71039903};
+	constexpr domain::CardCode blue_eyes_code{89631139};
+
+	driver::LocalTestSelector selector
+	{
+			select_up_to_max,
+			nullptr,
+			nullptr,
+			choose_all_triggers,
+	};
+
+	flow::Duel duel{selector};
+	auto& game = duel.game();
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	const auto* white_stone_script = duel.find_script(white_stone_code);
+	REQUIRE(white_stone_script != nullptr);
+	const auto* blue_eyes_script = duel.find_script(blue_eyes_code);
+	REQUIRE(blue_eyes_script != nullptr);
+
+	game.register_definition(white_stone_script->identity);
+	game.register_definition(blue_eyes_script->identity);
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto white_stone = game.create_instance(white_stone_code, domain::Player::FIRST);
+	REQUIRE(white_stone.valid());
+	game.place(*game.find_instance_mutable(white_stone), domain::GraveyardPlacement{.index = 0});
+
+	const auto blue_eyes = game.create_instance(blue_eyes_code, domain::Player::FIRST);
+	REQUIRE(blue_eyes.valid());
+	game.place(*game.find_instance_mutable(blue_eyes), domain::GraveyardPlacement{.index = 1});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_effect(white_stone, 1));
+	settle(duel);
+
+	CHECK(game.zone_of(white_stone) == domain::Zone::BANISHED);
+	CHECK(game.zone_of(blue_eyes) == domain::Zone::HAND);
 }

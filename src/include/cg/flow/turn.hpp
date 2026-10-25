@@ -45,14 +45,11 @@ namespace cg::flow
 				domain::Phase::END,
 		};
 
-		// 回合数/ID
-		using id_type = std::uint16_t;
-
 	private:
 		// 当前回合玩家 -- 逐回合切换
 		domain::Player turn_player_;
 		// 当前回合数/ID
-		id_type turn_id_;
+		domain::TurnId turn_id_;
 		// 当前阶段
 		domain::Phase phase_;
 
@@ -66,7 +63,7 @@ namespace cg::flow
 		[[nodiscard]] auto turn_player() const noexcept -> domain::Player;
 
 		// 当前回合数/ID
-		[[nodiscard]] auto turn_id() const noexcept -> id_type;
+		[[nodiscard]] auto turn_id() const noexcept -> domain::TurnId;
 
 		// 当前是否是第一回合
 		[[nodiscard]] auto is_first_turn() const noexcept -> bool;
