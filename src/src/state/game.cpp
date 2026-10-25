@@ -151,6 +151,24 @@ namespace cg::state
 		);
 	}
 
+	auto Game::count_zone_empty_card(const domain::Player player, const domain::Zone zone) const noexcept -> Field::size_type
+	{
+		return field_invoke(
+			&Field::count_zone_empty_card,
+			player,
+			zone
+		);
+	}
+
+	auto Game::count_zones_empty_card(const domain::Player player, const utility::EnumMask<domain::Zone> zones) const noexcept -> Field::size_type
+	{
+		return field_invoke(
+			&Field::count_zones_empty_card,
+			player,
+			zones
+		);
+	}
+
 	auto Game::count_zone_card(const domain::Player player, const domain::Zone zone) const noexcept -> Field::size_type
 	{
 		return field_invoke(
@@ -194,6 +212,56 @@ namespace cg::state
 		return field_invoke(
 			static_cast<auto(Field::*)(utility::EnumMask<domain::Zone> zones) const noexcept -> Field::size_type>(&Field::count_zones_card),
 			zones
+		);
+	}
+
+	auto Game::collect_empty_zone(const domain::Player player, const domain::Zone zone) const noexcept -> std::vector<domain::Location>
+	{
+		return field_invoke(
+			static_cast<auto(Field::*)(domain::Player player, domain::Zone zone) const noexcept -> std::vector<domain::Location>>(&Field::collect_empty_zone),
+			player,
+			zone
+		);
+	}
+
+	auto Game::collect_empty_zones(const domain::Player player, const utility::EnumMask<domain::Zone> zones) const noexcept -> std::vector<domain::Location>
+	{
+		return field_invoke(
+			&Field::collect_empty_zones,
+			player,
+			zones
+		);
+	}
+
+	auto Game::collect_monster_empty_zone(const domain::Player player) const noexcept -> std::vector<domain::MonsterLocation>
+	{
+		return field_invoke(
+			&Field::collect_monster_empty_zone,
+			player
+		);
+	}
+
+	auto Game::collect_extra_monster_empty_zone(const domain::Player player) const noexcept -> std::vector<domain::ExtraMonsterLocation>
+	{
+		return field_invoke(
+			&Field::collect_extra_monster_empty_zone,
+			player
+		);
+	}
+
+	auto Game::collect_any_monster_empty_zone(const domain::Player player) const noexcept -> std::vector<domain::AnyMonsterLocation>
+	{
+		return field_invoke(
+			&Field::collect_any_monster_empty_zone,
+			player
+		);
+	}
+
+	auto Game::collect_spell_trap_empty_zone(const domain::Player player) const noexcept -> std::vector<domain::SpellTrapLocation>
+	{
+		return field_invoke(
+			&Field::collect_spell_trap_empty_zone,
+			player
 		);
 	}
 

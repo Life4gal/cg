@@ -1,7 +1,9 @@
 #pragma once
 
+#include <optional>
 #include <span>
 
+#include <cg/domain/field.hpp>
 #include <cg/domain/player.hpp>
 
 #include <cg/dsl/id.hpp>
@@ -54,8 +56,21 @@ namespace cg::execution
 
 		virtual ~Selector() noexcept = default;
 
-
 		[[nodiscard]] virtual auto select_cards(domain::Player player, const Group& candidates, std::size_t min, std::size_t max) noexcept -> Group = 0;
+
+		// 选择怪兽区域(主怪兽区/额外怪兽区的候选由调用方限定)
+		[[nodiscard]] virtual auto select_monster_location(
+			domain::Player player,
+			state::CardInstanceId card,
+			std::span<const domain::MonsterLocation> candidates
+		) noexcept -> std::optional<domain::MonsterLocation> = 0;
+
+		// 选择魔法/陷阱区域
+		[[nodiscard]] virtual auto select_spell_trap_location(
+			domain::Player player,
+			state::CardInstanceId card,
+			std::span<const domain::SpellTrapLocation> candidates
+		) noexcept -> std::optional<domain::SpellTrapLocation> = 0;
 
 		// 必发组必须返回全部索引;选发组可返回空
 		[[nodiscard]] virtual auto choose_triggers(const TriggerDecision& decision) noexcept -> std::vector<std::size_t> = 0;

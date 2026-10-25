@@ -117,6 +117,12 @@ namespace cg::state
 		// 检查双方某些区域是否不存在卡牌实例
 		[[nodiscard]] auto is_zones_empty(utility::EnumMask<domain::Zone> zones) const noexcept -> bool;
 
+		// 获取某个区域所有空位的数量 -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律返回0
+		[[nodiscard]] auto count_zone_empty_card(domain::Player player, domain::Zone zone) const noexcept -> Field::size_type;
+
+		// 获取某个区域所有空位的数量 -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律返回0
+		[[nodiscard]] auto count_zones_empty_card(domain::Player player, utility::EnumMask<domain::Zone> zones) const noexcept -> Field::size_type;
+
 		// 获取某个区域所有卡牌实例的数量
 		// 如果是额外怪兽区,则只要在额外怪兽区就算,不论控制者
 		[[nodiscard]] auto count_zone_card(domain::Player player, domain::Zone zone) const noexcept -> Field::size_type;
@@ -133,6 +139,22 @@ namespace cg::state
 
 		// 获取双方某些区域所有卡牌实例的数量
 		[[nodiscard]] auto count_zones_card(utility::EnumMask<domain::Zone> zones) const noexcept -> Field::size_type;
+
+		// 获取指定区域的空位 -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律返回空
+		[[nodiscard]] auto collect_empty_zone(domain::Player player, domain::Zone zone) const noexcept -> std::vector<domain::Location>;
+
+		// 获取指定区域的空位 -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律返回空
+		[[nodiscard]] auto collect_empty_zones(domain::Player player, utility::EnumMask<domain::Zone> zones) const noexcept -> std::vector<domain::Location>;
+
+		// 获取怪兽区域的空位
+		[[nodiscard]] auto collect_monster_empty_zone(domain::Player player) const noexcept -> std::vector<domain::MonsterLocation>;
+		// 获取额外怪兽区域的空位
+		[[nodiscard]] auto collect_extra_monster_empty_zone(domain::Player player) const noexcept -> std::vector<domain::ExtraMonsterLocation>;
+		// 获取任意怪兽区域的空位
+		[[nodiscard]] auto collect_any_monster_empty_zone(domain::Player player) const noexcept -> std::vector<domain::AnyMonsterLocation>;
+		// 获取任意魔陷区域的空位
+		[[nodiscard]] auto collect_spell_trap_empty_zone(domain::Player player) const noexcept -> std::vector<domain::SpellTrapLocation>;
+		// 获取场地魔法区域的空位 -- 没有意义 :)
 
 		// 获取某个区域所有卡牌实例
 		// 如果是额外怪兽区,则只要在额外怪兽区就算,不论控制者

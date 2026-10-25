@@ -294,7 +294,31 @@ TEST_CASE("flow::Duel performs a Pendulum Summon")
 	constexpr domain::CardCode low_code{91200003};
 	constexpr domain::CardCode high_code{91200004};
 
-	flow::Duel duel{g_selector};
+	state::CardInstanceId low_id{};
+	state::CardInstanceId high_id{};
+	driver::LocalTestSelector selector
+	{
+			nullptr,
+			[&]([[maybe_unused]] const domain::Player player,
+			    const state::CardInstanceId card,
+			    const std::span<const domain::MonsterLocation> candidates) noexcept -> std::optional<domain::MonsterLocation>
+			{
+				const auto preferred = card == low_id ? domain::FieldColumn::C2 : domain::FieldColumn::C4;
+				for (const auto candidate: candidates)
+				{
+					if (candidate.column == preferred)
+					{
+						return candidate;
+					}
+				}
+
+				return candidates.empty() ? std::nullopt : std::optional<domain::MonsterLocation>{candidates.front()};
+			},
+			nullptr,
+			nullptr,
+	};
+
+	flow::Duel duel{selector};
 	auto& game = duel.game();
 
 	auto left_scale = make_monster(left_scale_code, 1000, 1000, 4);
@@ -318,6 +342,8 @@ TEST_CASE("flow::Duel performs a Pendulum Summon")
 	REQUIRE(low.valid());
 	const auto high = game.create_instance(high_code, domain::Player::FIRST);
 	REQUIRE(high.valid());
+	low_id = low;
+	high_id = high;
 
 	game.place(*game.find_instance_mutable(left), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
 	game.place(*game.find_instance_mutable(right), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
@@ -345,6 +371,15 @@ TEST_CASE("flow::Duel performs a Pendulum Summon")
 	CHECK(game.find_instance(high)->summon_record().method == domain::SummonMethod::PENDULUM);
 	CHECK(game.zone_of(left) == domain::Zone::SPELL_TRAP);
 	CHECK(game.zone_of(right) == domain::Zone::SPELL_TRAP);
+
+	const auto low_placement_value = game.find_instance(low)->placement();
+	const auto high_placement_value = game.find_instance(high)->placement();
+	const auto* low_placement = std::get_if<domain::MonsterPlacement>(&low_placement_value);
+	const auto* high_placement = std::get_if<domain::MonsterPlacement>(&high_placement_value);
+	REQUIRE(low_placement != nullptr);
+	REQUIRE(high_placement != nullptr);
+	CHECK(low_placement->column == domain::FieldColumn::C2);
+	CHECK(high_placement->column == domain::FieldColumn::C4);
 }
 
 TEST_CASE("flow::Duel: Solemn Judgment negates a Pendulum Summon")
@@ -2480,6 +2515,8 @@ TEST_CASE("flow::Duel lets the driver choose battle destruction triggers")
 	driver::LocalTestSelector auto_selector
 	{
 			nullptr,
+			nullptr,
+			nullptr,
 			[](const execution::TriggerDecision& decision) -> std::vector<std::size_t>
 			{
 				std::vector<std::size_t> indices(decision.candidates.size());
@@ -3052,6 +3089,8 @@ TEST_CASE("flow::Duel resolves a Ritual Spell through effect summon")
 				const auto count = std::ranges::min(min, candidates.size());
 				return {candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(count)};
 			},
+			nullptr,
+			nullptr,
 			nullptr
 	};
 	flow::Duel duel{selector};
@@ -3357,6 +3396,166 @@ TEST_CASE("flow::Duel resolves an effect-driven Special Summon from the Graveyar
 	);
 }
 
+TEST_CASE("flow::Duel uses the selector for effect special summon placement")
+{
+	constexpr domain::CardCode spell_code{97000150};
+	constexpr domain::CardCode monster_code{97000151};
+
+	state::CardInstanceId monster_id{};
+	driver::LocalTestSelector selector
+	{
+			nullptr,
+			[&](
+		[[maybe_unused]] const domain::Player player,
+		const state::CardInstanceId card,
+		const std::span<const domain::MonsterLocation> candidates
+	) noexcept -> std::optional<domain::MonsterLocation>
+			{
+				if (card == monster_id)
+				{
+					for (const auto candidate: candidates)
+					{
+						if (candidate.column == domain::FieldColumn::C3)
+						{
+							return candidate;
+						}
+					}
+				}
+
+				return candidates.empty() ? std::nullopt : std::optional<domain::MonsterLocation>{candidates.front()};
+			},
+			nullptr,
+			nullptr,
+	};
+
+	flow::Duel duel{selector};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(monster.valid());
+	monster_id = monster;
+
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(monster), domain::GraveyardPlacement{.index = 0});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+	settle(duel);
+
+	const auto placement_value = game.find_instance(monster)->placement();
+	const auto* placement = std::get_if<domain::MonsterPlacement>(&placement_value);
+	REQUIRE(placement != nullptr);
+	CHECK(game.zone_of(monster) == domain::Zone::MONSTER);
+	CHECK(placement->column == domain::FieldColumn::C3);
+}
+
+TEST_CASE("flow::Duel does not fall back when effect special summon location is rejected")
+{
+	constexpr domain::CardCode spell_code{97000150};
+	constexpr domain::CardCode monster_code{97000151};
+
+	driver::LocalTestSelector selector
+	{
+			nullptr,
+			[](const domain::Player, const state::CardInstanceId, const std::span<const domain::MonsterLocation>) noexcept -> std::optional<domain::MonsterLocation>
+			{
+				return std::nullopt;
+			},
+			nullptr,
+			nullptr,
+	};
+
+	flow::Duel duel{selector};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(monster.valid());
+
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(monster), domain::GraveyardPlacement{.index = 0});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+	settle(duel);
+
+	CHECK(game.zone_of(monster) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+}
+
+TEST_CASE("flow::Duel uses the selector for spell trap placement")
+{
+	constexpr domain::CardCode spell_code{97000150};
+	constexpr domain::CardCode monster_code{97000151};
+
+	driver::LocalTestSelector selector
+	{
+			nullptr,
+			nullptr,
+			[](const domain::Player, const state::CardInstanceId, const std::span<const domain::SpellTrapLocation> candidates) noexcept -> std::optional<domain::SpellTrapLocation>
+			{
+				for (const auto candidate: candidates)
+				{
+					if (candidate.column == domain::FieldColumn::C4)
+					{
+						return candidate;
+					}
+				}
+
+				return candidates.empty() ? std::nullopt : std::optional<domain::SpellTrapLocation>{candidates.front()};
+			},
+			nullptr,
+	};
+
+	flow::Duel duel{selector};
+	auto& game = duel.game();
+
+	game.register_definition(spell_code, make_spell(spell_code, {domain::CardSubtype::NORMAL}));
+	game.register_definition(monster_code, make_monster(monster_code, 1800, 1200, 4));
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_TEST_CARDS_DIR}));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+	REQUIRE(spell.valid());
+	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(monster.valid());
+
+	game.place(*game.find_instance_mutable(spell), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+	game.place(*game.find_instance_mutable(monster), domain::GraveyardPlacement{.index = 0});
+
+	advance_phase(duel); // STANDBY
+	advance_phase(duel); // MAIN_1
+
+	CHECK(duel.activate_card(spell));
+
+	const auto placement_value = game.find_instance(spell)->placement();
+	const auto* placement = std::get_if<domain::SpellTrapPlacement>(&placement_value);
+	REQUIRE(placement != nullptr);
+	CHECK(placement->column == domain::FieldColumn::C4);
+
+	settle(duel);
+}
+
 TEST_CASE("flow::Duel negates an effect-driven Special Summon effect")
 {
 	constexpr domain::CardCode spell_code{97000150};
@@ -3445,7 +3644,7 @@ TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck mon
 		{
 				.player = domain::Player::FIRST,
 				.method = domain::SummonMethod::SPECIAL,
-				.from = domain::GraveyardPlacement{.index = 0},
+				.from = {domain::GraveyardPlacement{.index = 0}},
 				.materials = {},
 		}
 	);
@@ -4473,6 +4672,8 @@ TEST_CASE("flow::Duel lets the driver order optional triggers")
 	driver::LocalTestSelector selector
 	{
 			nullptr,
+			nullptr,
+			nullptr,
 			[](const execution::TriggerDecision& decision) -> std::vector<std::size_t>
 			{
 				std::vector<std::size_t> indices(decision.candidates.size());
@@ -4483,7 +4684,7 @@ TEST_CASE("flow::Duel lets the driver order optional triggers")
 					std::ranges::reverse(indices);
 				}
 				return indices;
-			}
+			},
 	};
 	flow::Duel duel{selector};
 	auto& game = duel.game();
@@ -4565,7 +4766,9 @@ TEST_CASE("flow::Duel requires an external selector for target choice")
 				const auto last = candidates.begin() + static_cast<std::ptrdiff_t>(candidates.size() - 1);
 				return execution::Group{last, last + 1};
 			},
-			nullptr
+			nullptr,
+			nullptr,
+			nullptr,
 	};
 	flow::Duel duel{selector};
 	auto& game = duel.game();

@@ -11,19 +11,61 @@ namespace cg::driver
 	class LocalTestSelector final : public execution::Selector
 	{
 	public:
-		using select_type = std::function<auto(domain::Player player, const execution::Group& candidates, std::size_t min, std::size_t max) /*noexcept*/ -> execution::Group>;
-		using choose_type = std::function<auto(const execution::TriggerDecision& decision) /*noexcept*/ -> std::vector<std::size_t>>;
+		using select_card_type = std::function<
+			auto(
+				domain::Player player,
+				const execution::Group& candidates,
+				std::size_t min,
+				std::size_t max
+			) /*noexcept*/ -> execution::Group>;
+		using select_monster_location_type = std::function<
+			auto(
+				domain::Player player,
+				state::CardInstanceId card,
+				std::span<const domain::MonsterLocation> candidates
+			) /*noexcept*/ -> std::optional<domain::MonsterLocation>>;
+		using select_spell_trap_location_type = std::function<
+			auto(
+				domain::Player player,
+				state::CardInstanceId card,
+				std::span<const domain::SpellTrapLocation> candidates
+			) /*noexcept*/ -> std::optional<domain::SpellTrapLocation>>;
+
+		using choose_trigger_type = std::function<
+			auto(
+				const execution::TriggerDecision& decision
+			) /*noexcept*/ -> std::vector<std::size_t>>;
 
 	private:
-		select_type select_;
-		choose_type choose_;
+		select_card_type select_;
+		select_monster_location_type select_monster_location_;
+		select_spell_trap_location_type select_spell_trap_location_;
+
+		choose_trigger_type choose_;
 
 	public:
 		LocalTestSelector() noexcept;
 
-		LocalTestSelector(select_type select, choose_type choose) noexcept;
+		LocalTestSelector(
+			select_card_type select,
+			select_monster_location_type select_monster_location,
+			select_spell_trap_location_type select_spell_trap_location,
+			choose_trigger_type choose
+		) noexcept;
 
 		auto select_cards(domain::Player player, const execution::Group& candidates, std::size_t min, std::size_t max) noexcept -> execution::Group override;
+
+		auto select_monster_location(
+			domain::Player player,
+			state::CardInstanceId card,
+			std::span<const domain::MonsterLocation> candidates
+		) noexcept -> std::optional<domain::MonsterLocation> override;
+
+		auto select_spell_trap_location(
+			domain::Player player,
+			state::CardInstanceId card,
+			std::span<const domain::SpellTrapLocation> candidates
+		) noexcept -> std::optional<domain::SpellTrapLocation> override;
 
 		auto choose_triggers(const execution::TriggerDecision& decision) noexcept -> std::vector<std::size_t> override;
 	};

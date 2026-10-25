@@ -2455,34 +2455,29 @@ namespace cg::flow
 
 			seen_cards.push_back(card);
 
-			const auto level = interpreter_.state_resolver().level(*instance);
-			if (level <= left_scale || level >= right_scale)
+			if (const auto level = interpreter_.state_resolver().level(*instance);
+				level <= left_scale || level >= right_scale)
 			{
 				return false;
 			}
 
-			std::optional<domain::FieldColumn> column = std::nullopt;
-			for (const auto candidate: domain::field_columns)
-			{
-				if (std::ranges::contains(used_columns, candidate))
+			auto candidates = game_.collect_monster_empty_zone(controller);
+			std::erase_if(
+				candidates,
+				[&](const domain::MonsterLocation& location) noexcept -> bool
 				{
-					continue;
+					return std::ranges::contains(used_columns, location.column);
 				}
+			);
 
-				if (game_.is_location_empty(controller, domain::MonsterLocation{.column = candidate}))
-				{
-					column = candidate;
-					break;
-				}
-			}
-
-			if (!column.has_value())
+			const auto selected = selector_.get().select_monster_location(controller, card, candidates);
+			if (!selected.has_value() || !std::ranges::contains(candidates, *selected))
 			{
 				return false;
 			}
 
-			used_columns.push_back(*column);
-			entries.emplace_back(std::ref(*instance), domain::AnyMonsterPlacement{domain::MonsterPlacement{.column = *column, .position = domain::Position::FACE_UP_ATTACK}});
+			used_columns.push_back(selected->column);
+			entries.emplace_back(std::ref(*instance), domain::AnyMonsterPlacement{domain::MonsterPlacement{.column = selected->column, .position = domain::Position::FACE_UP_ATTACK}});
 		}
 
 		const auto started = begin_summon(
@@ -2598,22 +2593,15 @@ namespace cg::flow
 			}
 			else
 			{
-				std::optional<domain::FieldColumn> column;
-				for (const auto candidate: domain::field_columns)
-				{
-					if (game_.is_location_empty(controller, domain::Location{domain::SpellTrapLocation{.column = candidate}}))
-					{
-						column = candidate;
-						break;
-					}
-				}
+				auto candidates = game_.collect_spell_trap_empty_zone(controller);
 
-				if (!column.has_value())
+				const auto selected = selector_.get().select_spell_trap_location(controller, card, candidates);
+				if (!selected.has_value() || !std::ranges::contains(candidates, *selected))
 				{
 					return false;
 				}
 
-				target_placement = domain::Placement{domain::SpellTrapPlacement{.column = *column, .position = domain::Position::FACE_UP_ATTACK}};
+				target_placement = {domain::SpellTrapPlacement{.column = selected->column, .position = domain::Position::FACE_UP_ATTACK}};
 			}
 		}
 		else if (zone == domain::Zone::SPELL_TRAP)

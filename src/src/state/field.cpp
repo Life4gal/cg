@@ -269,6 +269,70 @@ namespace cg::state
 		return is_zones_empty(domain::Player::FIRST, zone) && is_zones_empty(domain::Player::SECOND, zone);
 	}
 
+	auto Field::count_zone_empty_card(const domain::Player player, const domain::Zone zone) const noexcept -> size_type
+	{
+		const auto& player_zone = player_zone_of(player);
+
+		switch (zone)
+		{
+			case domain::Zone::NOT_EXIST:
+			case domain::Zone::DECK:
+			case domain::Zone::EXTRA_DECK:
+			case domain::Zone::HAND:
+			case domain::Zone::GRAVEYARD:
+			case domain::Zone::BANISHED:
+			{
+				return 0;
+			}
+			case domain::Zone::MONSTER:
+			{
+				const auto size = std::ranges::count_if(player_zone.monster_zones, &CardInstanceId::valid);
+				LIBASSERT_DEBUG_ASSERT(size <= domain::total_field_columns);
+
+				return static_cast<size_type>(domain::total_field_columns - size);
+			}
+			case domain::Zone::EXTRA_MONSTER:
+			{
+				const auto size = std::ranges::count_if(extra_monster_zones_, &CardInstanceId::valid);
+				LIBASSERT_DEBUG_ASSERT(size <= domain::total_extra_columns);
+
+				return static_cast<size_type>(domain::total_extra_columns - size);
+			}
+			case domain::Zone::SPELL_TRAP:
+			{
+				const auto size = std::ranges::count_if(player_zone.spell_trap_zones, &CardInstanceId::valid);
+				LIBASSERT_DEBUG_ASSERT(size <= domain::total_field_columns);
+
+				return static_cast<size_type>(domain::total_field_columns - size);
+			}
+			case domain::Zone::FIELD_SPELL:
+			{
+				return player_zone.field_spell_zone.valid() ? 0 : 1;
+			}
+			default: // NOLINT(clang-diagnostic-covered-switch-default)
+			{
+				std::unreachable();
+			}
+		}
+	}
+
+	auto Field::count_zones_empty_card(const domain::Player player, const utility::EnumMask<domain::Zone> zones) const noexcept -> size_type
+	{
+		const auto size = std::ranges::fold_left(
+			zones | std::views::transform(
+				[this, player](const domain::Zone z) noexcept -> size_type
+				{
+					return count_zone_empty_card(player, z);
+				}
+			),
+			std::size_t{0},
+			std::plus{}
+		);
+
+		LIBASSERT_DEBUG_ASSERT(size <= std::numeric_limits<size_type>::max());
+		return static_cast<size_type>(size);
+	}
+
 	auto Field::count_zone_card(const domain::Player player, const domain::Zone zone) const noexcept -> size_type
 	{
 		const auto& player_zone = player_zone_of(player);
@@ -331,7 +395,7 @@ namespace cg::state
 			case domain::Zone::SPELL_TRAP:
 			{
 				const auto size = std::ranges::count_if(player_zone.spell_trap_zones, &CardInstanceId::valid);
-				LIBASSERT_DEBUG_ASSERT(size <= domain::total_extra_columns);
+				LIBASSERT_DEBUG_ASSERT(size <= domain::total_field_columns);
 
 				return static_cast<size_type>(size);
 			}
@@ -431,6 +495,190 @@ namespace cg::state
 
 		LIBASSERT_DEBUG_ASSERT(size <= std::numeric_limits<size_type>::max());
 		return static_cast<size_type>(size);
+	}
+
+	auto Field::collect_empty_zone(const domain::Player player, const domain::Zone zone, std::vector<domain::Location>& out) const noexcept -> void
+	{
+		const auto& player_zone = player_zone_of(player);
+
+		switch (zone)
+		{
+			case domain::Zone::NOT_EXIST:
+			case domain::Zone::DECK:
+			case domain::Zone::EXTRA_DECK:
+			case domain::Zone::HAND:
+			case domain::Zone::GRAVEYARD:
+			case domain::Zone::BANISHED:
+			{
+				break;
+			}
+			case domain::Zone::MONSTER:
+			{
+				for (const auto column: domain::field_columns)
+				{
+					if (const auto card = player_zone.monster_zones[std::to_underlying(column)];
+						!card.valid())
+					{
+						out.emplace_back(domain::MonsterLocation{.column = column});
+					}
+				}
+				break;
+			}
+			case domain::Zone::EXTRA_MONSTER:
+			{
+				for (const auto column: domain::extra_columns)
+				{
+					if (const auto card = extra_monster_zones_[std::to_underlying(column)];
+						!card.valid())
+					{
+						out.emplace_back(domain::ExtraMonsterLocation{.column = column});
+					}
+				}
+				break;
+			}
+			case domain::Zone::SPELL_TRAP:
+			{
+				for (const auto column: domain::field_columns)
+				{
+					if (const auto card = player_zone.spell_trap_zones[std::to_underlying(column)];
+						!card.valid())
+					{
+						out.emplace_back(domain::SpellTrapLocation{.column = column});
+					}
+				}
+				break;
+			}
+			case domain::Zone::FIELD_SPELL:
+			{
+				if (const auto card = player_zone.field_spell_zone;
+					!card.valid())
+				{
+					out.emplace_back(domain::FieldSpellLocation{});
+				}
+				break;
+			}
+			default: // NOLINT(clang-diagnostic-covered-switch-default)
+			{
+				std::unreachable();
+			}
+		}
+	}
+
+	auto Field::collect_empty_zone(const domain::Player player, const domain::Zone zone) const noexcept -> std::vector<domain::Location>
+	{
+		const auto count = count_zone_empty_card(player, zone);
+		std::vector<domain::Location> out{};
+		out.reserve(count);
+
+		collect_empty_zone(player, zone, out);
+		LIBASSERT_DEBUG_ASSERT(out.size() == count);
+
+		return out;
+	}
+
+	auto Field::collect_empty_zones(const domain::Player player, const utility::EnumMask<domain::Zone> zones) const noexcept -> std::vector<domain::Location>
+	{
+		const auto count = count_zones_empty_card(player, zones);
+		std::vector<domain::Location> out{};
+		out.reserve(count);
+
+		std::ranges::for_each(
+			zones,
+			[this, &out, player](const domain::Zone z) noexcept -> void
+			{
+				collect_empty_zone(player, z, out);
+			}
+		);
+		LIBASSERT_DEBUG_ASSERT(out.size() == count);
+
+		return out;
+	}
+
+	auto Field::collect_monster_empty_zone(const domain::Player player) const noexcept -> std::vector<domain::MonsterLocation>
+	{
+		const auto count = count_zone_empty_card(player, domain::Zone::MONSTER);
+		std::vector<domain::MonsterLocation> out{};
+		out.reserve(count);
+
+		for (const auto& player_zone = player_zone_of(player);
+		     const auto column: domain::field_columns)
+		{
+			if (const auto card = player_zone.monster_zones[std::to_underlying(column)];
+				!card.valid())
+			{
+				out.emplace_back(column);
+			}
+		}
+		LIBASSERT_DEBUG_ASSERT(out.size() == count);
+
+		return out;
+	}
+
+	auto Field::collect_extra_monster_empty_zone(const domain::Player player) const noexcept -> std::vector<domain::ExtraMonsterLocation>
+	{
+		const auto count = count_zone_empty_card(player, domain::Zone::EXTRA_MONSTER);
+		std::vector<domain::ExtraMonsterLocation> out{};
+		out.reserve(count);
+
+		for (const auto column: domain::extra_columns)
+		{
+			if (const auto card = extra_monster_zones_[std::to_underlying(column)];
+				!card.valid())
+			{
+				out.emplace_back(column);
+			}
+		}
+		LIBASSERT_DEBUG_ASSERT(out.size() == count);
+
+		return out;
+	}
+
+	auto Field::collect_any_monster_empty_zone(const domain::Player player) const noexcept -> std::vector<domain::AnyMonsterLocation>
+	{
+		const auto count = count_zones_empty_card(player, {domain::Zone::MONSTER, domain::Zone::EXTRA_MONSTER});
+		std::vector<domain::AnyMonsterLocation> out{};
+		out.reserve(count);
+
+		for (const auto& player_zone = player_zone_of(player);
+		     const auto column: domain::field_columns)
+		{
+			if (const auto card = player_zone.monster_zones[std::to_underlying(column)];
+				!card.valid())
+			{
+				out.emplace_back(domain::MonsterLocation{.column = column});
+			}
+		}
+		for (const auto column: domain::extra_columns)
+		{
+			if (const auto card = extra_monster_zones_[std::to_underlying(column)];
+				!card.valid())
+			{
+				out.emplace_back(domain::ExtraMonsterLocation{.column = column});
+			}
+		}
+		LIBASSERT_DEBUG_ASSERT(out.size() == count);
+
+		return out;
+	}
+
+	auto Field::collect_spell_trap_empty_zone(const domain::Player player) const noexcept -> std::vector<domain::SpellTrapLocation>
+	{
+		const auto count = count_zone_empty_card(player, domain::Zone::SPELL_TRAP);
+		std::vector<domain::SpellTrapLocation> out{};
+		out.reserve(count);
+
+		for (const auto& player_zone = player_zone_of(player);
+		     const auto column: domain::field_columns)
+		{
+			if (const auto card = player_zone.spell_trap_zones[std::to_underlying(column)];
+				!card.valid())
+			{
+				out.emplace_back(column);
+			}
+		}
+		LIBASSERT_DEBUG_ASSERT(out.size() == count);
+
+		return out;
 	}
 
 	auto Field::collect_zone_card(const domain::Player player, const domain::Zone zone, std::vector<CardInstanceId>& out) const noexcept -> void

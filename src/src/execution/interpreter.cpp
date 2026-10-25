@@ -1383,32 +1383,29 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		for (const auto column: domain::field_columns)
+		auto candidates = game.collect_monster_empty_zone(context.controller);
+
+		const auto location = selector_.get().select_monster_location(context.controller, *card, candidates);
+		if (!location.has_value() || !std::ranges::contains(candidates, *location))
 		{
-			if (const auto location = domain::MonsterLocation{.column = column};
-				!game.is_location_empty(context.controller, domain::Location{location}))
-			{
-				continue;
-			}
-
-			game.move_to_monster(*instance, context.controller, {domain::Reason::EFFECT}, domain::MonsterPlacement{.column = column, .position = value});
-			game.set_summon_record(
-				*instance,
-				state::CardInstance::SummonRecord
-				{
-						.player = context.controller,
-						.method = method_value,
-						.from = from,
-						.materials = {},
-				}
-			);
-
-			pending_events_.emplace_back(domain::EventCode::SPECIAL_SUMMON_SUCCESS, *card);
-
-			return Value{Void{}};
+			return std::nullopt;
 		}
 
-		return std::nullopt;
+		game.move_to_monster(*instance, context.controller, {domain::Reason::EFFECT}, domain::MonsterPlacement{.column = location->column, .position = value});
+		game.set_summon_record(
+			*instance,
+			state::CardInstance::SummonRecord
+			{
+					.player = context.controller,
+					.method = method_value,
+					.from = from,
+					.materials = {},
+			}
+		);
+
+		pending_events_.emplace_back(domain::EventCode::SPECIAL_SUMMON_SUCCESS, *card);
+
+		return Value{Void{}};
 	}
 
 	auto Interpreter::ritual_summon(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1591,16 +1588,10 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		auto column = std::optional<domain::FieldColumn>{};
-		for (const auto candidate: domain::field_columns)
-		{
-			if (game.is_location_empty(context.controller, domain::Location{domain::MonsterLocation{.column = candidate}}))
-			{
-				column = candidate;
-				break;
-			}
-		}
-		if (!column.has_value())
+		auto candidates = game.collect_monster_empty_zone(context.controller);
+
+		const auto location = selector_.get().select_monster_location(context.controller, monster->id(), candidates);
+		if (!location.has_value() || !std::ranges::contains(candidates, *location))
 		{
 			return std::nullopt;
 		}
@@ -1621,7 +1612,7 @@ namespace cg::execution
 		game.move_to_monster(
 			*monster,
 			{domain::Reason::EFFECT},
-			domain::MonsterPlacement{.column = *column, .position = position}
+			{.column = location->column, .position = position}
 		);
 		game.set_summon_record(
 			*monster,
