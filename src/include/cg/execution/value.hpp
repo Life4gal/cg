@@ -186,5 +186,9 @@ namespace cg::execution
 				Group,
 				// dsl::ValueClass::ENUM_SET
 				EnumMask
-			> {};
+			>
+	{
+	public:
+		using variant::variant;
+	};
 }

@@ -5299,6 +5299,62 @@ TEST_CASE("flow::Duel resolves Silver's Cry")
 	CHECK(game.find_instance(dragon)->summon_record().method == domain::SummonMethod::SPECIAL);
 }
 
+TEST_CASE("flow::Duel resolves Trade-In")
+{
+	constexpr domain::CardCode trade_in_code{33420078};
+	constexpr domain::CardCode level_eight_dragon_code{97001007};
+	constexpr domain::CardCode drawn_monster_code{97001008};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	const auto trade_in_definition = make_spell(trade_in_code, {domain::CardSubtype::NORMAL});
+	const auto level_eight_dragon_definition = make_monster(
+		level_eight_dragon_code,
+		3000,
+		2500,
+		8,
+		domain::Race::DRAGON
+	);
+	const auto drawn_monster_definition = make_monster(drawn_monster_code, 1000, 1000, 4);
+	game.register_definition(trade_in_definition);
+	game.register_definition(level_eight_dragon_definition);
+	game.register_definition(drawn_monster_definition);
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto trade_in = game.create_instance(trade_in_code, domain::Player::FIRST);
+	REQUIRE(trade_in.valid());
+	game.place(*game.find_instance_mutable(trade_in), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto level_eight_dragon = game.create_instance(level_eight_dragon_code, domain::Player::FIRST);
+	REQUIRE(level_eight_dragon.valid());
+	game.place(*game.find_instance_mutable(level_eight_dragon), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto first_draw = game.create_instance(drawn_monster_code, domain::Player::FIRST);
+	REQUIRE(first_draw.valid());
+	game.place(*game.find_instance_mutable(first_draw), domain::DeckPlacement{.index = 0});
+
+	const auto second_draw = game.create_instance(drawn_monster_code, domain::Player::FIRST);
+	REQUIRE(second_draw.valid());
+	game.place(*game.find_instance_mutable(second_draw), domain::DeckPlacement{.index = 1});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_card(trade_in));
+	settle(duel);
+
+	CHECK(game.zone_of(trade_in) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(level_eight_dragon) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(first_draw) == domain::Zone::HAND);
+	CHECK(game.zone_of(second_draw) == domain::Zone::HAND);
+	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::DECK) == 0);
+}
+
 TEST_CASE("flow::Duel resolves Dark Hole")
 {
 	constexpr domain::CardCode dark_hole_code{53129443};

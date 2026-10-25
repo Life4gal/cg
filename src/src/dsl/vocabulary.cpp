@@ -110,6 +110,17 @@ namespace cg::dsl
 			"卡是否具有指定种族"
 		);
 		do_register(
+			"is_level",
+			PrimitiveKind::PREDICATE,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+					{.name = "level", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+			},
+			type_id("bool"),
+			"是否为指定等级/阶级的怪兽"
+		);
+		do_register(
 			"is_in_zone",
 			PrimitiveKind::PREDICATE,
 			all_phases,
@@ -118,7 +129,7 @@ namespace cg::dsl
 					{.name = "zones", .kind = ParamDef::Value{.type = type_id("zones")}, .required = true},
 			},
 			type_id("bool"),
-			"卡是否位于指定区域"
+			"是否位于指定区域"
 		);
 		do_register(
 			"is_face_up",

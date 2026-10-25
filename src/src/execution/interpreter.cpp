@@ -289,6 +289,10 @@ namespace cg::execution
 		{
 			return is_race(*definition, call, context);
 		}
+		if (definition->name == "is_level")
+		{
+			return is_level(*definition, call, context);
+		}
 		if (definition->name == "is_in_zone")
 		{
 			return is_in_zone(*definition, call, context);
@@ -478,7 +482,7 @@ namespace cg::execution
 
 							for (const auto card: *group)
 							{
-								context.frame.bindings.insert_or_assign(for_each.binding, Value{Card{card}});
+								context.frame.bindings.insert_or_assign(for_each.binding, Card{card});
 								if (!execute_statements(for_each.body, context))
 								{
 									return false;
@@ -535,7 +539,7 @@ namespace cg::execution
 			candidates = *std::move(filtered);
 		}
 
-		return Value{Group{std::move(candidates)}};
+		return Group{std::move(candidates)};
 	}
 
 	auto Interpreter::exists_matching(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -569,7 +573,7 @@ namespace cg::execution
 			candidates = *std::move(filtered);
 		}
 
-		return Value{Boolean{std::cmp_greater_equal(candidates.size(), static_cast<Group::size_type>(*min))}};
+		return Boolean{std::cmp_greater_equal(candidates.size(), static_cast<Group::size_type>(*min))};
 	}
 
 	auto Interpreter::pick(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -610,7 +614,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		return Value{Group{std::move(*selected)}};
+		return Group{std::move(*selected)};
 	}
 
 	auto Interpreter::destroy(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -645,7 +649,7 @@ namespace cg::execution
 			pending_events_.emplace_back(domain::EventCode::EFFECT_DESTROYED, card);
 		}
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::discard(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -675,7 +679,7 @@ namespace cg::execution
 			game.move_to_graveyard(*instance, {domain::Reason::DISCARD});
 		}
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::is_card_type(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -703,7 +707,7 @@ namespace cg::execution
 
 		const auto value = static_cast<domain::CardType>(static_cast<std::underlying_type_t<domain::CardType>>(*kind));
 		const auto result = state_resolver_.contains_card_type(*instance, value);
-		return Value{Boolean{result}};
+		return Boolean{result};
 	}
 
 	auto Interpreter::is_code(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -732,7 +736,7 @@ namespace cg::execution
 		const auto expected = static_cast<domain::CardCode>(
 			static_cast<std::underlying_type_t<domain::CardCode>>(*code)
 		);
-		return Value{Boolean{state_resolver_.has_code(*instance, expected)}};
+		return Boolean{state_resolver_.has_code(*instance, expected)};
 	}
 
 	auto Interpreter::is_card_subtype(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -760,7 +764,7 @@ namespace cg::execution
 
 		const auto value = static_cast<domain::CardSubtype>(static_cast<std::underlying_type_t<domain::CardSubtype>>(*subtype));
 		const auto result = state_resolver_.contains_card_subtype(*instance, value);
-		return Value{Boolean{result}};
+		return Boolean{result};
 	}
 
 	auto Interpreter::is_attribute(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -793,7 +797,7 @@ namespace cg::execution
 
 		const auto value = static_cast<domain::Attribute>(static_cast<std::underlying_type_t<domain::Attribute>>(*attribute));
 		const auto result = state_resolver_.contains_attribute(*instance, value);
-		return Value{Boolean{result}};
+		return Boolean{result};
 	}
 
 	auto Interpreter::is_race(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -826,7 +830,39 @@ namespace cg::execution
 
 		const auto value = static_cast<domain::Race>(static_cast<std::underlying_type_t<domain::Race>>(*race));
 		const auto result = state_resolver_.is_race(*instance, value);
-		return Value{Boolean{result}};
+		return Boolean{result};
+	}
+
+	auto Interpreter::is_level(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		const auto* level = as_argument<dsl::ValueClass::INT>(*args, 1);
+		if (card == nullptr || level == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto* instance = game.find_instance(*card);
+		if (instance == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		if (!state_resolver_.contains_card_type(*instance, domain::CardType::MONSTER))
+		{
+			return Boolean{false};
+		}
+
+		const auto value = static_cast<std::underlying_type_t<domain::LevelRank>>(*level);
+		return Boolean{state_resolver_.level(*instance) == value};
 	}
 
 	auto Interpreter::is_in_zone(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -849,7 +885,7 @@ namespace cg::execution
 		const auto zones_mask = to_enum_mask<domain::Zone>(*zones);
 		const auto zone = game.zone_of(*card);
 
-		return Value{Boolean{zones_mask.contains(zone)}};
+		return Boolean{zones_mask.contains(zone)};
 	}
 
 	auto Interpreter::is_face_up(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -879,11 +915,11 @@ namespace cg::execution
 		if (const auto position = domain::position_of(placement);
 			position.has_value())
 		{
-			return Value{Boolean{*position == domain::Position::FACE_UP_ATTACK || *position == domain::Position::FACE_UP_DEFENSE}};
+			return Boolean{*position == domain::Position::FACE_UP_ATTACK || *position == domain::Position::FACE_UP_DEFENSE};
 		}
 
 		// 墓地是表侧表示
-		return Value{Boolean{std::holds_alternative<domain::GraveyardPlacement>(placement)}};
+		return Boolean{std::holds_alternative<domain::GraveyardPlacement>(placement)};
 	}
 
 	auto Interpreter::level(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -913,7 +949,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		return Value{Integer{state_resolver_.level(*instance)}};
+		return Integer{state_resolver_.level(*instance)};
 	}
 
 	auto Interpreter::attack(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -943,7 +979,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		return Value{Integer{state_resolver_.attack(*instance)}};
+		return Integer{state_resolver_.attack(*instance)};
 	}
 
 	auto Interpreter::defense(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -973,7 +1009,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		return Value{Integer{state_resolver_.defense(*instance)}};
+		return Integer{state_resolver_.defense(*instance)};
 	}
 
 	auto Interpreter::this_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -984,7 +1020,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		return Value{Card{context.source}};
+		return Card{context.source};
 	}
 
 	auto Interpreter::candidate_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1000,7 +1036,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		return Value{Card{context.frame.element_scopes.back()}};
+		return Card{context.frame.element_scopes.back()};
 	}
 
 	auto Interpreter::chain_exists(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1013,10 +1049,10 @@ namespace cg::execution
 
 		if (!context.chain.has_value())
 		{
-			return Value{Boolean{false}};
+			return Boolean{false};
 		}
 
-		return Value{Boolean{!context.chain->chain.get().empty()}};
+		return Boolean{!context.chain->chain.get().empty()};
 	}
 
 	auto Interpreter::event_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1032,7 +1068,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		return Value{Card{*context.event->card}};
+		return Card{*context.event->card};
 	}
 
 	auto Interpreter::event_amount(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1048,7 +1084,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		return Value{Integer{*context.event->amount}};
+		return Integer{*context.event->amount};
 	}
 
 	auto Interpreter::event_player(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1065,7 +1101,7 @@ namespace cg::execution
 		}
 
 		const auto relative = *context.event->player == context.controller ? 0 : 1;
-		return Value{Integer{relative}};
+		return Integer{relative};
 	}
 
 	auto Interpreter::sole_card(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1082,7 +1118,7 @@ namespace cg::execution
 			return std::nullopt;
 		}
 
-		return Value{Card{*group->begin()}};
+		return Card{*group->begin()};
 	}
 
 	auto Interpreter::draw(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1124,7 +1160,7 @@ namespace cg::execution
 			}
 		}
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::add_to_hand(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1154,7 +1190,7 @@ namespace cg::execution
 			game.move_to_hand(*instance, {domain::Reason::EFFECT}, domain::Position::FACE_DOWN_DEFENSE);
 		}
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::banish(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1187,7 +1223,7 @@ namespace cg::execution
 			game.move_to_banished(*instance, {domain::Reason::EFFECT}, position);
 		}
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::effect_damage(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1215,7 +1251,7 @@ namespace cg::execution
 			game.change_life_points(player, -value);
 		}
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::recover_life(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1243,7 +1279,7 @@ namespace cg::execution
 			game.change_life_points(player, value);
 		}
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::pay_half_life(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1261,7 +1297,7 @@ namespace cg::execution
 		const auto amount = (life + 1) / 2;
 		game.change_life_points(context.controller, -amount);
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::change_position(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1324,7 +1360,7 @@ namespace cg::execution
 
 		game.place(*instance, *updated);
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::special_summon(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1405,7 +1441,7 @@ namespace cg::execution
 
 		pending_events_.emplace_back(domain::EventCode::SPECIAL_SUMMON_SUCCESS, *card);
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::ritual_summon(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1626,7 +1662,7 @@ namespace cg::execution
 		);
 		pending_events_.emplace_back(domain::EventCode::SPECIAL_SUMMON_SUCCESS, monster_id);
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::negate_activation(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1648,7 +1684,7 @@ namespace cg::execution
 
 		link.negate_activation();
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::negate_activation_and_destroy(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1683,7 +1719,7 @@ namespace cg::execution
 		pending_events_.emplace_back(domain::EventCode::DESTROYED, source);
 		pending_events_.emplace_back(domain::EventCode::EFFECT_DESTROYED, source);
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	auto Interpreter::negate_effect(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1704,7 +1740,7 @@ namespace cg::execution
 
 		link.negate_effect();
 
-		return Value{Void{}};
+		return Void{};
 	}
 
 	Interpreter::Interpreter(
@@ -1814,7 +1850,7 @@ namespace cg::execution
 					{
 						const auto value = static_cast<EnumMask::value_type>(enums.mask);
 
-						return Value{EnumMask{value}};
+						return EnumMask{value};
 					},
 					[&](const dsl::BindingRef& binding) noexcept -> std::optional<Value>
 					{
@@ -1832,48 +1868,55 @@ namespace cg::execution
 					},
 					[&](const dsl::BooleanOperation& boolean) noexcept -> std::optional<Value>
 					{
-						const auto operands = evaluate_list(boolean.operands, context);
-						if (!operands.has_value())
-						{
-							return std::nullopt;
-						}
-
 						if (boolean.op == dsl::BooleanOperator::NOT)
 						{
-							if (operands->size() != 1)
+							if (boolean.operands.size() != 1)
 							{
 								return std::nullopt;
 							}
 
-							const auto value = as<dsl::ValueClass::BOOL>(operands->operator[](0));
+							const auto operand = evaluate(boolean.operands.front(), context);
+							if (!operand.has_value())
+							{
+								return std::nullopt;
+							}
+
+							const auto value = as<dsl::ValueClass::BOOL>(*operand);
 							if (value == nullptr)
 							{
 								return std::nullopt;
 							}
 
-							return Value{Boolean{!*value}};
+							return Boolean{!*value};
 						}
 
-						auto result = boolean.op == dsl::BooleanOperator::AND;
-						for (const auto& operand: *operands)
+						const auto is_and = boolean.op == dsl::BooleanOperator::AND;
+						for (const auto& operand: boolean.operands)
 						{
-							const auto value = as<dsl::ValueClass::BOOL>(operand);
+							// 逻辑运算短路, 避免对已排除的卡继续求值(例如非怪兽没有等级)
+							const auto evaluated = evaluate(operand, context);
+							if (!evaluated.has_value())
+							{
+								return std::nullopt;
+							}
+
+							const auto value = as<dsl::ValueClass::BOOL>(*evaluated);
 							if (value == nullptr)
 							{
 								return std::nullopt;
 							}
 
-							if (boolean.op == dsl::BooleanOperator::AND)
+							if (is_and && !*value)
 							{
-								result = result && *value;
+								return Boolean{false};
 							}
-							else
+							if (!is_and && *value)
 							{
-								result = result || *value;
+								return Boolean{true};
 							}
 						}
 
-						return Value{Boolean{result}};
+						return Boolean{is_and};
 					},
 					[&](const dsl::CompareOperation& compare) noexcept -> std::optional<Value>
 					{
@@ -1891,7 +1934,7 @@ namespace cg::execution
 							return std::nullopt;
 						}
 
-						return Value{Boolean{integer_compare(compare.op, *lhs, *rhs)}};
+						return Boolean{integer_compare(compare.op, *lhs, *rhs)};
 					},
 					[&](const dsl::ArithmeticOperation& arithmetic) noexcept -> std::optional<Value>
 					{
@@ -1914,7 +1957,7 @@ namespace cg::execution
 							return std::nullopt;
 						}
 
-						return Value{Integer{*result}};
+						return Integer{*result};
 					},
 			},
 			expression
