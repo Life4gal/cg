@@ -5174,6 +5174,131 @@ TEST_CASE("flow::Duel resolves Reinforcement of the Army")
 	CHECK(game.zone_of(rota) == domain::Zone::GRAVEYARD);
 }
 
+TEST_CASE("flow::Duel resolves Mystical Space Typhoon")
+{
+	constexpr domain::CardCode mystical_space_typhoon_code{5318639};
+	constexpr domain::CardCode set_trap_code{97001004};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	const auto mystical_space_typhoon_definition = make_spell(
+		mystical_space_typhoon_code,
+		{domain::CardSubtype::QUICK_PLAY}
+	);
+	const auto set_trap_definition = make_trap(set_trap_code, {domain::CardSubtype::NORMAL});
+	game.register_definition(mystical_space_typhoon_definition);
+	game.register_definition(set_trap_definition);
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto mystical_space_typhoon = game.create_instance(mystical_space_typhoon_code, domain::Player::FIRST);
+	REQUIRE(mystical_space_typhoon.valid());
+	game.place(
+		*game.find_instance_mutable(mystical_space_typhoon),
+		domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+
+	const auto set_trap = game.create_instance(set_trap_code, domain::Player::SECOND);
+	REQUIRE(set_trap.valid());
+	game.place(
+		*game.find_instance_mutable(set_trap),
+		domain::SpellTrapPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_card(mystical_space_typhoon));
+	settle(duel);
+
+	CHECK(game.zone_of(set_trap) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(mystical_space_typhoon) == domain::Zone::GRAVEYARD);
+}
+
+TEST_CASE("flow::Duel resolves Monster Reborn")
+{
+	constexpr domain::CardCode monster_reborn_code{83764718};
+	constexpr domain::CardCode monster_code{97001005};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	const auto monster_reborn_definition = make_spell(monster_reborn_code, {domain::CardSubtype::NORMAL});
+	const auto monster_definition = make_monster(monster_code, 1800, 1200, 4, domain::Race::DRAGON);
+	game.register_definition(monster_reborn_definition);
+	game.register_definition(monster_definition);
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto monster_reborn = game.create_instance(monster_reborn_code, domain::Player::FIRST);
+	REQUIRE(monster_reborn.valid());
+	game.place(
+		*game.find_instance_mutable(monster_reborn),
+		domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+
+	const auto monster = game.create_instance(monster_code, domain::Player::FIRST);
+	REQUIRE(monster.valid());
+	game.place(*game.find_instance_mutable(monster), domain::GraveyardPlacement{.index = 0});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_card(monster_reborn));
+	settle(duel);
+
+	CHECK(game.zone_of(monster) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(monster_reborn) == domain::Zone::GRAVEYARD);
+	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::SPECIAL);
+}
+
+TEST_CASE("flow::Duel resolves Silver's Cry")
+{
+	constexpr domain::CardCode silvers_cry_code{69162969};
+	constexpr domain::CardCode dragon_code{97001006};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	const auto silvers_cry_definition = make_spell(silvers_cry_code, {domain::CardSubtype::QUICK_PLAY});
+	const auto dragon_definition = make_monster(dragon_code, 1800, 1200, 4, domain::Race::DRAGON);
+	game.register_definition(silvers_cry_definition);
+	game.register_definition(dragon_definition);
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto silvers_cry = game.create_instance(silvers_cry_code, domain::Player::FIRST);
+	REQUIRE(silvers_cry.valid());
+	game.place(
+		*game.find_instance_mutable(silvers_cry),
+		domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+
+	const auto dragon = game.create_instance(dragon_code, domain::Player::FIRST);
+	REQUIRE(dragon.valid());
+	game.place(*game.find_instance_mutable(dragon), domain::GraveyardPlacement{.index = 0});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_card(silvers_cry));
+	settle(duel);
+
+	CHECK(game.zone_of(dragon) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(silvers_cry) == domain::Zone::GRAVEYARD);
+	CHECK(game.find_instance(dragon)->summon_record().method == domain::SummonMethod::SPECIAL);
+}
+
 TEST_CASE("flow::Duel resolves Dark Hole")
 {
 	constexpr domain::CardCode dark_hole_code{53129443};

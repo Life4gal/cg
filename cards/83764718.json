@@ -1,0 +1,53 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["NORMAL"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"condition": {
+				"call": "exists_matching",
+				"args": {
+					"players": ["SELF", "OPPONENT"],
+					"zones": ["GRAVEYARD"],
+					"min": 1,
+					"filter": {
+						"call": "is_card_type",
+						"args": {"card": {"call": "$"}, "card_type": "MONSTER"}
+					}
+				}
+			},
+			"target": [
+				{
+					"call": "pick_target",
+					"args": {
+						"players": ["SELF", "OPPONENT"],
+						"zones": ["GRAVEYARD"],
+						"min": 1,
+						"max": 1,
+						"filter": {
+							"call": "is_card_type",
+							"args": {"card": {"call": "$"}, "card_type": "MONSTER"}
+						}
+					},
+					"bind": "target"
+				}
+			],
+			"effect": [
+				{
+					"call": "special_summon",
+					"args": {
+						"card": {
+							"call": "sole_card",
+							"args": {"group": {"var": "target"}}
+						},
+						"method": "SPECIAL",
+						"position": "FACE_UP_ATTACK"
+					}
+				}
+			]
+		}
+	]
+}
