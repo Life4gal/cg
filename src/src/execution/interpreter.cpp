@@ -293,6 +293,10 @@ namespace cg::execution
 		{
 			return is_level(*definition, call, context);
 		}
+		if (definition->name == "can_change_to_face_down")
+		{
+			return can_change_to_face_down(*definition, call, context);
+		}
 		if (definition->name == "is_in_zone")
 		{
 			return is_in_zone(*definition, call, context);
@@ -863,6 +867,54 @@ namespace cg::execution
 
 		const auto value = static_cast<std::underlying_type_t<domain::LevelRank>>(*level);
 		return Boolean{state_resolver_.level(*instance) == value};
+	}
+
+	auto Interpreter::can_change_to_face_down(
+		const dsl::PrimitiveDef& definition,
+		const dsl::PrimitiveCall& call,
+		Context& context
+	) noexcept -> std::optional<Value>
+	{
+		const auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		if (card == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto* instance = game.find_instance(*card);
+		if (instance == nullptr)
+		{
+			return Value{Boolean{false}};
+		}
+
+		const auto placement = instance->placement();
+		const auto* monster = std::get_if<domain::MonsterPlacement>(&placement);
+		const auto* extra_monster = std::get_if<domain::ExtraMonsterPlacement>(&placement);
+		if (monster == nullptr && extra_monster == nullptr)
+		{
+			return Value{Boolean{false}};
+		}
+
+		const auto position = monster != nullptr ? monster->position : extra_monster->position;
+		if (position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
+		{
+			return Value{Boolean{false}};
+		}
+
+		if (instance->is_token() || instance->origin_is_card_subtype(domain::CardSubtype::LINK))
+		{
+			return Value{Boolean{false}};
+		}
+
+		return Value{Boolean{true}};
 	}
 
 	auto Interpreter::is_in_zone(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>

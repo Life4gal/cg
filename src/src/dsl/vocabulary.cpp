@@ -121,6 +121,16 @@ namespace cg::dsl
 			"是否为指定等级/阶级的怪兽"
 		);
 		do_register(
+			"can_change_to_face_down",
+			PrimitiveKind::PREDICATE,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+			},
+			type_id("bool"),
+			"是否可以变为里侧守备表示"
+		);
+		do_register(
 			"is_in_zone",
 			PrimitiveKind::PREDICATE,
 			all_phases,

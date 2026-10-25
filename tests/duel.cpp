@@ -5355,6 +5355,51 @@ TEST_CASE("flow::Duel resolves Trade-In")
 	CHECK(game.count_zone_card(domain::Player::FIRST, domain::Zone::DECK) == 0);
 }
 
+TEST_CASE("flow::Duel resolves Book of Moon")
+{
+	constexpr domain::CardCode book_of_moon_code{14087893};
+	constexpr domain::CardCode monster_code{97001009};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	const auto book_of_moon_definition = make_spell(book_of_moon_code, {domain::CardSubtype::QUICK_PLAY});
+	const auto monster_definition = make_monster(monster_code, 1800, 1200, 4);
+	game.register_definition(book_of_moon_definition);
+	game.register_definition(monster_definition);
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto book_of_moon = game.create_instance(book_of_moon_code, domain::Player::FIRST);
+	REQUIRE(book_of_moon.valid());
+	game.place(
+		*game.find_instance_mutable(book_of_moon),
+		domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+
+	const auto monster = game.create_instance(monster_code, domain::Player::SECOND);
+	REQUIRE(monster.valid());
+	game.place(
+		*game.find_instance_mutable(monster),
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+	);
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_card(book_of_moon));
+	settle(duel);
+
+	const auto placement = game.find_instance(monster)->placement();
+	const auto* monster_placement = std::get_if<domain::MonsterPlacement>(&placement);
+	REQUIRE(monster_placement != nullptr);
+	CHECK(monster_placement->position == domain::Position::FACE_DOWN_DEFENSE);
+	CHECK(game.zone_of(book_of_moon) == domain::Zone::GRAVEYARD);
+}
+
 TEST_CASE("flow::Duel resolves Dark Hole")
 {
 	constexpr domain::CardCode dark_hole_code{53129443};
