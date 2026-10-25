@@ -5400,6 +5400,74 @@ TEST_CASE("flow::Duel resolves Book of Moon")
 	CHECK(game.zone_of(book_of_moon) == domain::Zone::GRAVEYARD);
 }
 
+TEST_CASE("flow::Duel resolves Raigeki Break")
+{
+	constexpr domain::CardCode raigeki_break_code{4178474};
+	constexpr domain::CardCode cost_code{97001010};
+	constexpr domain::CardCode target_code{97001011};
+
+	state::CardInstanceId target_id{};
+	driver::LocalTestSelector selector
+	{
+			[&]([[maybe_unused]] const domain::Player player, const execution::Group& candidates, [[maybe_unused]] const std::size_t min, [[maybe_unused]] const std::size_t max) -> execution::Group
+			{
+				if (std::ranges::contains(candidates, target_id))
+				{
+					return execution::Group{std::vector<state::CardInstanceId>{target_id}};
+				}
+				if (candidates.size() == 1)
+				{
+					return execution::Group{candidates.begin(), candidates.end()};
+				}
+				return {};
+			},
+			nullptr,
+			nullptr,
+			nullptr,
+	};
+	flow::Duel duel{selector};
+	auto& game = duel.game();
+
+	const auto raigeki_break_definition = make_trap(raigeki_break_code, {domain::CardSubtype::NORMAL});
+	const auto cost_definition = make_monster(cost_code, 1000, 1000, 4);
+	const auto target_definition = make_monster(target_code, 1000, 1000, 4);
+	game.register_definition(raigeki_break_definition);
+	game.register_definition(cost_definition);
+	game.register_definition(target_definition);
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto raigeki_break = game.create_instance(raigeki_break_code, domain::Player::FIRST);
+	REQUIRE(raigeki_break.valid());
+	game.place(*game.find_instance_mutable(raigeki_break), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto cost = game.create_instance(cost_code, domain::Player::FIRST);
+	REQUIRE(cost.valid());
+	game.place(*game.find_instance_mutable(cost), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto target = game.create_instance(target_code, domain::Player::SECOND);
+	REQUIRE(target.valid());
+	target_id = target;
+	game.place(*game.find_instance_mutable(target), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	CHECK(duel.set_spell_trap(raigeki_break, domain::FieldColumn::C1));
+
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.activate_card(raigeki_break));
+	settle(duel);
+
+	CHECK(game.zone_of(cost) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(target) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(raigeki_break) == domain::Zone::GRAVEYARD);
+}
+
 TEST_CASE("flow::Duel resolves Dark Hole")
 {
 	constexpr domain::CardCode dark_hole_code{53129443};
