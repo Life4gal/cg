@@ -1,0 +1,218 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["EFFECT", "TUNER"],
+		"monster": {
+			"attribute": "LIGHT",
+			"race": "SPELLCASTER",
+			"level": 1,
+			"attack": 800,
+			"defense": 1300
+		}
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {
+				"mode": "trigger",
+				"source": {"event": "NORMAL_SUMMON_SUCCESS"},
+				"timing": "WHEN",
+				"optional": true
+			},
+			"condition": {
+				"call": "exists_matching",
+				"args": {
+					"players": ["SELF"],
+					"zones": ["HAND"],
+					"min": 1,
+					"filter": {
+						"and": [
+							{
+								"call": "is_card_type",
+								"args": {"card": {"call": "$"}, "card_type": "MONSTER"}
+							},
+							{
+								"call": "is_attribute",
+								"args": {"card": {"call": "$"}, "attribute": "LIGHT"}
+							},
+							{
+								"call": "is_level",
+								"args": {"card": {"call": "$"}, "level": 1}
+							},
+							{
+								"call": "is_card_subtype",
+								"args": {"card": {"call": "$"}, "subtype": "TUNER"}
+							}
+						]
+					}
+				}
+			},
+			"effect": [
+				{
+					"call": "pick_resolution",
+					"args": {
+						"players": ["SELF"],
+						"zones": ["HAND"],
+						"min": 1,
+						"max": 1,
+						"filter": {
+							"and": [
+								{
+									"call": "is_card_type",
+									"args": {"card": {"call": "$"}, "card_type": "MONSTER"}
+								},
+								{
+									"call": "is_attribute",
+									"args": {"card": {"call": "$"}, "attribute": "LIGHT"}
+								},
+								{
+									"call": "is_level",
+									"args": {"card": {"call": "$"}, "level": 1}
+								},
+								{
+									"call": "is_card_subtype",
+									"args": {"card": {"call": "$"}, "subtype": "TUNER"}
+								}
+							]
+						}
+					},
+					"bind": "selected"
+				},
+				{
+					"call": "special_summon",
+					"args": {
+						"card": {
+							"call": "sole_card",
+							"args": {"group": {"var": "selected"}}
+						},
+						"method": "SPECIAL",
+						"position": "FACE_UP_ATTACK"
+					}
+				}
+			]
+		},
+		{
+			"type": "activated",
+			"activation": {"mode": "ignition"},
+			"zones": ["MONSTER", "EXTRA_MONSTER"],
+			"usage": {"kind": "TURN_PER_NAME", "count": 1},
+			"condition": {
+				"and": [
+					{
+						"call": "exists_matching",
+						"args": {
+							"players": ["SELF"],
+							"zones": ["MONSTER", "EXTRA_MONSTER"],
+							"min": 1,
+							"filter": {
+								"and": [
+									{
+										"call": "is_card_type",
+										"args": {"card": {"call": "$"}, "card_type": "MONSTER"}
+									},
+									{
+										"call": "is_card_subtype",
+										"args": {"card": {"call": "$"}, "subtype": "EFFECT"}
+									},
+									{
+										"call": "is_face_up",
+										"args": {"card": {"call": "$"}}
+									}
+								]
+							}
+						}
+					},
+					{
+						"call": "exists_matching",
+						"args": {
+							"players": ["SELF"],
+							"zones": ["HAND"],
+							"min": 1,
+							"filter": {
+								"call": "is_archetype",
+								"args": {
+									"card": {"call": "$"},
+									"archetype": "BLUE-EYES"
+								}
+							}
+						}
+					}
+				]
+			},
+			"target": [
+				{
+					"call": "pick_target",
+					"args": {
+						"players": ["SELF"],
+						"zones": ["MONSTER", "EXTRA_MONSTER"],
+						"min": 1,
+						"max": 1,
+						"filter": {
+							"and": [
+								{
+									"call": "is_card_type",
+									"args": {"card": {"call": "$"}, "card_type": "MONSTER"}
+								},
+								{
+									"call": "is_card_subtype",
+									"args": {"card": {"call": "$"}, "subtype": "EFFECT"}
+								},
+								{
+									"call": "is_face_up",
+									"args": {"card": {"call": "$"}}
+								}
+							]
+						}
+					},
+					"bind": "target"
+				}
+			],
+			"effect": [
+				{
+					"call": "send_to_graveyard",
+					"args": {"cards": {"var": "target"}}
+				},
+				{
+					"guard": {
+						"call": "is_in_zone",
+						"args": {
+							"card": {
+								"call": "sole_card",
+								"args": {"group": {"var": "target"}}
+							},
+							"zones": ["GRAVEYARD"]
+						}
+					}
+				},
+				{
+					"call": "pick_resolution",
+					"args": {
+						"players": ["SELF"],
+						"zones": ["HAND"],
+						"min": 1,
+						"max": 1,
+						"filter": {
+							"call": "is_archetype",
+							"args": {
+								"card": {"call": "$"},
+								"archetype": "BLUE-EYES"
+							}
+						}
+					},
+					"bind": "selected"
+				},
+				{
+					"call": "special_summon",
+					"args": {
+						"card": {
+							"call": "sole_card",
+							"args": {"group": {"var": "selected"}}
+						},
+						"method": "SPECIAL",
+						"position": "FACE_UP_ATTACK"
+					}
+				}
+			]
+		}
+	]
+}
