@@ -778,6 +778,13 @@ namespace cg::execution
 			shuffle = static_cast<bool>(*value);
 		}
 
+		auto top = false;
+		if (const auto* value = as_argument<dsl::ValueClass::BOOL>(*args, 2);
+			value != nullptr)
+		{
+			top = static_cast<bool>(*value);
+		}
+
 		std::vector<domain::Player> owners{};
 		for (const auto card: *cards)
 		{
@@ -788,7 +795,14 @@ namespace cg::execution
 			}
 
 			const auto owner = instance->owner();
-			game.move_to_deck(*instance, {domain::Reason::EFFECT});
+			if (top)
+			{
+				game.move_to_deck_top(*instance, {domain::Reason::EFFECT});
+			}
+			else
+			{
+				game.move_to_deck(*instance, {domain::Reason::EFFECT});
+			}
 
 			pending_events_.emplace_back(domain::EventCode::RETURNED_TO_DECK, card);
 
@@ -1177,6 +1191,11 @@ namespace cg::execution
 		if (instance == nullptr)
 		{
 			return std::nullopt;
+		}
+
+		if (game.zone_of(*card) != domain::Zone::GRAVEYARD)
+		{
+			return Boolean{false};
 		}
 
 		return Boolean{instance->move_provenance().turn_id == game.turn_id()};

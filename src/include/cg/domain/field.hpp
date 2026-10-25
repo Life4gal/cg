@@ -111,6 +111,16 @@ namespace cg::domain
 	};
 
 	// ==============================================================
+	// "袋"区位置(DECK/EXTRA_DECK/HAND/GRAVEYARD/BANISHED)
+	// ==============================================================
+
+	enum class BagPlacement : std::uint8_t
+	{
+		TOP,
+		BOTTOM,
+	};
+
+	// ==============================================================
 	// 卡牌所在位置
 	// ==============================================================
 
@@ -249,6 +259,24 @@ namespace cg::domain
 		using variant::variant;
 	};
 
+	class AnyBagLocation : public std::variant<
+				// 卡组
+				DeckLocation,
+				// 额外卡组
+				ExtraDeckLocation,
+				// 手牌
+				HandLocation,
+				// 墓地
+				GraveyardLocation,
+				// 除外区
+				BanishedLocation
+				//
+			>
+	{
+	public:
+		using variant::variant;
+	};
+
 	class AnyFieldLocation : public std::variant<
 				// 怪兽区
 				MonsterLocation,
@@ -287,6 +315,13 @@ namespace cg::domain
 		return static_cast<Zone>(index);
 	}
 
+	[[nodiscard]] constexpr auto zone_of(const AnyBagLocation& location) noexcept -> Zone
+	{
+		constexpr auto base = utility::variant_index_v<DeckLocation, Location>;
+		const auto index = location.index();
+		return static_cast<Zone>(base + index);
+	}
+
 	[[nodiscard]] constexpr auto zone_of(const AnyFieldLocation& location) noexcept -> Zone
 	{
 		constexpr auto base = utility::variant_index_v<MonsterLocation, Location>;
@@ -306,7 +341,7 @@ namespace cg::domain
 	// ===========================================================================
 
 	template<typename L>
-		requires(std::is_same_v<L, Location> || std::is_same_v<L, AnyFieldLocation> || std::is_same_v<L, AnyMonsterLocation>)
+		requires(std::is_same_v<L, Location> || std::is_same_v<L, AnyBagLocation> || std::is_same_v<L, AnyFieldLocation> || std::is_same_v<L, AnyMonsterLocation>)
 	[[nodiscard]] constexpr auto index_of(const L& location) noexcept -> std::optional<DeckLocation::size_type>
 	{
 		return std::visit(
@@ -331,7 +366,7 @@ namespace cg::domain
 	// ===========================================================================
 
 	template<typename L>
-		requires(std::is_same_v<L, Location> || std::is_same_v<L, AnyFieldLocation> || std::is_same_v<L, AnyMonsterLocation>)
+		requires(std::is_same_v<L, Location> || std::is_same_v<L, AnyBagLocation> || std::is_same_v<L, AnyFieldLocation> || std::is_same_v<L, AnyMonsterLocation>)
 	[[nodiscard]] constexpr auto column_of(const L& location) noexcept -> std::conditional_t<std::is_same_v<L, Location>, std::optional<FieldColumn>, FieldColumn>
 	{
 		return std::visit(
@@ -356,7 +391,7 @@ namespace cg::domain
 	// ===========================================================================
 
 	template<typename L>
-		requires(std::is_same_v<L, AnyFieldLocation> || std::is_same_v<L, AnyMonsterLocation>)
+		requires(std::is_same_v<L, AnyBagLocation> || std::is_same_v<L, AnyFieldLocation> || std::is_same_v<L, AnyMonsterLocation>)
 	[[nodiscard]] constexpr auto location_of(const L& location) noexcept -> Location
 	{
 		return std::visit(
@@ -512,6 +547,24 @@ namespace cg::domain
 		using variant::variant;
 	};
 
+	class AnyBagPlacement : public std::variant<
+				// 卡组
+				DeckPlacement,
+				// 额外卡组
+				ExtraDeckPlacement,
+				// 手牌
+				HandPlacement,
+				// 墓地
+				GraveyardPlacement,
+				// 除外区
+				BanishedPlacement
+				//
+			>
+	{
+	public:
+		using variant::variant;
+	};
+
 	class AnyFieldPlacement : public std::variant<
 				// 怪兽区域
 				MonsterPlacement,
@@ -550,6 +603,13 @@ namespace cg::domain
 		return static_cast<Zone>(index);
 	}
 
+	[[nodiscard]] constexpr auto zone_of(const AnyBagPlacement& placement) noexcept -> Zone
+	{
+		constexpr auto base = utility::variant_index_v<DeckPlacement, Placement>;
+		const auto index = placement.index();
+		return static_cast<Zone>(base + index);
+	}
+
 	[[nodiscard]] constexpr auto zone_of(const AnyFieldPlacement& placement) noexcept -> Zone
 	{
 		constexpr auto base = utility::variant_index_v<MonsterPlacement, Placement>;
@@ -569,7 +629,7 @@ namespace cg::domain
 	// ===========================================================================
 
 	template<typename P>
-		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyBagPlacement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
 	[[nodiscard]] constexpr auto index_of(const P& placement) noexcept -> std::optional<DeckPlacement::size_type>
 	{
 		return std::visit(
@@ -594,7 +654,7 @@ namespace cg::domain
 	// ===========================================================================
 
 	template<typename P>
-		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyBagPlacement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
 	[[nodiscard]] constexpr auto column_of(const P& placement) noexcept -> std::optional<FieldColumn>
 	{
 		return std::visit(
@@ -619,7 +679,7 @@ namespace cg::domain
 	// ===========================================================================
 
 	template<typename P>
-		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyBagPlacement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
 	[[nodiscard]] constexpr auto position_of(const P& placement) noexcept -> std::optional<Position>
 	{
 		return std::visit(
@@ -644,7 +704,7 @@ namespace cg::domain
 	// ===========================================================================
 
 	template<typename P>
-		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyBagPlacement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
 	[[nodiscard]] constexpr auto location_of(const P& placement) noexcept -> Location
 	{
 		return std::visit(
@@ -657,22 +717,84 @@ namespace cg::domain
 				// DeckPlacement/ExtraDeckPlacement/HandPlacement/GraveyardPlacement/BanishedPlacement
 				if constexpr (requires { p.index; })
 				{
-					return {location_type{.index = p.index}};
+					return location_type{.index = p.index};
 				}
 				// MonsterPlacement/ExtraMonsterPlacement/SpellTrapPlacement
 				else if constexpr (requires { p.column; })
 				{
-					return {location_type{.column = p.column}};
+					return location_type{.column = p.column};
 				}
 				else if constexpr (std::is_same_v<T, FieldSpellPlacement>)
 				{
-					return {location_type{}};
+					return location_type{};
 				}
 				else
 				{
 					static_assert(index == utility::variant_index_v<NotExistPlacement, Placement>);
-					return {NotExistLocation{}};
+					return NotExistLocation{};
 				}
+			},
+			placement
+		);
+	}
+
+	[[nodiscard]] constexpr auto direct_location_of(const Placement& placement) noexcept -> Location
+	{
+		return location_of(placement);
+	}
+
+	[[nodiscard]] constexpr auto direct_location_of(const AnyBagPlacement& placement) noexcept -> AnyBagLocation
+	{
+		return std::visit(
+			[]<typename T>(const T& p) noexcept -> AnyBagLocation
+			{
+				constexpr auto index = utility::variant_index_v<T, AnyBagPlacement>;
+				// 假定AnyBagPlacement和AnyBagLocation对应结构体的位置一样!
+				using location_type = utility::variant_alternative_t<index, AnyBagLocation>;
+
+				return location_type{.index = p.index};
+			},
+			placement
+		);
+	}
+
+	[[nodiscard]] constexpr auto direct_location_of(const AnyFieldPlacement& placement) noexcept -> AnyFieldLocation
+	{
+		return std::visit(
+			[]<typename T>(const T& p) noexcept -> AnyFieldLocation
+			{
+				constexpr auto index = utility::variant_index_v<T, AnyFieldPlacement>;
+				// 假定AnyFieldPlacement和AnyFieldLocation对应结构体的位置一样!
+				using location_type = utility::variant_alternative_t<index, AnyFieldLocation>;
+
+				// MonsterPlacement/ExtraMonsterPlacement/SpellTrapPlacement
+				if constexpr (requires { p.column; })
+				{
+					return location_type{.column = p.column};
+				}
+				else if constexpr (std::is_same_v<T, FieldSpellPlacement>)
+				{
+					return location_type{};
+				}
+				else
+				{
+					std::unreachable();
+				}
+			},
+			placement
+		);
+	}
+
+	[[nodiscard]] constexpr auto direct_location_of(const AnyMonsterPlacement& placement) noexcept -> AnyMonsterLocation
+	{
+		return std::visit(
+			[]<typename T>(const T& p) noexcept -> AnyMonsterLocation
+			{
+				constexpr auto index = utility::variant_index_v<T, AnyMonsterPlacement>;
+				// 假定AnyMonsterPlacement和AnyMonsterLocation对应结构体的位置一样!
+				using location_type = utility::variant_alternative_t<index, AnyMonsterLocation>;
+
+				return location_type{.column = p.column};
 			},
 			placement
 		);
@@ -683,7 +805,7 @@ namespace cg::domain
 	// ===========================================================================
 
 	template<typename P>
-		requires(std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+		requires(std::is_same_v<P, AnyBagPlacement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
 	[[nodiscard]] constexpr auto placement_of(const P& placement) noexcept -> Placement
 	{
 		return std::visit(
@@ -700,9 +822,9 @@ namespace cg::domain
 	// ===========================================================================
 
 	template<typename P>
-		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
+		requires(std::is_same_v<P, Placement> || std::is_same_v<P, AnyBagPlacement> || std::is_same_v<P, AnyFieldPlacement> || std::is_same_v<P, AnyMonsterPlacement>)
 	[[nodiscard]] constexpr auto field_info_of(const P& placement) noexcept -> std::conditional_t<
-		std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement>,
+		std::is_same_v<P, Placement> || std::is_same_v<P, AnyBagPlacement> || std::is_same_v<P, AnyFieldPlacement>,
 		std::optional<FieldInfo>,
 		FieldInfo
 	>
@@ -710,7 +832,7 @@ namespace cg::domain
 		return std::visit(
 			[]<typename T>(const T& p) noexcept ->
 		std::conditional_t<
-			std::is_same_v<P, Placement> || std::is_same_v<P, AnyFieldPlacement>,
+			std::is_same_v<P, Placement> || std::is_same_v<P, AnyBagPlacement> || std::is_same_v<P, AnyFieldPlacement>,
 			std::optional<FieldInfo>,
 			FieldInfo
 		>

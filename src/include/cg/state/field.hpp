@@ -179,23 +179,45 @@ namespace cg::state
 
 		// 检查某个位置是否为空(不存在卡牌实例) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律返回false
 		[[nodiscard]] auto is_location_empty(domain::Player player, domain::Location location) const noexcept -> bool;
+		// 检查某个位置是否为空(不存在卡牌实例)
+		// [[nodiscard]] auto is_location_empty(domain::Player player, domain::AnyFieldLocation location) const noexcept -> bool;
 
-		// 检查双方玩家某个位置是否为空(不存在卡牌实例) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义
+		// 检查双方玩家某个位置是否为空(不存在卡牌实例) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律返回false
 		[[nodiscard]] auto is_location_empty(domain::Location location) const noexcept -> bool;
+		// 检查双方玩家某个位置是否为空(不存在卡牌实例)
+		// [[nodiscard]] auto is_location_empty(domain::AnyFieldLocation location) const noexcept -> bool;
 
-		// 获取指定位置的卡牌实例,如果目标位置不存在卡牌实例则返回无效ID
+		// 获取指定位置的卡牌实例,如果目标位置不存在卡牌实例则返回无效ID -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律返回无效ID
 		[[nodiscard]] auto select_location_card(domain::Player player, domain::Location location) const noexcept -> CardInstanceId;
+		// 获取指定位置的卡牌实例,如果目标位置不存在卡牌实例则返回无效ID
+		[[nodiscard]] auto select_location_card(domain::Player player, domain::AnyFieldLocation location) const noexcept -> CardInstanceId;
 
-		// 将卡放入指定位置(不处理原位置),返回是否覆盖(即原位置是否有卡) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律追加(无视位置,返回false)
+		// 将卡放入指定位置(不处理原位置),返回是否覆盖(即原位置是否有卡) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律追加(无视位置,放在对应区域底部,返回false)
 		auto place(domain::Player player, CardInstanceId card, domain::Location location) noexcept -> bool;
+		// 将卡放入指定位置(不处理原位置)
+		auto place(domain::Player player, CardInstanceId card, domain::AnyBagLocation location, domain::BagPlacement bag) noexcept -> void;
+		// 将卡放入指定位置(不处理原位置),返回是否覆盖(即原位置是否有卡)
+		auto place(domain::Player player, CardInstanceId card, domain::AnyFieldLocation location) noexcept -> bool;
 
 		// 将卡从指定位置移除,返回是否移除成功 -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律擦除指定卡(无视位置,返回是否擦除成功(即该卡在指定区域存在))
 		auto remove(domain::Player player, CardInstanceId card, domain::Location location) noexcept -> bool;
+		// 将卡从指定位置移除,返回是否擦除成功(即该卡在指定区域存在)
+		auto remove(domain::Player player, CardInstanceId card, domain::AnyBagLocation location) noexcept -> bool;
+		// 将卡从指定位置移除,返回是否移除成功
+		auto remove(domain::Player player, domain::AnyFieldLocation location) noexcept -> bool;
 
-		// 将卡放入指定位置(不处理原位置),返回是否覆盖(即原位置是否有卡) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律追加(无视位置,返回false)
+		// 将卡放入指定位置(不处理原位置),返回是否覆盖(即原位置是否有卡) -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律追加(无视位置,放在对应区域底部,返回false)
 		auto place(domain::Player player, CardInstanceId card, domain::Placement placement) noexcept -> bool;
+		// 将卡放入指定位置(不处理原位置)
+		auto place(domain::Player player, CardInstanceId card, domain::AnyBagPlacement placement, domain::BagPlacement bag) noexcept -> void;
+		// 将卡放入指定位置(不处理原位置),返回是否覆盖(即原位置是否有卡)
+		auto place(domain::Player player, CardInstanceId card, domain::AnyFieldPlacement placement) noexcept -> bool;
 
 		// 将卡从指定位置移除,返回是否移除成功 -- 仅对怪兽区/额外怪兽区/魔陷区/场地魔法区有意义,其他区域一律擦除指定卡(无视位置,返回是否擦除成功(即该卡在指定区域存在))
 		auto remove(domain::Player player, CardInstanceId card, domain::Placement placement) noexcept -> bool;
+		// 将卡从指定位置移除,返回是否擦除成功(即该卡在指定区域存在)
+		auto remove(domain::Player player, CardInstanceId card, domain::AnyBagPlacement placement) noexcept -> bool;
+		// 将卡从指定位置移除,返回是否移除成功
+		auto remove(domain::Player player, domain::AnyFieldPlacement placement) noexcept -> bool;
 	};
 }

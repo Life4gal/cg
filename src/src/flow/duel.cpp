@@ -2395,7 +2395,8 @@ namespace cg::flow
 			return false;
 		}
 
-		if (const auto it = set_turns_.find(card); it != set_turns_.end() && it->second >= turn_.turn_id())
+		if (const auto it = set_turns_.find(card);
+			it != set_turns_.end() && std::to_underlying(it->second) >= std::to_underlying(turn_.turn_id()))
 		{
 			return false;
 		}
@@ -2937,7 +2938,7 @@ namespace cg::flow
 		{
 			// 盖放当回合不可发动
 			if (const auto it = set_turns_.find(card);
-				it == set_turns_.end() || it->second >= turn_.turn_id())
+				it == set_turns_.end() || std::to_underlying(it->second) >= std::to_underlying(turn_.turn_id()))
 			{
 				return false;
 			}

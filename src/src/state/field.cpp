@@ -900,12 +900,42 @@ namespace cg::state
 		return !card.valid();
 	}
 
+	// auto Field::is_location_empty(const domain::Player player, const domain::AnyFieldLocation location) const noexcept -> bool
+	// {
+	// 	const auto card = select_location_card(player, location);
+	// 	return !card.valid();
+	// }
+
 	auto Field::is_location_empty(const domain::Location location) const noexcept -> bool
 	{
 		return is_location_empty(domain::Player::FIRST, location) && is_location_empty(domain::Player::SECOND, location);
 	}
 
+	// auto Field::is_location_empty(const domain::AnyFieldLocation location) const noexcept -> bool
+	// {
+	// 	return is_location_empty(domain::Player::FIRST, location) && is_location_empty(domain::Player::SECOND, location);
+	// }
+
 	auto Field::select_location_card(const domain::Player player, const domain::Location location) const noexcept -> CardInstanceId
+	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[&]<typename L>(const L& l) noexcept -> CardInstanceId //
+						requires(utility::variant_index_v<L, domain::AnyFieldLocation> != utility::invalid_variant_index)
+					{
+						return this->select_location_card(player, domain::AnyFieldLocation{l});
+					},
+					[]([[maybe_unused]] const auto& unhandled) noexcept -> CardInstanceId
+					{
+						return CardInstanceId{CardInstanceId::invalid_id};
+					},
+			},
+			location
+		);
+	}
+
+	auto Field::select_location_card(const domain::Player player, const domain::AnyFieldLocation location) const noexcept -> CardInstanceId
 	{
 		const auto& player_zone = player_zone_of(player);
 
@@ -950,36 +980,83 @@ namespace cg::state
 
 	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::Location location) noexcept -> bool
 	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[&]<typename L>(const L& l) noexcept -> bool //
+						requires (utility::variant_index_v<L, domain::AnyBagLocation> != utility::invalid_variant_index)
+					{
+						this->place(player, card, domain::AnyBagLocation{l}, domain::BagPlacement::BOTTOM);
+						return true;
+					},
+					[&]<typename L>(const L& l) noexcept -> bool //
+						requires(utility::variant_index_v<L, domain::AnyFieldLocation> != utility::invalid_variant_index)
+					{
+						return this->place(player, card, domain::AnyFieldLocation{l});
+					},
+					[](const domain::NotExistLocation&) noexcept -> bool
+					{
+						return false;
+					},
+			},
+			location
+		);
+	}
+
+	namespace
+	{
+		auto place_bag_zone(PlayerZone::bag_zones_type& zones, const CardInstanceId card, const domain::BagPlacement bag) noexcept -> void
+		{
+			if (bag == domain::BagPlacement::BOTTOM)
+			{
+				zones.push_back(card);
+			}
+			else
+			{
+				zones.insert(zones.begin(), card);
+			}
+		}
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::AnyBagLocation location, const domain::BagPlacement bag) noexcept -> void
+	{
 		auto& player_zone = player_zone_of(player);
 
 		return std::visit(
 			utility::Overloaded
 			{
-					[&]([[maybe_unused]] const domain::DeckLocation& l) noexcept -> bool
+					[&]([[maybe_unused]] const domain::DeckLocation& l) noexcept -> void
 					{
-						player_zone.deck_zones.push_back(card);
-						return false;
+						place_bag_zone(player_zone.deck_zones, card, bag);
 					},
-					[&]([[maybe_unused]] const domain::ExtraDeckLocation& l) noexcept -> bool
+					[&]([[maybe_unused]] const domain::ExtraDeckLocation& l) noexcept -> void
 					{
-						player_zone.extra_deck_zones.push_back(card);
-						return false;
+						place_bag_zone(player_zone.extra_deck_zones, card, bag);
 					},
-					[&]([[maybe_unused]] const domain::HandLocation& l) noexcept -> bool
+					[&]([[maybe_unused]] const domain::HandLocation& l) noexcept -> void
 					{
-						player_zone.hand_zones.push_back(card);
-						return false;
+						place_bag_zone(player_zone.hand_zones, card, bag);
 					},
-					[&]([[maybe_unused]] const domain::GraveyardLocation& l) noexcept -> bool
+					[&]([[maybe_unused]] const domain::GraveyardLocation& l) noexcept -> void
 					{
-						player_zone.graveyard_zones.push_back(card);
-						return false;
+						place_bag_zone(player_zone.graveyard_zones, card, bag);
 					},
-					[&]([[maybe_unused]] const domain::BanishedLocation& l) noexcept -> bool
+					[&]([[maybe_unused]] const domain::BanishedLocation& l) noexcept -> void
 					{
-						player_zone.banished_zones.push_back(card);
-						return false;
+						place_bag_zone(player_zone.banished_zones, card, bag);
 					},
+			},
+			location
+		);
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::AnyFieldLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+
+		return std::visit(
+			utility::Overloaded
+			{
 					[&](const domain::MonsterLocation& l) noexcept -> bool
 					{
 						LIBASSERT_DEBUG_ASSERT(std::to_underlying(l.column) < player_zone.monster_zones.size());
@@ -1005,10 +1082,6 @@ namespace cg::state
 					{
 						const auto prev = std::exchange(player_zone.field_spell_zone, card);
 						return prev.valid();
-					},
-					[](const domain::NotExistLocation&) noexcept -> bool
-					{
-						return false;
 					},
 			},
 			location
@@ -1042,6 +1115,30 @@ namespace cg::state
 
 	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::Location location) noexcept -> bool
 	{
+		return std::visit(
+			utility::Overloaded
+			{
+					[&]<typename L>(const L& l) noexcept -> bool //
+						requires (utility::variant_index_v<L, domain::AnyBagLocation> != utility::invalid_variant_index)
+					{
+						return this->remove(player, card, domain::AnyBagLocation{l});
+					},
+					[&]<typename L>(const L& l) noexcept -> bool //
+						requires(utility::variant_index_v<L, domain::AnyFieldLocation> != utility::invalid_variant_index)
+					{
+						return this->remove(player, domain::AnyFieldLocation{l});
+					},
+					[](const domain::NotExistLocation&) noexcept -> bool
+					{
+						return false;
+					},
+			},
+			location
+		);
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::AnyBagLocation location) noexcept -> bool
+	{
 		auto& player_zone = player_zone_of(player);
 
 		return std::visit(
@@ -1067,6 +1164,18 @@ namespace cg::state
 					{
 						return erase_bag_zones(player_zone.banished_zones, card);
 					},
+			},
+			location
+		);
+	}
+
+	auto Field::remove(const domain::Player player, const domain::AnyFieldLocation location) noexcept -> bool
+	{
+		auto& player_zone = player_zone_of(player);
+
+		return std::visit(
+			utility::Overloaded
+			{
 					[&](const domain::MonsterLocation& l) noexcept -> bool
 					{
 						return erase_field_zones(player_zone.monster_zones, l.column);
@@ -1084,10 +1193,6 @@ namespace cg::state
 						const auto prev = std::exchange(player_zone.field_spell_zone, CardInstanceId{CardInstanceId::invalid_id});
 						return prev.valid();
 					},
-					[](const domain::NotExistLocation&) noexcept -> bool
-					{
-						return false;
-					},
 			},
 			location
 		);
@@ -1095,13 +1200,37 @@ namespace cg::state
 
 	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::Placement placement) noexcept -> bool
 	{
-		const auto location = domain::location_of(placement);
+		const auto location = domain::direct_location_of(placement);
+		return place(player, card, location);
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::AnyBagPlacement placement, const domain::BagPlacement bag) noexcept -> void
+	{
+		const auto location = domain::direct_location_of(placement);
+		place(player, card, location, bag);
+	}
+
+	auto Field::place(const domain::Player player, const CardInstanceId card, const domain::AnyFieldPlacement placement) noexcept -> bool
+	{
+		const auto location = domain::direct_location_of(placement);
 		return place(player, card, location);
 	}
 
 	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::Placement placement) noexcept -> bool
 	{
-		const auto location = domain::location_of(placement);
+		const auto location = domain::direct_location_of(placement);
 		return remove(player, card, location);
+	}
+
+	auto Field::remove(const domain::Player player, const CardInstanceId card, const domain::AnyBagPlacement placement) noexcept -> bool
+	{
+		const auto location = domain::direct_location_of(placement);
+		return remove(player, card, location);
+	}
+
+	auto Field::remove(const domain::Player player, const domain::AnyFieldPlacement placement) noexcept -> bool
+	{
+		const auto location = domain::direct_location_of(placement);
+		return remove(player, location);
 	}
 }

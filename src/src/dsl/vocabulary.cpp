@@ -469,9 +469,10 @@ namespace cg::dsl
 			{
 					{.name = "cards", .kind = ParamDef::Value{.type = type_id("group")}, .required = true},
 					{.name = "shuffle", .kind = ParamDef::Value{.type = type_id("bool")}, .required = false},
+					{.name = "top", .kind = ParamDef::Value{.type = type_id("bool")}, .required = false},
 			},
 			type_id("void"),
-			"返回卡组(默认洗牌)"
+			"返回卡组(默认洗牌;top = 放到卡组顶)"
 		);
 		do_register(
 			"draw",

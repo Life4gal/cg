@@ -6584,3 +6584,75 @@ TEST_CASE("flow::Duel resolves The White Stone of Ancients graveyard effect")
 	CHECK(game.zone_of(white_stone) == domain::Zone::BANISHED);
 	CHECK(game.zone_of(blue_eyes) == domain::Zone::HAND);
 }
+
+TEST_CASE("flow::Duel resolves Phoenix Wing Wind Blast")
+{
+	constexpr domain::CardCode phoenix_code{63356631};
+	constexpr domain::CardCode cost_code{97001022};
+	constexpr domain::CardCode target_code{97001023};
+	constexpr domain::CardCode deck_filler_code{97001024};
+
+	driver::LocalTestSelector selector
+	{
+			select_up_to_max,
+			nullptr,
+			nullptr,
+			choose_all_triggers,
+	};
+
+	flow::Duel duel{selector};
+	auto& game = duel.game();
+
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	const auto* phoenix_script = duel.find_script(phoenix_code);
+	REQUIRE(phoenix_script != nullptr);
+	game.register_definition(phoenix_script->identity);
+
+	const auto cost_definition = make_monster(cost_code, 1000, 1000, 4);
+	game.register_definition(cost_definition);
+	const auto target_definition = make_monster(target_code, 1000, 1000, 4);
+	game.register_definition(target_definition);
+	const auto deck_filler_definition = make_monster(deck_filler_code, 1000, 1000, 4);
+	game.register_definition(deck_filler_definition);
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto phoenix = game.create_instance(phoenix_code, domain::Player::FIRST);
+	REQUIRE(phoenix.valid());
+	game.place(*game.find_instance_mutable(phoenix), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto cost = game.create_instance(cost_code, domain::Player::FIRST);
+	REQUIRE(cost.valid());
+	game.place(*game.find_instance_mutable(cost), domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto target = game.create_instance(target_code, domain::Player::SECOND);
+	REQUIRE(target.valid());
+	game.place(*game.find_instance_mutable(target), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto deck_filler = game.create_instance(deck_filler_code, domain::Player::SECOND);
+	REQUIRE(deck_filler.valid());
+	game.place(*game.find_instance_mutable(deck_filler), domain::DeckPlacement{.index = 0});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.set_spell_trap(phoenix, domain::FieldColumn::C1));
+	CHECK(advance_phase(duel)); // END
+	CHECK(duel.end_turn());
+
+	CHECK_FALSE(duel.pass_priority());
+	CHECK(duel.activate_card(phoenix));
+	settle(duel);
+
+	CHECK(game.zone_of(cost) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(target) == domain::Zone::DECK);
+	CHECK(game.zone_of(phoenix) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(deck_filler) == domain::Zone::DECK);
+
+	const auto opponent_deck = game.collect_zone_card(domain::Player::SECOND, domain::Zone::DECK);
+	REQUIRE(opponent_deck.size() == 2);
+	CHECK(opponent_deck.front() == target);
+}
