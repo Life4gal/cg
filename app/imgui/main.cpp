@@ -54,11 +54,37 @@ namespace
 			bool confirmed{};
 		};
 
+		class LocationSelection
+		{
+		public:
+			bool spell_trap{};
+			std::vector<domain::FieldColumn> columns;
+			std::optional<std::size_t> selected;
+			bool confirmed{};
+		};
+
+		class TriggerSelection
+		{
+		public:
+			class Candidate
+			{
+			public:
+				state::CardInstanceId source;
+			};
+
+			std::vector<Candidate> candidates;
+			bool optional{};
+			std::vector<std::size_t> selected;
+			bool confirmed{};
+		};
+
 		class Snapshot
 		{
 		public:
 			std::optional<driver::PlayerView> view;
 			std::optional<CardSelection> cards;
+			std::optional<LocationSelection> locations;
+			std::optional<TriggerSelection> triggers;
 			bool waiting{};
 			bool action_queued{};
 			std::optional<std::string> error;
@@ -73,6 +99,8 @@ namespace
 		std::optional<driver::PlayerView> view_;
 		std::optional<driver::LocalAction> action_;
 		std::optional<CardSelection> cards_;
+		std::optional<LocationSelection> locations_;
+		std::optional<TriggerSelection> triggers_;
 		std::optional<std::string> error_;
 		std::size_t submitted_actions_{};
 		bool waiting_{};
@@ -110,6 +138,8 @@ namespace
 			{
 					.view = view_,
 					.cards = cards_,
+					.locations = locations_,
+					.triggers = triggers_,
 					.waiting = waiting_,
 					.action_queued = action_.has_value(),
 					.error = error_,
@@ -119,7 +149,14 @@ namespace
 		[[nodiscard]] auto submit(driver::LocalAction action) -> bool
 		{
 			std::scoped_lock lock{mutex_};
-			if (!waiting_ || cards_.has_value() || action_.has_value() || shutdown_)
+			if (
+				!waiting_ ||
+				cards_.has_value() ||
+				locations_.has_value() ||
+				triggers_.has_value() ||
+				action_.has_value() ||
+				shutdown_
+			)
 			{
 				return false;
 			}
@@ -168,6 +205,100 @@ namespace
 			}
 
 			cards_->confirmed = true;
+			condition_.notify_all();
+			return true;
+		}
+
+		[[nodiscard]] auto confirm_location(const std::size_t index) noexcept -> bool
+		{
+			std::scoped_lock lock{mutex_};
+			if (!locations_.has_value() || locations_->confirmed || shutdown_ || index >= locations_->columns.size())
+			{
+				return false;
+			}
+
+			locations_->selected = index;
+			locations_->confirmed = true;
+			condition_.notify_all();
+			return true;
+		}
+
+		auto toggle_trigger(const std::size_t index) noexcept -> void
+		{
+			std::scoped_lock lock{mutex_};
+			if (
+				!triggers_.has_value() ||
+				!triggers_->optional ||
+				triggers_->confirmed ||
+				shutdown_ ||
+				index >= triggers_->candidates.size()
+			)
+			{
+				return;
+			}
+
+			auto& selected = triggers_->selected;
+			if (const auto it = std::ranges::find(selected, index); it != selected.end())
+			{
+				selected.erase(it);
+			}
+			else
+			{
+				selected.push_back(index);
+			}
+		}
+
+		auto move_trigger(const std::size_t index, const int delta) noexcept -> void
+		{
+			std::scoped_lock lock{mutex_};
+			if (!triggers_.has_value() || triggers_->confirmed || shutdown_)
+			{
+				return;
+			}
+
+			auto& selected = triggers_->selected;
+			const auto it = std::ranges::find(selected, index);
+			if (it == selected.end())
+			{
+				return;
+			}
+
+			const auto position = static_cast<std::ptrdiff_t>(it - selected.begin());
+			if (delta < 0 && position > 0)
+			{
+				std::swap(selected[static_cast<std::size_t>(position)], selected[static_cast<std::size_t>(position - 1)]);
+			}
+			else if (delta > 0 && position + 1 < static_cast<std::ptrdiff_t>(selected.size()))
+			{
+				std::swap(selected[static_cast<std::size_t>(position)], selected[static_cast<std::size_t>(position + 1)]);
+			}
+		}
+
+		[[nodiscard]] auto confirm_triggers() noexcept -> bool
+		{
+			std::scoped_lock lock{mutex_};
+			if (!triggers_.has_value() || triggers_->confirmed || shutdown_)
+			{
+				return false;
+			}
+
+			if (!triggers_->optional)
+			{
+				if (triggers_->selected.size() != triggers_->candidates.size())
+				{
+					return false;
+				}
+
+				for (std::size_t index = 0; index < triggers_->candidates.size(); ++index)
+				{
+					if (!std::ranges::contains(triggers_->selected, index))
+					{
+						return false;
+					}
+				}
+			}
+
+			triggers_->confirmed = true;
 			condition_.notify_all();
 			return true;
 		}
@@ -277,7 +408,47 @@ namespace
 				return std::nullopt;
 			}
 
-			return candidates.front();
+			std::unique_lock lock{mutex_};
+			if (shutdown_)
+			{
+				return std::nullopt;
+			}
+
+			LocationSelection selection;
+			selection.spell_trap = false;
+			selection.columns.reserve(candidates.size());
+			for (const auto& candidate: candidates)
+			{
+				selection.columns.push_back(candidate.column);
+			}
+
+			locations_ = std::move(selection);
+			waiting_ = true;
+			condition_.notify_all();
+			condition_.wait(
+				lock,
+				[this]() noexcept
+				{
+					return shutdown_ || (locations_.has_value() && locations_->confirmed);
+				}
+			);
+
+			if (shutdown_)
+			{
+				locations_.reset();
+				waiting_ = false;
+				return std::nullopt;
+			}
+
+			auto location = std::move(*locations_);
+			locations_.reset();
+			waiting_ = false;
+			if (!location.selected.has_value() || *location.selected >= candidates.size())
+			{
+				return std::nullopt;
+			}
+
+			return candidates[*location.selected];
 		}
 
 		[[nodiscard]] auto select_spell_trap_location(
@@ -291,19 +462,99 @@ namespace
 				return std::nullopt;
 			}
 
-			return candidates.front();
+			std::unique_lock lock{mutex_};
+			if (shutdown_)
+			{
+				return std::nullopt;
+			}
+
+			LocationSelection selection;
+			selection.spell_trap = true;
+			selection.columns.reserve(candidates.size());
+			for (const auto& candidate: candidates)
+			{
+				selection.columns.push_back(candidate.column);
+			}
+
+			locations_ = std::move(selection);
+			waiting_ = true;
+			condition_.notify_all();
+			condition_.wait(
+				lock,
+				[this]() noexcept
+				{
+					return shutdown_ || (locations_.has_value() && locations_->confirmed);
+				}
+			);
+
+			if (shutdown_)
+			{
+				locations_.reset();
+				waiting_ = false;
+				return std::nullopt;
+			}
+
+			auto location = std::move(*locations_);
+			locations_.reset();
+			waiting_ = false;
+			if (!location.selected.has_value() || *location.selected >= candidates.size())
+			{
+				return std::nullopt;
+			}
+
+			return candidates[*location.selected];
 		}
 
 		[[nodiscard]] auto choose_triggers(const execution::TriggerDecision& decision) noexcept -> std::vector<std::size_t> override
 		{
-			if (decision.optional)
+			if (decision.candidates.empty())
 			{
 				return {};
 			}
 
-			std::vector<std::size_t> selected(decision.candidates.size());
-			std::ranges::iota(selected, std::size_t{0});
-			return selected;
+			std::unique_lock lock{mutex_};
+			if (shutdown_)
+			{
+				return {};
+			}
+
+			TriggerSelection selection;
+			selection.optional = decision.optional;
+			selection.candidates.reserve(decision.candidates.size());
+			for (const auto& candidate: decision.candidates)
+			{
+				selection.candidates.push_back(TriggerSelection::Candidate{.source = candidate.source});
+			}
+			if (!decision.optional)
+			{
+				for (std::size_t index = 0; index < selection.candidates.size(); ++index)
+				{
+					selection.selected.push_back(index);
+				}
+			}
+
+			triggers_ = std::move(selection);
+			waiting_ = true;
+			condition_.notify_all();
+			condition_.wait(
+				lock,
+				[this]() noexcept
+				{
+					return shutdown_ || (triggers_.has_value() && triggers_->confirmed);
+				}
+			);
+
+			if (shutdown_)
+			{
+				triggers_.reset();
+				waiting_ = false;
+				return {};
+			}
+
+			auto trigger_selection = std::move(*triggers_);
+			triggers_.reset();
+			waiting_ = false;
+			return trigger_selection.selected;
 		}
 	};
 
@@ -619,6 +870,115 @@ namespace
 			}
 		}
 
+		auto render_location_selection(const ImGuiController::LocationSelection& selection) -> void
+		{
+			ImGui::SeparatorText(selection.spell_trap ? "Select Spell / Trap Zone" : "Select Monster Zone");
+			ImGui::TextDisabled("Choose one zone.");
+
+			for (const auto [index, column]: selection.columns | std::views::enumerate)
+			{
+				ImGui::PushID(static_cast<int>(index));
+				ImGui::BeginDisabled(selection.confirmed);
+				const auto label = std::format("Zone {}", std::to_underlying(column) + 1);
+				if (ImGui::Button(label.c_str()))
+				{
+					(void)controller_.confirm_location(index);
+				}
+				ImGui::EndDisabled();
+				ImGui::PopID();
+				ImGui::SameLine();
+			}
+			ImGui::NewLine();
+
+			if (selection.confirmed)
+			{
+				ImGui::TextColored(ImVec4{0.5f, 0.8f, 0.5f, 1.0f}, "Location queued; resolving...");
+			}
+		}
+
+		auto render_trigger_selection(const ImGuiController::TriggerSelection& selection) -> void
+		{
+			ImGui::SeparatorText(selection.optional ? "Optional Triggers" : "Mandatory Trigger Order");
+			if (selection.optional)
+			{
+				ImGui::TextDisabled("Select any subset; the list order is the resolution order.");
+			}
+			else
+			{
+				ImGui::TextDisabled("All mandatory triggers must resolve; choose their resolution order.");
+			}
+
+			for (std::size_t order = 0; order < selection.selected.size(); ++order)
+			{
+				const auto index = selection.selected[order];
+				ImGui::PushID(static_cast<int>(index));
+				ImGui::Text(
+					"%zu. %s",
+					order + 1,
+					id_text(selection.candidates[index].source).c_str()
+				);
+				ImGui::SameLine();
+				ImGui::BeginDisabled(selection.confirmed);
+				if (ImGui::SmallButton("Up"))
+				{
+					controller_.move_trigger(index, -1);
+				}
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Down"))
+				{
+					controller_.move_trigger(index, 1);
+				}
+				if (selection.optional)
+				{
+					ImGui::SameLine();
+					if (ImGui::SmallButton("Remove"))
+					{
+						controller_.toggle_trigger(index);
+					}
+				}
+				ImGui::EndDisabled();
+				ImGui::PopID();
+			}
+
+			if (selection.optional)
+			{
+				ImGui::SeparatorText("Available");
+				for (std::size_t index = 0; index < selection.candidates.size(); ++index)
+				{
+					if (std::ranges::contains(selection.selected, index))
+					{
+						continue;
+					}
+
+					ImGui::PushID(static_cast<int>(index));
+					ImGui::BeginDisabled(selection.confirmed);
+					const auto label = std::format("Add {}", id_text(selection.candidates[index].source));
+					if (ImGui::SmallButton(label.c_str()))
+					{
+						controller_.toggle_trigger(index);
+					}
+					ImGui::EndDisabled();
+					ImGui::PopID();
+				}
+			}
+
+			const bool mandatory_complete =
+					selection.optional ||
+					selection.selected.size() == selection.candidates.size();
+			const bool can_confirm = !selection.confirmed && mandatory_complete;
+			ImGui::BeginDisabled(!can_confirm);
+			if (ImGui::Button("Confirm Triggers"))
+			{
+				(void)controller_.confirm_triggers();
+			}
+			ImGui::EndDisabled();
+
+			if (selection.confirmed)
+			{
+				ImGui::TextColored(ImVec4{0.5f, 0.8f, 0.5f, 1.0f}, "Trigger selection queued; resolving...");
+			}
+		}
+
 		auto render_view(const ImGuiController::Snapshot& snapshot) -> void
 		{
 			const auto* view = snapshot.view.has_value() ? &*snapshot.view : nullptr;
@@ -666,6 +1026,16 @@ namespace
 			if (snapshot.cards.has_value())
 			{
 				render_card_selection(*snapshot.cards);
+				return;
+			}
+			if (snapshot.locations.has_value())
+			{
+				render_location_selection(*snapshot.locations);
+				return;
+			}
+			if (snapshot.triggers.has_value())
+			{
+				render_trigger_selection(*snapshot.triggers);
 				return;
 			}
 
