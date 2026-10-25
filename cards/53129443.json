@@ -1,0 +1,27 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["NORMAL"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"effect": [
+				{
+					"call": "destroy",
+					"args": {
+						"cards": {
+							"call": "find_cards",
+							"args": {
+								"players": ["SELF", "OPPONENT"],
+								"zones": ["MONSTER", "EXTRA_MONSTER"]
+							}
+						},
+						"reason": "EFFECT"
+					}
+				}
+			]
+		}
+	]
+}

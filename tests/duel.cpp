@@ -5173,3 +5173,47 @@ TEST_CASE("flow::Duel resolves Reinforcement of the Army")
 	CHECK(game.zone_of(warrior) == domain::Zone::HAND);
 	CHECK(game.zone_of(rota) == domain::Zone::GRAVEYARD);
 }
+
+TEST_CASE("flow::Duel resolves Dark Hole")
+{
+	constexpr domain::CardCode dark_hole_code{53129443};
+	constexpr domain::CardCode own_monster_code{97001002};
+	constexpr domain::CardCode opponent_monster_code{97001003};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	const auto dark_hole_definition = make_spell(dark_hole_code, {domain::CardSubtype::NORMAL});
+	const auto own_monster_definition = make_monster(own_monster_code, 1000, 1000, 4);
+	const auto opponent_monster_definition = make_monster(opponent_monster_code, 1000, 1000, 4);
+	game.register_definition(dark_hole_definition);
+	game.register_definition(own_monster_definition);
+	game.register_definition(opponent_monster_definition);
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto dark_hole = game.create_instance(dark_hole_code, domain::Player::FIRST);
+	REQUIRE(dark_hole.valid());
+	game.place(*game.find_instance_mutable(dark_hole), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto own_monster = game.create_instance(own_monster_code, domain::Player::FIRST);
+	REQUIRE(own_monster.valid());
+	game.place(*game.find_instance_mutable(own_monster), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	const auto opponent_monster = game.create_instance(opponent_monster_code, domain::Player::SECOND);
+	REQUIRE(opponent_monster.valid());
+	game.place(*game.find_instance_mutable(opponent_monster), domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_card(dark_hole));
+	settle(duel);
+
+	CHECK(game.zone_of(own_monster) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(opponent_monster) == domain::Zone::GRAVEYARD);
+	CHECK(game.zone_of(dark_hole) == domain::Zone::GRAVEYARD);
+}
