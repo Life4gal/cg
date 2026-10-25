@@ -5137,3 +5137,39 @@ TEST_CASE("flow::Duel requires an external selector for target choice")
 
 	std::filesystem::remove_all(directory);
 }
+
+TEST_CASE("flow::Duel resolves Reinforcement of the Army")
+{
+	constexpr domain::CardCode rota_code{32807846};
+	constexpr domain::CardCode warrior_code{97001001};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+
+	const auto rota_definition = make_spell(rota_code, {domain::CardSubtype::NORMAL});
+	const auto warrior_definition = make_monster(warrior_code, 1000, 1000, 4, domain::Race::WARRIOR);
+	game.register_definition(rota_definition);
+	game.register_definition(warrior_definition);
+	REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto rota = game.create_instance(rota_code, domain::Player::FIRST);
+	REQUIRE(rota.valid());
+	game.place(*game.find_instance_mutable(rota), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
+
+	const auto warrior = game.create_instance(warrior_code, domain::Player::FIRST);
+	REQUIRE(warrior.valid());
+	game.place(*game.find_instance_mutable(warrior), domain::DeckPlacement{.index = 0});
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_card(rota));
+	settle(duel);
+
+	CHECK(game.zone_of(warrior) == domain::Zone::HAND);
+	CHECK(game.zone_of(rota) == domain::Zone::GRAVEYARD);
+}
