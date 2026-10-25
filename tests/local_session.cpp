@@ -1,8 +1,13 @@
 #include <cg/driver/local_session.hpp>
 
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <vector>
 
+#include <cg/server/deck.hpp>
+
+#include <nlohmann/json.hpp>
 #include <doctest/doctest.h>
 
 namespace
@@ -262,4 +267,44 @@ TEST_CASE("driver::LocalDuelSession reports surrender")
 	CHECK(result.status == driver::LocalDuelSession::Status::MATCH_OVER);
 	REQUIRE(result.winner.has_value());
 	CHECK(*result.winner == domain::Player::SECOND);
+}
+
+TEST_CASE("driver::LocalDuelSession initializes the Blue-Eyes pilot deck")
+{
+	auto first = std::make_unique<driver::ScriptedController>();
+	auto second = std::make_unique<driver::ScriptedController>();
+
+	driver::LocalDuelSession session{std::move(first), std::move(second)};
+
+	REQUIRE(session.load_scripts(CG_CARDS_DIR));
+
+	const auto deck_path = std::filesystem::path{CG_CARDS_DIR}.parent_path() / "decks" / "blue_eyes_pilot.json";
+	std::ifstream stream{deck_path};
+	REQUIRE(stream.good());
+
+	const auto json = nlohmann::json::parse(stream);
+	const auto deck = server::Deck::load(json);
+	REQUIRE(deck.has_value());
+
+	flow::DuelDeck duel_deck{};
+	duel_deck.main_deck = deck->main_deck;
+	duel_deck.extra_deck = deck->extra_deck;
+	duel_deck.side_deck = deck->side_deck;
+
+	flow::DuelConfig config{};
+	config.decks[std::to_underlying(domain::Player::FIRST)] = duel_deck;
+	config.decks[std::to_underlying(domain::Player::SECOND)] = duel_deck;
+	config.seed = 20261025;
+	config.first_player = domain::Player::FIRST;
+	config.opening_hand = 5;
+
+	REQUIRE(session.initialize(config));
+
+	const auto view = session.view(domain::Player::FIRST);
+	CHECK(view.self_side.hand.size() == 5);
+	CHECK(view.self_side.deck_count == 43);
+	CHECK(view.self_side.extra_deck.size() == 3);
+	CHECK(view.opponent_side.hand_count == 5);
+	CHECK(view.opponent_side.deck_count == 43);
+	CHECK(view.opponent_side.extra_deck_count == 3);
 }

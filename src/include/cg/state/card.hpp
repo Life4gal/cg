@@ -175,6 +175,9 @@ namespace cg::state
 		[[nodiscard]] auto origin_has_link_marker(domain::LinkMarker mark) const noexcept -> bool;
 		[[nodiscard]] auto origin_has_link_marker(utility::EnumMask<domain::LinkMarker> marks) const noexcept -> bool;
 
+		// 是否属于指定系列/字段
+		[[nodiscard]] auto origin_has_archetype(dsl::ArchetypeId archetype) const noexcept -> bool;
+
 		// ================================================================
 		// 历史/素材
 		// ================================================================

@@ -1,0 +1,33 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["NORMAL"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"effect": [
+				{
+					"call": "release",
+					"args": {
+						"cards": {
+							"call": "find_cards",
+							"args": {
+								"players": ["SELF"],
+								"zones": ["MONSTER", "EXTRA_MONSTER"],
+								"filter": {
+									"call": "is_code",
+									"args": {
+										"card": {"call": "$"},
+										"code": 97000163
+									}
+								}
+							}
+						}
+					}
+				}
+			]
+		}
+	]
+}

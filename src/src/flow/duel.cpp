@@ -1903,6 +1903,7 @@ namespace cg::flow
 
 			game_.move_to_graveyard(*instance, {domain::Reason::BATTLE, domain::Reason::BATTLE_DESTROY});
 			windows.emplace_back(dsl::TriggerSource{domain::EventCode::BATTLE_DESTROYED}, *card);
+			windows.emplace_back(dsl::TriggerSource{domain::EventCode::SENT_TO_GRAVEYARD}, *card);
 		};
 
 		add_destroyed(attack.destroy_target);

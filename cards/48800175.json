@@ -1,0 +1,70 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["NORMAL"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"cost": [
+				{
+					"call": "pick_cost",
+					"args": {
+						"players": ["SELF"],
+						"zones": ["HAND"],
+						"min": 1,
+						"max": 1,
+						"filter": true,
+						"exclude_source": true
+					},
+					"bind": "cost_cards"
+				},
+				{
+					"call": "discard",
+					"args": {"cards": {"var": "cost_cards"}}
+				}
+			],
+			"effect": [
+				{
+					"call": "pick_resolution",
+					"args": {
+						"players": ["SELF"],
+						"zones": ["DECK"],
+						"min": 0,
+						"max": 2,
+						"filter": {
+							"and": [
+								{
+									"call": "is_card_type",
+									"args": {"card": {"call": "$"}, "card_type": "MONSTER"}
+								},
+								{
+									"call": "is_race",
+									"args": {"card": {"call": "$"}, "race": "DRAGON"}
+								},
+								{
+									"ge": [
+										{"call": "attack", "args": {"card": {"call": "$"}}},
+										3000
+									]
+								},
+								{
+									"le": [
+										{"call": "defense", "args": {"card": {"call": "$"}}},
+										2500
+									]
+								}
+							]
+						}
+					},
+					"bind": "selected"
+				},
+				{
+					"call": "add_to_hand",
+					"args": {"cards": {"var": "selected"}}
+				}
+			]
+		}
+	]
+}

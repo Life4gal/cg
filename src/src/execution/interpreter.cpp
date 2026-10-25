@@ -269,6 +269,14 @@ namespace cg::execution
 		{
 			return discard(*definition, call, context);
 		}
+		if (definition->name == "send_to_graveyard")
+		{
+			return send_to_graveyard(*definition, call, context);
+		}
+		if (definition->name == "release")
+		{
+			return release(*definition, call, context);
+		}
 		if (definition->name == "is_code")
 		{
 			return is_code(*definition, call, context);
@@ -288,6 +296,10 @@ namespace cg::execution
 		if (definition->name == "is_race")
 		{
 			return is_race(*definition, call, context);
+		}
+		if (definition->name == "is_archetype")
+		{
+			return is_archetype(*definition, call, context);
 		}
 		if (definition->name == "is_level")
 		{
@@ -364,6 +376,10 @@ namespace cg::execution
 		if (definition->name == "recover_life")
 		{
 			return recover_life(*definition, call, context);
+		}
+		if (definition->name == "pay_life")
+		{
+			return pay_life(*definition, call, context);
 		}
 		if (definition->name == "pay_half_life")
 		{
@@ -612,6 +628,15 @@ namespace cg::execution
 			candidates = *std::move(filtered);
 		}
 
+		if (definition.name == "pick_cost")
+		{
+			if (const auto* exclude_source = as_argument<dsl::ValueClass::BOOL>(*args, 5);
+				exclude_source != nullptr && static_cast<bool>(*exclude_source))
+			{
+				std::erase(candidates.operator Group::value_type&(), context.source);
+			}
+		}
+
 		auto selected = select(context, candidates, static_cast<std::size_t>(*min), static_cast<std::size_t>(*max));
 		if (!selected.has_value())
 		{
@@ -651,6 +676,7 @@ namespace cg::execution
 
 			pending_events_.emplace_back(domain::EventCode::DESTROYED, card);
 			pending_events_.emplace_back(domain::EventCode::EFFECT_DESTROYED, card);
+			pending_events_.emplace_back(domain::EventCode::SENT_TO_GRAVEYARD, card);
 		}
 
 		return Void{};
@@ -681,6 +707,74 @@ namespace cg::execution
 			}
 
 			game.move_to_graveyard(*instance, {domain::Reason::DISCARD});
+
+			pending_events_.emplace_back(domain::EventCode::DISCARDED, card);
+			pending_events_.emplace_back(domain::EventCode::SENT_TO_GRAVEYARD, card);
+		}
+
+		return Void{};
+	}
+
+	auto Interpreter::send_to_graveyard(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* cards = as_argument<dsl::ValueClass::GROUP>(*args, 0);
+		if (cards == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		for (const auto card: *cards)
+		{
+			auto* instance = game.find_instance_mutable(card);
+			if (instance == nullptr)
+			{
+				return std::nullopt;
+			}
+
+			game.move_to_graveyard(*instance, {domain::Reason::EFFECT});
+
+			pending_events_.emplace_back(domain::EventCode::SENT_TO_GRAVEYARD, card);
+		}
+
+		return Void{};
+	}
+
+	auto Interpreter::release(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* cards = as_argument<dsl::ValueClass::GROUP>(*args, 0);
+		if (cards == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		for (const auto card: *cards)
+		{
+			auto* instance = game.find_instance_mutable(card);
+			if (instance == nullptr)
+			{
+				return std::nullopt;
+			}
+
+			game.move_to_graveyard(*instance, {domain::Reason::RELEASE});
+
+			pending_events_.emplace_back(domain::EventCode::RELEASED, card);
+			pending_events_.emplace_back(domain::EventCode::SENT_TO_GRAVEYARD, card);
 		}
 
 		return Void{};
@@ -835,6 +929,33 @@ namespace cg::execution
 		const auto value = static_cast<domain::Race>(static_cast<std::underlying_type_t<domain::Race>>(*race));
 		const auto result = state_resolver_.is_race(*instance, value);
 		return Boolean{result};
+	}
+
+	auto Interpreter::is_archetype(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		const auto* archetype = as_argument<dsl::ValueClass::INT>(*args, 1);
+		if (card == nullptr || archetype == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto* instance = game.find_instance(*card);
+		if (instance == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto id = dsl::ArchetypeId{static_cast<dsl::ArchetypeId::value_type>(static_cast<Integer::value_type>(*archetype))};
+		return Boolean{instance->origin_has_archetype(id)};
 	}
 
 	auto Interpreter::is_level(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
@@ -1331,6 +1452,32 @@ namespace cg::execution
 			game.change_life_points(player, value);
 		}
 
+		return Void{};
+	}
+
+	auto Interpreter::pay_life(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* amount = as_argument<dsl::ValueClass::INT>(*args, 0);
+		if (amount == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto value = static_cast<std::underlying_type_t<domain::AttackDefense>>(*amount);
+		if (value < 0 || game.life_points(context.controller) < value)
+		{
+			return std::nullopt;
+		}
+
+		game.change_life_points(context.controller, -value);
 		return Void{};
 	}
 

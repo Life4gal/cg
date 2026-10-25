@@ -310,6 +310,7 @@ namespace cg::dsl
 					{.name = "min", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
 					{.name = "max", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
 					{.name = "filter", .kind = ParamDef::Scoped{.element = type_id("card"), .type = type_id("bool")}, .required = false},
+					{.name = "exclude_source", .kind = ParamDef::Value{.type = type_id("bool")}, .required = false},
 			},
 			type_id("group"),
 			"在指定玩家范围/区域中选择代价(仅COST阶段)"

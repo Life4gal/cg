@@ -962,6 +962,10 @@ namespace
 				submit_button("Set S/T", controller_, driver::LocalAction{driver::SetSpellTrapAction{card, column}}, queued);
 				ImGui::SameLine();
 				submit_button("Activate", controller_, driver::LocalAction{driver::ActivateCardAction{card}}, queued);
+				ImGui::SameLine();
+				submit_button("Effect 0", controller_, driver::LocalAction{driver::ActivateEffectAction{card, 0}}, queued);
+				ImGui::SameLine();
+				submit_button("Effect 1", controller_, driver::LocalAction{driver::ActivateEffectAction{card, 1}}, queued);
 				ImGui::PopID();
 			}
 
@@ -976,6 +980,8 @@ namespace
 				ImGui::Text("%s", card_text(view, card).c_str());
 				ImGui::SameLine();
 				submit_button("Effect 0", controller_, driver::LocalAction{driver::ActivateEffectAction{card, 0}}, queued);
+				ImGui::SameLine();
+				submit_button("Effect 1", controller_, driver::LocalAction{driver::ActivateEffectAction{card, 1}}, queued);
 				ImGui::SameLine();
 				submit_button("Attack Direct", controller_, driver::LocalAction{driver::DeclareAttackAction{card, std::nullopt}}, queued);
 				for (const auto target: view.opponent_side.monsters)

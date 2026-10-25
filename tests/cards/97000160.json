@@ -1,0 +1,36 @@
+{
+	"identity": {
+		"kind": "SPELL",
+		"subtypes": ["NORMAL"]
+	},
+	"effects": [
+		{
+			"type": "activated",
+			"activation": {"mode": "activation"},
+			"cost": [
+				{"call": "pay_life", "args": {"amount": 1000}}
+			],
+			"effect": [
+				{
+					"call": "send_to_graveyard",
+					"args": {
+						"cards": {
+							"call": "find_cards",
+							"args": {
+								"players": ["SELF"],
+								"zones": ["DECK"],
+								"filter": {
+									"call": "is_archetype",
+									"args": {
+										"card": {"call": "$"},
+										"archetype": "TEST-ARCHETYPE"
+									}
+								}
+							}
+						}
+					}
+				}
+			]
+		}
+	]
+}

@@ -272,6 +272,11 @@ namespace cg::state
 		return !ms.intersect(marks).empty();
 	}
 
+	auto CardInstance::origin_has_archetype(const dsl::ArchetypeId archetype) const noexcept -> bool
+	{
+		return std::ranges::contains(definition_.get().archetypes, archetype);
+	}
+
 	auto CardInstance::move_provenance() const noexcept -> const MoveProvenance&
 	{
 		return move_;
