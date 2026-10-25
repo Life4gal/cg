@@ -704,6 +704,7 @@ namespace
 		std::optional<state::CardInstanceId> extra_card_;
 		std::vector<state::CardInstanceId> extra_materials_;
 		int extra_kind_{};
+		int extra_column_{};
 		bool shutdown_{};
 
 		auto render_header(const driver::PlayerView& view) -> void
@@ -827,6 +828,8 @@ namespace
 			ImGui::Text("Summon %s into column %d", card_text(view, *extra_card_).c_str(), column_ + 1);
 			ImGui::SetNextItemWidth(150.0f);
 			ImGui::Combo("Summon Type", &extra_kind_, "Fusion\0""Synchro\0""Xyz\0""Link\0");
+			ImGui::SetNextItemWidth(90.0f);
+			ImGui::Combo("Extra Zone", &extra_column_, "EX1\0""EX2\0");
 			ImGui::TextDisabled("Select the materials from your field, then confirm.");
 
 			for (const auto card: view.self_side.monsters)
@@ -854,30 +857,23 @@ namespace
 			ImGui::BeginDisabled(!can_confirm);
 			if (ImGui::Button("Confirm Extra Summon"))
 			{
-				const auto kind = static_cast<driver::ExtraSummonKind>(extra_kind_);
-				const auto column = static_cast<domain::FieldColumn>(column_);
-				domain::AnyMonsterPlacement placement = kind == driver::ExtraSummonKind::LINK
-						? domain::AnyMonsterPlacement{
-								domain::ExtraMonsterPlacement{
-										.column = column,
-										.position = domain::Position::FACE_UP_ATTACK,
-								}
-						}
-						: domain::AnyMonsterPlacement{
-								domain::MonsterPlacement{
-										.column = column,
-										.position = domain::Position::FACE_UP_ATTACK,
-								}
-						};
+				const auto kind = static_cast<domain::ExtraDeckSummonType>(extra_kind_);
+				const auto column = extra_column_ == 0
+					                    ? domain::FieldColumn::EX1
+					                    : domain::FieldColumn::EX2;
+				const domain::AnyMonsterPlacement placement = domain::ExtraMonsterPlacement{
+						.column = column,
+						.position = domain::Position::FACE_UP_ATTACK,
+				};
 
 				(void)controller_.submit(
 					driver::LocalAction{
-						driver::ExtraSummonAction{
-							.kind = kind,
-							.card = *extra_card_,
-							.placement = placement,
-							.materials = extra_materials_,
-						}
+							driver::ExtraSummonAction{
+									.kind = kind,
+									.card = *extra_card_,
+									.placement = placement,
+									.materials = extra_materials_,
+							}
 					}
 				);
 				extra_card_.reset();
