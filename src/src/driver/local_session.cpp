@@ -253,12 +253,60 @@ namespace cg::driver
 				.spell_traps = game.collect_zone_card(opponent, domain::Zone::SPELL_TRAP),
 				.field_spell = take_field_spell(opponent),
 		};
+
+		const auto is_public_field_card = [](const state::CardInstance& card) noexcept -> bool
+		{
+			const auto placement = card.placement();
+			const auto position = domain::position_of(placement);
+			if (!position.has_value())
+			{
+				return true;
+			}
+
+			return *position != domain::Position::FACE_DOWN_DEFENSE;
+		};
+
+		std::unordered_map<std::uint32_t, domain::CardCode> card_codes;
+		const auto add_code = [&](const state::CardInstanceId id, const bool public_only) noexcept -> void
+		{
+			if (!id.valid())
+			{
+				return;
+			}
+
+			if (const auto* card = game.find_instance(id);
+				card != nullptr)
+			{
+				if (public_only && !is_public_field_card(*card))
+				{
+					return;
+				}
+
+				card_codes.emplace(id.raw(), card->origin_code());
+			}
+		};
+
+		std::ranges::for_each(self_side.extra_deck, std::bind_back(add_code, false));
+		std::ranges::for_each(self_side.hand, std::bind_back(add_code, false));
+		std::ranges::for_each(self_side.graveyard, std::bind_back(add_code, false));
+		std::ranges::for_each(self_side.banished, std::bind_back(add_code, false));
+		std::ranges::for_each(self_side.monsters, std::bind_back(add_code, false));
+		std::ranges::for_each(self_side.spell_traps, std::bind_back(add_code, false));
+		add_code(self_side.field_spell, false);
+
+		std::ranges::for_each(opponent_side.graveyard, std::bind_back(add_code, false));
+		std::ranges::for_each(opponent_side.banished, std::bind_back(add_code, true));
+		std::ranges::for_each(opponent_side.monsters, std::bind_back(add_code, true));
+		std::ranges::for_each(opponent_side.spell_traps, std::bind_back(add_code, true));
+		add_code(opponent_side.field_spell, true);
+
 		const std::array life_points{game.life_points(player), game.life_points(opponent)};
 
 		return
 		{
 				.self_side = std::move(self_side),
 				.opponent_side = std::move(opponent_side),
+				.card_codes = std::move(card_codes),
 				.life_points = life_points,
 				.player = player,
 				.turn_player = duel_.turn().turn_player(),

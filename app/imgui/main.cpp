@@ -35,6 +35,16 @@ namespace
 		return std::format("#{}", id.raw());
 	}
 
+	[[nodiscard]] auto card_text(const driver::PlayerView& view, const state::CardInstanceId id) -> std::string
+	{
+		if (const auto it = view.card_codes.find(id.raw()); it != view.card_codes.end())
+		{
+			return std::format("{} [{}]", id_text(id), std::to_underlying(it->second));
+		}
+
+		return id_text(id);
+	}
+
 	[[nodiscard]] auto player_text(const domain::Player player) -> std::string_view
 	{
 		return utility::to_string(player);
@@ -689,6 +699,8 @@ namespace
 		GLFWwindow* window_{};
 		ImGuiContext* context_{};
 		int column_{};
+		std::optional<state::CardInstanceId> tribute_card_;
+		std::vector<state::CardInstanceId> tribute_cards_;
 		bool shutdown_{};
 
 		auto render_header(const driver::PlayerView& view) -> void
@@ -709,7 +721,12 @@ namespace
 			);
 		}
 
-		static auto render_cards(const char* label, const std::vector<state::CardInstanceId>& cards, const bool show_empty) -> void
+		static auto render_cards(
+			const driver::PlayerView& view,
+			const char* label,
+			const std::vector<state::CardInstanceId>& cards,
+			const bool show_empty
+		) -> void
 		{
 			ImGui::TextDisabled("%s (%zu)", label, cards.size());
 			if (cards.empty())
@@ -723,7 +740,7 @@ namespace
 
 			for (const auto card: cards)
 			{
-				ImGui::BulletText("%s", id_text(card).c_str());
+				ImGui::BulletText("%s", card_text(view, card).c_str());
 			}
 		}
 
@@ -739,6 +756,63 @@ namespace
 			return false;
 		}
 
+		auto render_tribute_panel(const driver::PlayerView& view, const bool queued) -> void
+		{
+			if (!tribute_card_.has_value())
+			{
+				return;
+			}
+
+			ImGui::SeparatorText("Tribute Summon");
+			ImGui::Text("Tribute for %s in column %d", card_text(view, *tribute_card_).c_str(), column_ + 1);
+			ImGui::TextDisabled("Level 5-6 requires 1 tribute; level 7+ requires 2.");
+
+			for (const auto card: view.self_side.monsters)
+			{
+				const bool checked = std::ranges::contains(tribute_cards_, card);
+				bool next = checked;
+				ImGui::PushID(static_cast<int>(card.raw()));
+				if (ImGui::Checkbox("##tribute", &next) && next != checked)
+				{
+					if (next)
+					{
+						tribute_cards_.push_back(card);
+					}
+					else if (const auto it = std::ranges::find(tribute_cards_, card); it != tribute_cards_.end())
+					{
+						tribute_cards_.erase(it);
+					}
+				}
+				ImGui::SameLine();
+				ImGui::Text("%s", card_text(view, card).c_str());
+				ImGui::PopID();
+			}
+
+			const bool can_confirm = !queued && !tribute_cards_.empty();
+			ImGui::BeginDisabled(!can_confirm);
+			if (ImGui::Button("Confirm Tribute Summon"))
+			{
+				(void)controller_.submit(
+					driver::LocalAction{
+							driver::TributeSummonAction{
+									*tribute_card_,
+									static_cast<domain::FieldColumn>(column_),
+									tribute_cards_,
+							}
+					}
+				);
+				tribute_card_.reset();
+				tribute_cards_.clear();
+			}
+			ImGui::EndDisabled();
+			ImGui::SameLine();
+			if (ImGui::Button("Cancel Tribute"))
+			{
+				tribute_card_.reset();
+				tribute_cards_.clear();
+			}
+		}
+
 		auto render_actions(const driver::PlayerView& view, const ImGuiController::Snapshot& snapshot) -> void
 		{
 			ImGui::SeparatorText("Actions");
@@ -746,6 +820,12 @@ namespace
 			{
 				ImGui::TextDisabled("Waiting for the opponent or chain resolution...");
 				return;
+			}
+
+			if (tribute_card_.has_value() && !std::ranges::contains(view.self_side.hand, *tribute_card_))
+			{
+				tribute_card_.reset();
+				tribute_cards_.clear();
 			}
 
 			const bool queued = snapshot.action_queued;
@@ -782,9 +862,15 @@ namespace
 			for (const auto card: view.self_side.hand)
 			{
 				ImGui::PushID(static_cast<int>(card.raw()));
-				ImGui::Text("%s", id_text(card).c_str());
+				ImGui::Text("%s", card_text(view, card).c_str());
 				ImGui::SameLine();
 				submit_button("Summon", controller_, driver::LocalAction{driver::NormalSummonAction{card, column}}, queued);
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Tribute"))
+				{
+					tribute_card_ = card;
+					tribute_cards_.clear();
+				}
 				ImGui::SameLine();
 				submit_button("Set Monster", controller_, driver::LocalAction{driver::SetMonsterAction{card, column}}, queued);
 				ImGui::SameLine();
@@ -802,7 +888,7 @@ namespace
 			for (const auto card: view.self_side.monsters)
 			{
 				ImGui::PushID(static_cast<int>(card.raw()));
-				ImGui::Text("%s", id_text(card).c_str());
+				ImGui::Text("%s", card_text(view, card).c_str());
 				ImGui::SameLine();
 				submit_button("Effect 0", controller_, driver::LocalAction{driver::ActivateEffectAction{card, 0}}, queued);
 				ImGui::SameLine();
@@ -810,11 +896,13 @@ namespace
 				for (const auto target: view.opponent_side.monsters)
 				{
 					ImGui::SameLine();
-					const auto label = std::format("Attack {}", id_text(target));
+					const auto label = std::format("Attack {}", card_text(view, target));
 					submit_button(label.c_str(), controller_, driver::LocalAction{driver::DeclareAttackAction{card, target}}, queued);
 				}
 				ImGui::PopID();
 			}
+
+			render_tribute_panel(view, queued);
 
 			if (view.pending_replay)
 			{
@@ -823,7 +911,7 @@ namespace
 				for (const auto target: view.opponent_side.monsters)
 				{
 					ImGui::SameLine();
-					const auto label = std::format("Replay {}", id_text(target));
+					const auto label = std::format("Replay {}", card_text(view, target));
 					submit_button(label.c_str(), controller_, driver::LocalAction{driver::ReplayAttackAction{target}}, queued);
 				}
 			}
@@ -896,7 +984,7 @@ namespace
 			}
 		}
 
-		auto render_trigger_selection(const ImGuiController::TriggerSelection& selection) -> void
+		auto render_trigger_selection(const driver::PlayerView& view, const ImGuiController::TriggerSelection& selection) -> void
 		{
 			ImGui::SeparatorText(selection.optional ? "Optional Triggers" : "Mandatory Trigger Order");
 			if (selection.optional)
@@ -915,7 +1003,7 @@ namespace
 				ImGui::Text(
 					"%zu. %s",
 					order + 1,
-					id_text(selection.candidates[index].source).c_str()
+					card_text(view, selection.candidates[index].source).c_str()
 				);
 				ImGui::SameLine();
 				ImGui::BeginDisabled(selection.confirmed);
@@ -952,7 +1040,7 @@ namespace
 
 					ImGui::PushID(static_cast<int>(index));
 					ImGui::BeginDisabled(selection.confirmed);
-					const auto label = std::format("Add {}", id_text(selection.candidates[index].source));
+					const auto label = std::format("Add {}", card_text(view, selection.candidates[index].source));
 					if (ImGui::SmallButton(label.c_str()))
 					{
 						controller_.toggle_trigger(index);
@@ -1003,12 +1091,12 @@ namespace
 				view->self_side.graveyard.size(),
 				view->self_side.banished.size()
 			);
-			render_cards("Hand", view->self_side.hand, false);
-			render_cards("Monsters", view->self_side.monsters, true);
-			render_cards("Spell / Trap", view->self_side.spell_traps, true);
+			render_cards(*view, "Hand", view->self_side.hand, false);
+			render_cards(*view, "Monsters", view->self_side.monsters, true);
+			render_cards(*view, "Spell / Trap", view->self_side.spell_traps, true);
 			if (view->self_side.field_spell.valid())
 			{
-				ImGui::Text("Field Spell: %s", id_text(view->self_side.field_spell).c_str());
+				ImGui::Text("Field Spell: %s", card_text(*view, view->self_side.field_spell).c_str());
 			}
 
 			ImGui::SeparatorText("Opponent");
@@ -1020,8 +1108,8 @@ namespace
 				view->opponent_side.graveyard.size(),
 				view->opponent_side.banished.size()
 			);
-			render_cards("Monsters", view->opponent_side.monsters, true);
-			render_cards("Spell / Trap", view->opponent_side.spell_traps, true);
+			render_cards(*view, "Monsters", view->opponent_side.monsters, true);
+			render_cards(*view, "Spell / Trap", view->opponent_side.spell_traps, true);
 
 			if (snapshot.cards.has_value())
 			{
@@ -1035,7 +1123,7 @@ namespace
 			}
 			if (snapshot.triggers.has_value())
 			{
-				render_trigger_selection(*snapshot.triggers);
+				render_trigger_selection(*view, *snapshot.triggers);
 				return;
 			}
 

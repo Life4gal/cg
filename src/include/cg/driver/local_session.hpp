@@ -6,9 +6,11 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
+#include <cg/domain/card.hpp>
 #include <cg/domain/field.hpp>
 #include <cg/domain/player.hpp>
 
@@ -139,6 +141,8 @@ namespace cg::driver
 		// 双方卡牌信息
 		SelfSide self_side;
 		OpponentSide opponent_side;
+		// 实例 ID -> 卡密; 仅供 UI 显示,不暴露额外隐藏信息
+		std::unordered_map<std::uint32_t, domain::CardCode> card_codes;
 		// 双方LP信息
 		std::array<std::underlying_type_t<domain::AttackDefense>, 2> life_points;
 

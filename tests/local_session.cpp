@@ -69,6 +69,11 @@ TEST_CASE("driver::LocalDuelSession runs pass/phase/normal-summon through two co
 	CHECK(initial_view.first_turn);
 
 	const auto monster = initial_view.self_side.hand.front();
+	const auto* monster_instance = session.duel().game().find_instance(monster);
+	REQUIRE(monster_instance != nullptr);
+	const auto monster_code = initial_view.card_codes.find(monster.raw());
+	REQUIRE(monster_code != initial_view.card_codes.end());
+	CHECK(monster_code->second == monster_instance->origin_code());
 
 	// FIRST: 过 -> (STANDBY 后)过 -> (MAIN_1)通常召唤 -> 过
 	// SECOND: 过 -> 推进阶段 -> 过 -> 推进阶段 -> 过
