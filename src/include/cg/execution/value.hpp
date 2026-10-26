@@ -26,6 +26,11 @@ namespace cg::execution
 		{
 			return value_;
 		}
+
+		[[nodiscard]] constexpr auto operator==(const Boolean& other) const noexcept -> bool
+		{
+			return value_ == other.value_;
+		}
 	};
 
 	class Integer
@@ -46,6 +51,11 @@ namespace cg::execution
 		{
 			return value_;
 		}
+
+		[[nodiscard]] constexpr auto operator==(const Integer& other) const noexcept -> bool
+		{
+			return value_ == other.value_;
+		}
 	};
 
 	class Card
@@ -63,6 +73,11 @@ namespace cg::execution
 		[[nodiscard]] constexpr explicit(false) operator value_type() const noexcept
 		{
 			return value_;
+		}
+
+		[[nodiscard]] constexpr auto operator==(const Card& other) const noexcept -> bool
+		{
+			return value_ == other.value_;
 		}
 	};
 
@@ -151,6 +166,11 @@ namespace cg::execution
 		{
 			return value_;
 		}
+
+		[[nodiscard]] constexpr auto operator==(const Group& other) const noexcept -> bool
+		{
+			return value_ == other.value_;
+		}
 	};
 
 	class EnumMask
@@ -169,6 +189,11 @@ namespace cg::execution
 		[[nodiscard]] constexpr explicit(false) operator value_type() const noexcept
 		{
 			return value_;
+		}
+
+		[[nodiscard]] constexpr auto operator==(const EnumMask& other) const noexcept -> bool
+		{
+			return value_ == other.value_;
 		}
 	};
 

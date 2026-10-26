@@ -2212,7 +2212,38 @@ namespace cg::execution
 							return std::nullopt;
 						}
 
-						// TODO: 卡片/组的相等比较
+						if (const auto* lhs_card = std::get_if<Card>(&operands->operator[](0));
+							lhs_card != nullptr)
+						{
+							const auto* rhs_card = std::get_if<Card>(&operands->operator[](1));
+							if (rhs_card == nullptr)
+							{
+								return std::nullopt;
+							}
+
+							const auto same = *lhs_card == *rhs_card;
+							switch (compare.op)
+							{
+								case dsl::CompareOperator::EQUAL:
+								{
+									return Boolean{same};
+								}
+								case dsl::CompareOperator::NOT_EQUAL:
+								{
+									return Boolean{!same};
+								}
+								case dsl::CompareOperator::LESS_THAN:
+								case dsl::CompareOperator::LESS_EQUAL:
+								case dsl::CompareOperator::GREATER_THAN:
+								case dsl::CompareOperator::GREATER_EQUAL:
+								default: // NOLINT(clang-diagnostic-covered-switch-default)
+								{
+									return std::nullopt;
+								}
+							}
+						}
+
+						// TODO: 组的相等比较
 						const auto lhs = as<dsl::ValueClass::INT>(operands->operator[](0));
 						const auto rhs = as<dsl::ValueClass::INT>(operands->operator[](1));
 						if (lhs == nullptr || rhs == nullptr)

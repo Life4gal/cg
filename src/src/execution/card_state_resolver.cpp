@@ -13,10 +13,7 @@
 
 namespace cg::execution
 {
-	auto CardStateResolver::collect_static_modifiers(
-		const state::CardInstance& card,
-		Context& context
-	) const noexcept -> std::vector<std::reference_wrapper<const dsl::StaticModifier>>
+	auto CardStateResolver::collect_static_modifiers(const state::CardInstance& card) const noexcept -> std::vector<std::reference_wrapper<const dsl::StaticModifier>>
 	{
 		class ActiveEffectGuard
 		{
@@ -47,11 +44,7 @@ namespace cg::execution
 		std::vector<std::reference_wrapper<const dsl::StaticModifier>> result{};
 		for (const auto& instance: game.instances())
 		{
-			if (const auto zone = game.zone_of(instance.id());
-				zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER && zone != domain::Zone::SPELL_TRAP && zone != domain::Zone::FIELD_SPELL)
-			{
-				continue;
-			}
+			const auto zone = game.zone_of(instance.id());
 
 			const auto* script = scripts_.get().find(instance.origin_code());
 			if (script == nullptr)
@@ -64,6 +57,7 @@ namespace cg::execution
 				const auto* static_effect = std::get_if<dsl::StaticEffect>(&effect.body);
 				if (
 					static_effect == nullptr ||
+					!static_effect->zones.contains(zone) ||
 					std::ranges::find(active_effects_, &effect) != active_effects_.end()
 				)
 				{
@@ -73,8 +67,9 @@ namespace cg::execution
 				const auto applies = [&]() noexcept -> bool
 				{
 					const ActiveEffectGuard guard{active_effects_, &effect};
+					Context static_context{instance.controller(), instance.id()};
 
-					const auto value = interpreter.evaluate_scoped(static_effect->apply_to.expression, card.id(), context);
+					const auto value = interpreter.evaluate_scoped(static_effect->apply_to.expression, card.id(), static_context);
 					if (!value.has_value())
 					{
 						return false;
@@ -91,7 +86,7 @@ namespace cg::execution
 						return true;
 					}
 
-					const auto condition = interpreter.evaluate(*static_effect->condition, context);
+					const auto condition = interpreter.evaluate_scoped(*static_effect->condition, card.id(), static_context);
 					if (!condition.has_value())
 					{
 						return false;
@@ -121,7 +116,7 @@ namespace cg::execution
 		const auto& vocabulary = vocabulary_.get();
 		auto& interpreter = interpreter_.get();
 
-		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		for (const auto& modifier: collect_static_modifiers(card) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
 			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "change_name")
@@ -159,7 +154,7 @@ namespace cg::execution
 		auto& interpreter = interpreter_.get();
 
 		utility::EnumMask<domain::CardType> result{};
-		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		for (const auto& modifier: collect_static_modifiers(card) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
 			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "add_card_type")
@@ -190,10 +185,41 @@ namespace cg::execution
 		auto& interpreter = interpreter_.get();
 
 		utility::EnumMask<domain::CardSubtype> result{};
-		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		for (const auto& modifier: collect_static_modifiers(card) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
 			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "add_card_subtype")
+			{
+				continue;
+			}
+
+			const auto args = interpreter.evaluate_list(modifier.args, context);
+			if (!args.has_value() || args->size() != 1)
+			{
+				continue;
+			}
+
+			if (const auto* value = std::get_if<Integer>(&args->front());
+				value != nullptr)
+			{
+				const auto subtype = static_cast<std::underlying_type_t<domain::CardSubtype>>(static_cast<Integer::value_type>(*value));
+				result.add_with(static_cast<domain::CardSubtype>(subtype));
+			}
+		}
+
+		return result;
+	}
+
+	auto CardStateResolver::static_removed_card_subtypes(const state::CardInstance& card, Context& context) const noexcept -> utility::EnumMask<domain::CardSubtype>
+	{
+		const auto& vocabulary = vocabulary_.get();
+		auto& interpreter = interpreter_.get();
+
+		utility::EnumMask<domain::CardSubtype> result{};
+		for (const auto& modifier: collect_static_modifiers(card) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		{
+			const auto* definition = vocabulary.find(modifier.primitive);
+			if (definition == nullptr || definition->name != "remove_card_subtype")
 			{
 				continue;
 			}
@@ -221,7 +247,7 @@ namespace cg::execution
 		auto& interpreter = interpreter_.get();
 
 		utility::EnumMask<domain::Attribute> result{};
-		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		for (const auto& modifier: collect_static_modifiers(card) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
 			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "add_attribute")
@@ -252,7 +278,7 @@ namespace cg::execution
 		auto& interpreter = interpreter_.get();
 
 		Integer::value_type total = 0;
-		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		for (const auto& modifier: collect_static_modifiers(card) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
 			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "change_level")
@@ -286,7 +312,7 @@ namespace cg::execution
 		auto& interpreter = interpreter_.get();
 
 		Integer::value_type total = 0;
-		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		for (const auto& modifier: collect_static_modifiers(card) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
 			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "add_numeric_property")
@@ -323,7 +349,7 @@ namespace cg::execution
 		auto& interpreter = interpreter_.get();
 
 		utility::EnumMask<domain::Protection> result{};
-		for (const auto& modifier: collect_static_modifiers(card, context) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
+		for (const auto& modifier: collect_static_modifiers(card) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
 			const auto* definition = vocabulary.find(modifier.primitive);
 			if (definition == nullptr || definition->name != "add_protection")
@@ -406,6 +432,7 @@ namespace cg::execution
 
 		auto result = static_card_subtypes(card, context);
 		result.unite_with(card.origin_subtypes());
+		result.subtract_with(static_removed_card_subtypes(card, context));
 
 		return result;
 	}

@@ -165,6 +165,17 @@ namespace cg::dsl
 	class StaticEffect
 	{
 	public:
+		// 默认来源区域:场上四区
+		constexpr static utility::EnumMask<domain::Zone> default_zones
+		{
+				domain::Zone::MONSTER,
+				domain::Zone::EXTRA_MONSTER,
+				domain::Zone::SPELL_TRAP,
+				domain::Zone::FIELD_SPELL,
+		};
+
+		// 来源区域(默认:场上四区)
+		utility::EnumMask<domain::Zone> zones;
 		// 适用对象(作用域表达式:对候选卡的谓词)
 		ScopedExpression apply_to;
 		// 生效条件

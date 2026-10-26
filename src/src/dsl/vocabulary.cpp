@@ -573,6 +573,16 @@ namespace cg::dsl
 			"增加卡牌子类型(如:也视为调整)"
 		);
 		do_register(
+			"remove_card_subtype",
+			PrimitiveKind::STATIC,
+			{Phase::STATIC},
+			{
+					{.name = "subtype", .kind = ParamDef::Value{.type = type_id("card_subtype")}, .required = true},
+			},
+			type_id("void"),
+			"移除卡牌子类型(例:在墓地不再视为效果怪兽)"
+		);
+		do_register(
 			"add_attribute",
 			PrimitiveKind::STATIC,
 			{Phase::STATIC},

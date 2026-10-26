@@ -52,14 +52,12 @@ namespace cg::execution
 		mutable effect_stack_type active_effects_;
 
 		// 收集作用于目标卡的静态修饰(已通过 apply_to / condition 筛选)
-		[[nodiscard]] auto collect_static_modifiers(
-			const state::CardInstance& card,
-			Context& context
-		) const noexcept -> std::vector<std::reference_wrapper<const dsl::StaticModifier>>;
+		[[nodiscard]] auto collect_static_modifiers(const state::CardInstance& card) const noexcept -> std::vector<std::reference_wrapper<const dsl::StaticModifier>>;
 
 		[[nodiscard]] auto static_code(const state::CardInstance& card, Context& context) const noexcept -> std::optional<domain::CardCode>;
 		[[nodiscard]] auto static_card_types(const state::CardInstance& card, Context& context) const noexcept -> utility::EnumMask<domain::CardType>;
 		[[nodiscard]] auto static_card_subtypes(const state::CardInstance& card, Context& context) const noexcept -> utility::EnumMask<domain::CardSubtype>;
+		[[nodiscard]] auto static_removed_card_subtypes(const state::CardInstance& card, Context& context) const noexcept -> utility::EnumMask<domain::CardSubtype>;
 		[[nodiscard]] auto static_attributes(const state::CardInstance& card, Context& context) const noexcept -> utility::EnumMask<domain::Attribute>;
 		[[nodiscard]] auto static_level_bonus(const state::CardInstance& card, Context& context) const noexcept -> Integer::value_type;
 		[[nodiscard]] auto static_numeric_bonus(const state::CardInstance& card, domain::NumericProperty property, Context& context) const noexcept -> Integer::value_type;

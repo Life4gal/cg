@@ -2449,10 +2449,45 @@ namespace cg::dsl::json
 		LIBASSERT_DEBUG_ASSERT(json.contains("type") && json.at("type").is_string() && json.at("type").get_ref<const nlohmann::json::string_t&>() == "static");
 		LIBASSERT_DEBUG_ASSERT(types_.get().contains("bool") && types_.get().contains("card"));
 
-		if (!only_specified_keys(json, {"type", "apply_to", "condition", "modifiers"}))
+		if (!only_specified_keys(json, {"type", "zones", "apply_to", "condition", "modifiers"}))
 		{
-			fail(path, "static effect allows only `type` / `apply_to` / `condition` / `modifiers`");
+			fail(path, "static effect allows only `type` / `zones` / `apply_to` / `condition` / `modifiers`");
 			return std::nullopt;
+		}
+
+		auto zones = StaticEffect::default_zones;
+		if (const auto it = json.find("zones");
+			it != json.end())
+		{
+			auto zones_path = std::format("{}.zones", path);
+
+			if (!it.value().is_array())
+			{
+				fail(std::move(zones_path), "must be an array");
+				return std::nullopt;
+			}
+
+			zones = {};
+			for (const auto [index, item]: it.value() | std::views::enumerate)
+			{
+				auto item_path = std::format("{}[{}]", zones_path, index);
+
+				if (!item.is_string())
+				{
+					fail(std::move(item_path), "must be a string");
+					return std::nullopt;
+				}
+
+				const auto& text = item.get_ref<const nlohmann::json::string_t&>();
+				const auto zone = utility::from_string<domain::Zone>(text);
+				if (!zone.has_value())
+				{
+					fail(std::move(item_path), std::format("unknown zone `{}`", text));
+					return std::nullopt;
+				}
+
+				zones.add_with(*zone);
+			}
 		}
 
 		auto apply_to_path = std::format("{}.apply_to", path);
@@ -2514,6 +2549,7 @@ namespace cg::dsl::json
 
 		return StaticEffect
 		{
+				.zones = zones,
 				.apply_to = {.element = types_.get().find("card")->id, .expression = *std::move(apply_to)},
 				.condition = std::move(condition),
 				.modifiers = std::move(modifiers),
