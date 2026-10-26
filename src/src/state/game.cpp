@@ -516,6 +516,18 @@ namespace cg::state
 		);
 	}
 
+	auto Game::prevent_attack(CardInstance& card) const noexcept -> void
+	{
+		CardInstance::Modifier modifier{card};
+		modifier.prevent_attack(turn_id_);
+	}
+
+	auto Game::mark_attacked(CardInstance& card) const noexcept -> void
+	{
+		CardInstance::Modifier modifier{card};
+		modifier.mark_attacked(turn_id_);
+	}
+
 	auto Game::add_overlay(CardInstance& card, const CardInstance& material) noexcept -> void
 	{
 		std::ignore = this;

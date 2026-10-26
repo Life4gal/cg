@@ -56,6 +56,13 @@ namespace cg::driver
 		std::vector<state::CardInstanceId> tributes;
 	};
 
+	class SelfSpecialSummonAction
+	{
+	public:
+		state::CardInstanceId card;
+		domain::MonsterPlacement placement;
+	};
+
 	class ExtraSummonAction
 	{
 	public:
@@ -98,6 +105,14 @@ namespace cg::driver
 		std::size_t effect_index;
 	};
 
+	class ApplySpecialSummonEffectAction
+	{
+	public:
+		state::CardInstanceId card;
+		std::size_t effect_index;
+		domain::MonsterPlacement placement;
+	};
+
 	class LocalAction : public std::variant<
 				PassAction,
 				AdvancePhaseAction,
@@ -106,12 +121,14 @@ namespace cg::driver
 				NormalSummonAction,
 				SetMonsterAction,
 				TributeSummonAction,
+				SelfSpecialSummonAction,
 				ExtraSummonAction,
 				ActivateCardAction,
 				SetSpellTrapAction,
 				DeclareAttackAction,
 				ReplayAttackAction,
-				ActivateEffectAction
+				ActivateEffectAction,
+				ApplySpecialSummonEffectAction
 			>
 	{
 	public:

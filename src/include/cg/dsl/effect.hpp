@@ -72,12 +72,14 @@ namespace cg::dsl
 
 	enum class UsageKind : std::uint8_t
 	{
-		// 一回合一次(每张卡)
+		// 一回合一次(实例+效果,使用过后如果控制权发生转移,对方不可以使用,切换回合重置)
 		TURN_PER_CARD,
-		// 卡名一回合一次
+		// 卡名一回合一次(卡密+玩家+效果,使用过后如果控制权发生转移,对方可以使用,切换回合重置)
 		TURN_PER_NAME,
-		// 决斗一次
-		DUEL_PER_NAME,
+		// 同一卡实例只能使用1次(实例+最后一次正面表示的代数+效果,使用过后如果控制权发生转移,对方不可以使用,且切换回合不重置)
+		ONCE_PER_CARD,
+		// 决斗一次(卡密+玩家+效果,使用过后如果控制权发生转移,对方可以使用,且切换回合不重置)
+		ONCE_PER_DUEL,
 	};
 
 	enum class RestrictionVerb : std::uint8_t
@@ -96,8 +98,8 @@ namespace cg::dsl
 		// 要么没有限制,有限制也不会超过255次(同时可以减少填充)
 		using size_type = std::uint8_t;
 
-		// 次数上限
-		UsageKind kind;
+		// 使用限制维度;可多选,如 [TURN_PER_NAME, ONCE_PER_CARD]
+		utility::EnumMask<UsageKind> kind;
 		size_type count;
 		RestrictionVerb verb;
 
@@ -174,7 +176,7 @@ namespace cg::dsl
 				domain::Zone::FIELD_SPELL,
 		};
 
-		// 来源区域(默认:场上四区)
+		// 来源区域
 		utility::EnumMask<domain::Zone> zones;
 		// 适用对象(作用域表达式:对候选卡的谓词)
 		ScopedExpression apply_to;
@@ -183,14 +185,35 @@ namespace cg::dsl
 		// 修饰符列表
 		StaticModifierList modifiers;
 
-		[[nodiscard]] auto operator==(const StaticEffect& other) const -> bool = default;
+		[[nodiscard]] auto operator==(const StaticEffect&) const -> bool = default;
+	};
+
+	// ===========================================
+	// 效果特招(不发动、不入连锁,但仍属于效果)
+	// ===========================================
+
+	// 与 RuleSpecialProcedure 的区别:
+	// - RuleSpecialProcedure 是效果外文本/召唤条件,不是效果;
+	// - UnclassifiedSpecialSummon 是效果,受 Effect 级别的 usage / 效果无效等规则影响
+	// 需要发动的效果特招不使用本类型:使用 ActivatedEffect + effect 中的 special_summon
+	class UnclassifiedSpecialSummon
+	{
+	public:
+		// 发动条件(冒号前;仅发动时需满足)
+		std::optional<Expression> condition;
+		// 代价(分号前;发动时)
+		StatementList cost;
+		// 可发动所在区域
+		utility::EnumMask<domain::Zone> source_zones;
+
+		[[nodiscard]] constexpr auto operator==(const UnclassifiedSpecialSummon&) const -> bool = default;
 	};
 
 	// ===========================================
 	// 效果(稳定标识 + 定义体)
 	// ===========================================
 
-	class EffectBody : public std::variant<ActivatedEffect, StaticEffect> {};
+	class EffectBody : public std::variant<ActivatedEffect, StaticEffect, UnclassifiedSpecialSummon> {};
 
 	class Effect
 	{

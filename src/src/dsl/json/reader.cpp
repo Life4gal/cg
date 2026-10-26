@@ -1006,6 +1006,8 @@ namespace cg::dsl::json
 				.kind = kind,
 				.subtypes = subtypes,
 				.monster = monster,
+				.spell = std::nullopt,
+				.trap = std::nullopt,
 				.archetypes = std::move(archetypes),
 				.code_list = std::move(code_list),
 		};
@@ -1455,7 +1457,7 @@ namespace cg::dsl::json
 
 		if (method_text == "special")
 		{
-			return do_read_procedure(&Reader::read_summon_self_special_procedure);
+			return do_read_procedure(&Reader::read_summon_rule_special_procedure);
 		}
 
 		fail(std::move(method_path), std::format("unknown summon method `{}`", method_text));
@@ -1770,15 +1772,15 @@ namespace cg::dsl::json
 		return RitualProcedure{.material = *std::move(material), .level = *std::move(level)};
 	}
 
-	auto Reader::read_summon_self_special_procedure(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<SelfSpecialProcedure>
+	auto Reader::read_summon_rule_special_procedure(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<RuleSpecialProcedure>
 	{
 		LIBASSERT_DEBUG_ASSERT(json.is_object());
 		LIBASSERT_DEBUG_ASSERT(json.contains("method") && json.at("method").is_string() && json.at("method").get_ref<const nlohmann::json::string_t&>() == "special");
 		LIBASSERT_DEBUG_ASSERT(types_.get().contains("bool"));
 
-		if (!only_specified_keys(json, {"method", "condition", "cost", "source_zones"}))
+		if (!only_specified_keys(json, {"method", "condition", "cost", "source_zones", "once_per_turn"}))
 		{
-			fail(path, "allows only `method` / `condition` / `cost` / `source_zones`");
+			fail(path, "allows only `method` / `condition` / `cost` / `source_zones` / `once_per_turn`");
 			return std::nullopt;
 		}
 
@@ -1823,6 +1825,21 @@ namespace cg::dsl::json
 			return std::nullopt;
 		}
 
+		bool once_per_turn = false;
+		if (const auto it = json.find("once_per_turn");
+			it != json.end())
+		{
+			auto once_per_turn_path = std::format("{}.once_per_turn", path);
+
+			if (!it.value().is_boolean())
+			{
+				fail(std::move(once_per_turn_path), "must be a boolean");
+				return std::nullopt;
+			}
+
+			once_per_turn = it.value().get<bool>();
+		}
+
 		utility::EnumMask<domain::Zone> source_zones{};
 		if (const auto it = json.find("source_zones");
 			it != json.end())
@@ -1857,7 +1874,13 @@ namespace cg::dsl::json
 			}
 		}
 
-		return SelfSpecialProcedure{.condition = std::move(condition), .cost = std::move(cost), .source_zones = source_zones};
+		return RuleSpecialProcedure
+		{
+				.condition = std::move(condition),
+				.cost = std::move(cost),
+				.source_zones = source_zones,
+				.once_per_turn = once_per_turn,
+		};
 	}
 
 	auto Reader::read_summon_material_expression(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<Expression>
@@ -2013,6 +2036,17 @@ namespace cg::dsl::json
 		if (type == "static")
 		{
 			auto body = read_static_effect_body(json, path);
+			if (!body.has_value())
+			{
+				return std::nullopt;
+			}
+
+			return EffectBody{*std::move(body)};
+		}
+
+		if (type == "unclassified_special_summon")
+		{
+			auto body = read_unclassified_special_summon_body(json, path);
 			if (!body.has_value())
 			{
 				return std::nullopt;
@@ -2602,6 +2636,104 @@ namespace cg::dsl::json
 		return StaticModifier{.primitive = def->id, .args = *std::move(args)};
 	}
 
+	auto Reader::read_unclassified_special_summon_body(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<UnclassifiedSpecialSummon>
+	{
+		LIBASSERT_DEBUG_ASSERT(json.is_object());
+		LIBASSERT_DEBUG_ASSERT(json.contains("type") && json.at("type").is_string() && json.at("type").get_ref<const nlohmann::json::string_t&>() == "unclassified_special_summon");
+		LIBASSERT_DEBUG_ASSERT(types_.get().contains("bool"));
+
+		if (!only_specified_keys(json, {"type", "condition", "cost", "source_zones", "usage", "mutex", "properties"}))
+		{
+			fail(path, "unclassified_special_summon allows only `type` / `condition` / `cost` / `source_zones` / `usage` / `mutex` / `properties`");
+			return std::nullopt;
+		}
+
+		std::optional<Expression> condition;
+		StatementList cost;
+		bool error = false;
+
+		scopes_.emplace_back();
+		if (const auto it = json.find("condition");
+			it != json.end())
+		{
+			const auto condition_path = std::format("{}.condition", path);
+
+			condition = read_expression(it.value(), types_.get().find("bool")->id, condition_path);
+			if (!condition.has_value())
+			{
+				error = true;
+			}
+		}
+		if (!error)
+		{
+			if (const auto it = json.find("cost");
+				it != json.end())
+			{
+				const auto cost_path = std::format("{}.cost", path);
+
+				if (auto c = read_statement_list(it.value(), Phase::COST, cost_path);
+					!c.has_value())
+				{
+					error = true;
+				}
+				else
+				{
+					cost = *std::move(c);
+				}
+			}
+		}
+		scopes_.pop_back();
+
+		if (error)
+		{
+			return std::nullopt;
+		}
+
+		auto source_zones_path = std::format("{}.source_zones", path);
+
+		utility::EnumMask<domain::Zone> source_zones{};
+		const auto source_zones_it = json.find("source_zones");
+		if (source_zones_it == json.end())
+		{
+			fail(std::move(source_zones_path), "missing");
+			return std::nullopt;
+		}
+
+		if (!source_zones_it.value().is_array())
+		{
+			fail(std::move(source_zones_path), "must be an array");
+			return std::nullopt;
+		}
+
+		for (const auto [index, item]: source_zones_it.value() | std::views::enumerate)
+		{
+			const auto item_path = std::format("{}[{}]", source_zones_path, index);
+
+			if (!item.is_string())
+			{
+				fail(item_path, "must be a string");
+				return std::nullopt;
+			}
+
+			const auto& text = item.get_ref<const nlohmann::json::string_t&>();
+			const auto zone = utility::from_string<domain::Zone>(text);
+			if (!zone.has_value())
+			{
+				fail(item_path, std::format("unknown zone `{}`", text));
+				return std::nullopt;
+			}
+
+			source_zones.add_with(*zone);
+		}
+
+		return UnclassifiedSpecialSummon
+		{
+				.condition = std::move(condition),
+				.cost = std::move(cost),
+				.source_zones = source_zones,
+		};
+	}
+
 	auto Reader::read_effect_usage_restriction(
 		const nlohmann::json::const_iterator& usage,
 		const std::string_view path
@@ -2622,17 +2754,56 @@ namespace cg::dsl::json
 		auto kind_path = std::format("{}.kind", path);
 
 		const auto kind_it = usage.value().find("kind");
-		if (kind_it == usage.value().end() || !kind_it.value().is_string())
+		if (kind_it == usage.value().end())
 		{
-			fail(std::move(kind_path), "missing or not a string");
+			fail(std::move(kind_path), "missing");
 			return std::nullopt;
 		}
 
-		const auto& kind_text = kind_it.value().get_ref<const nlohmann::json::string_t&>();
-		const auto kind = utility::from_string<UsageKind>(kind_text);
-		if (!kind.has_value())
+		utility::EnumMask<UsageKind> kinds{};
+		if (kind_it.value().is_string())
 		{
-			fail(std::move(kind_path), std::format("unknown kind `{}`", kind_text));
+			const auto& kind_text = kind_it.value().get_ref<const nlohmann::json::string_t&>();
+			const auto kind = utility::from_string<UsageKind>(kind_text);
+			if (!kind.has_value())
+			{
+				fail(std::move(kind_path), std::format("unknown kind `{}`", kind_text));
+				return std::nullopt;
+			}
+
+			kinds.add_with(*kind);
+		}
+		else if (kind_it.value().is_array())
+		{
+			for (const auto [index, element]: kind_it.value() | std::views::enumerate)
+			{
+				auto element_path = std::format("{}[{}]", kind_path, index);
+				if (!element.is_string())
+				{
+					fail(std::move(element_path), "must be a string");
+					return std::nullopt;
+				}
+
+				const auto& kind_text = element.get_ref<const nlohmann::json::string_t&>();
+				const auto kind = utility::from_string<UsageKind>(kind_text);
+				if (!kind.has_value())
+				{
+					fail(std::move(element_path), std::format("unknown kind `{}`", kind_text));
+					return std::nullopt;
+				}
+
+				kinds.add_with(*kind);
+			}
+
+			if (kinds.empty())
+			{
+				fail(std::move(kind_path), "must not be empty");
+				return std::nullopt;
+			}
+		}
+		else
+		{
+			fail(std::move(kind_path), "must be a string or array of strings");
 			return std::nullopt;
 		}
 
@@ -2681,7 +2852,7 @@ namespace cg::dsl::json
 			verb = *e;
 		}
 
-		return UsageRestriction{.kind = *kind, .count = count, .verb = verb};
+		return UsageRestriction{.kind = kinds, .count = count, .verb = verb};
 	}
 
 	auto Reader::read_effect_properties(const nlohmann::json& json, const std::string_view path) noexcept -> std::optional<utility::EnumMask<EffectProperty>>

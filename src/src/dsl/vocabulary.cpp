@@ -165,6 +165,16 @@ namespace cg::dsl
 			"是否在本回合被送入墓地"
 		);
 		do_register(
+			"summoned_from_hand",
+			PrimitiveKind::PREDICATE,
+			all_phases,
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+			},
+			type_id("bool"),
+			"该卡最近一次召唤是否来自手牌"
+		);
+		do_register(
 			"find_cards",
 			PrimitiveKind::QUERY,
 			all_phases,
@@ -425,6 +435,16 @@ namespace cg::dsl
 			"舍弃(手牌送墓;与 send_to_graveyard 语义不同)"
 		);
 		do_register(
+			"reveal",
+			PrimitiveKind::ACTION,
+			{Phase::COST},
+			{
+					{.name = "cards", .kind = ParamDef::Value{.type = type_id("group")}, .required = true},
+			},
+			type_id("void"),
+			"展示手牌/卡牌(当前只校验所在区域,不移动卡牌)"
+		);
+		do_register(
 			"release",
 			PrimitiveKind::ACTION,
 			{Phase::COST, Phase::RESOLVE},
@@ -518,6 +538,16 @@ namespace cg::dsl
 			"变更表示形式"
 		);
 		do_register(
+			"prevent_attack_this_turn",
+			PrimitiveKind::ACTION,
+			{Phase::COST, Phase::RESOLVE},
+			{
+					{.name = "card", .kind = ParamDef::Value{.type = type_id("card")}, .required = true},
+			},
+			type_id("void"),
+			"本回合不能攻击(离场或重新召唤时清除)"
+		);
+		do_register(
 			"effect_damage",
 			PrimitiveKind::ACTION,
 			{Phase::RESOLVE},
@@ -551,6 +581,16 @@ namespace cg::dsl
 			},
 			type_id("void"),
 			"视为指定卡的卡名"
+		);
+		do_register(
+			"change_name_to_code",
+			PrimitiveKind::STATIC,
+			{Phase::STATIC},
+			{
+					{.name = "code", .kind = ParamDef::Value{.type = type_id("int")}, .required = true},
+			},
+			type_id("void"),
+			"把卡名改为指定卡密"
 		);
 		do_register(
 			"add_card_type",

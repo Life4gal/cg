@@ -2142,11 +2142,11 @@ TEST_CASE("flow::Duel resolves Fusion, Link, Ritual, and SelfSpecial summons")
 		advance_phase(duel);
 		advance_phase(duel);
 
-		CHECK(duel.self_special_summon(self, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
+		CHECK(duel.rule_special_summon(self, domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}));
 		resolve_summon(duel);
 
 		CHECK(game.zone_of(self) == domain::Zone::MONSTER);
-		CHECK(game.find_instance(self)->summon_record().method == domain::SummonMethod::SPECIAL);
+		CHECK(game.find_instance(self)->summon_record().method == domain::SummonMethod::RULE_SPECIAL);
 	}
 
 	SUBCASE("self special failures")
@@ -2167,9 +2167,9 @@ TEST_CASE("flow::Duel resolves Fusion, Link, Ritual, and SelfSpecial summons")
 		advance_phase(duel);
 
 		// 来源区域不是 procedure 允许的HAND
-		CHECK_FALSE(duel.self_special_summon(on_field, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+		CHECK_FALSE(duel.rule_special_summon(on_field, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
 		// 条件本身不成立。
-		CHECK_FALSE(duel.self_special_summon(condition_false, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+		CHECK_FALSE(duel.rule_special_summon(condition_false, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
 		CHECK_FALSE(duel.pending_summon());
 		CHECK(game.zone_of(condition_false) == domain::Zone::HAND);
 	}
@@ -2577,7 +2577,7 @@ TEST_CASE("flow::Duel: Solemn Judgment negates Link, Ritual, and SelfSpecial Sum
 		game.place(*game.find_instance_mutable(solemn), domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE});
 		set_solemn_and_pass(duel, solemn);
 
-		CHECK(duel.self_special_summon(self, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
+		CHECK(duel.rule_special_summon(self, domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}));
 		CHECK(duel.pending_summon());
 		CHECK_FALSE(duel.pass_priority());
 		CHECK(duel.activate_card(solemn));
@@ -2896,6 +2896,98 @@ TEST_CASE("flow::Duel processes destruction events from effects")
 	CHECK(game.zone_of(igniter) == domain::Zone::MONSTER);
 	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::HAND) == 1);
 	CHECK(game.count_zone_card(domain::Player::SECOND, domain::Zone::DECK) == 0);
+}
+
+TEST_CASE("flow::Duel scopes usage keys by effect")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_usage_effect_scope";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	{
+		std::ofstream stream{directory / "98000050.json", std::ios::binary};
+		stream <<
+				R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"usage":{"kind":"TURN_PER_NAME","count":1},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":100}}]},{"type":"activated","activation":{"mode":"ignition"},"usage":{"kind":"TURN_PER_NAME","count":1},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":200}}]}]})";
+	}
+
+	constexpr domain::CardCode effect_code{98000050};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+	game.register_definition(make_monster(effect_code, 1000, 1000, 4));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto card = game.create_instance(effect_code, domain::Player::FIRST);
+	REQUIRE(card.valid());
+	game.place(
+		*game.find_instance_mutable(card),
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+	);
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_effect(card, 0));
+	settle(duel);
+
+	// 同一卡名的两个不同效果各自拥有一次使用次数
+	CHECK(duel.activate_effect(card, 1));
+	settle(duel);
+
+	CHECK(game.life_points(domain::Player::SECOND) == 7700);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel keeps TURN_PER_CARD usage with the card after control change")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_usage_turn_per_card_control";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	{
+		std::ofstream stream{directory / "98000051.json", std::ios::binary};
+		stream <<
+				R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"usage":{"kind":"TURN_PER_CARD","count":1},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":100}}]}]})";
+	}
+
+	constexpr domain::CardCode effect_code{98000051};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+	game.register_definition(make_monster(effect_code, 1000, 1000, 4));
+	REQUIRE(duel.load_scripts(directory));
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto card = game.create_instance(effect_code, domain::Player::FIRST);
+	REQUIRE(card.valid());
+	game.place(
+		*game.find_instance_mutable(card),
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+	);
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_effect(card, 0));
+	settle(duel);
+
+	// 控制权转移后仍受同一实例的一回合一次限制
+	game.place(
+		*game.find_instance_mutable(card),
+		domain::Player::SECOND,
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+	);
+	duel.pass_priority();
+	CHECK_FALSE(duel.activate_effect(card, 0));
+
+	std::filesystem::remove_all(directory);
 }
 
 TEST_CASE("flow::Duel shares usage counters within a group")
@@ -3677,7 +3769,7 @@ TEST_CASE("flow::Duel resolves an effect-driven Special Summon from the Graveyar
 	CHECK_FALSE(duel.pending_summon());
 	CHECK(game.zone_of(monster) == domain::Zone::MONSTER);
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
-	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 	CHECK(
 		std::ranges::none_of(
 			duel.windows(),
@@ -3944,7 +4036,7 @@ TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck mon
 	game.set_summon_record(
 		*game.find_instance_mutable(fusion),
 		domain::Player::FIRST,
-		domain::SummonMethod::SPECIAL,
+		domain::SummonMethod::EFFECT_SPECIAL,
 		domain::GraveyardPlacement{.index = 0},
 		{}
 	);
@@ -3963,7 +4055,7 @@ TEST_CASE("flow::Duel requires a proper summon before reviving an Extra Deck mon
 	settle(duel);
 	CHECK(game.zone_of(fusion) == domain::Zone::MONSTER);
 	CHECK(game.zone_of(second_spell) == domain::Zone::GRAVEYARD);
-	CHECK(game.find_instance(fusion)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(fusion)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 	CHECK(game.find_instance(fusion)->properly_summoned());
 
 	// 回到额外卡组后失去正规召唤状态
@@ -4173,7 +4265,7 @@ TEST_CASE("flow::Duel resolves an effect Special Summon from the Banished zone")
 
 	CHECK(game.zone_of(monster) == domain::Zone::MONSTER);
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
-	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 }
 
 TEST_CASE("flow::Duel takes control with an effect Special Summon from the opponent's Graveyard")
@@ -4211,7 +4303,7 @@ TEST_CASE("flow::Duel takes control with an effect Special Summon from the oppon
 	CHECK(game.find_instance(monster)->controller() == domain::Player::FIRST);
 	CHECK(game.find_instance(monster)->owner() == domain::Player::SECOND);
 	CHECK(game.find_instance(monster)->summon_record().controller == domain::Player::FIRST);
-	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
 
 	// 离开场上后控制权回到持有者,并进入持有者墓地
@@ -5268,7 +5360,7 @@ TEST_CASE("flow::Duel resolves Monster Reborn")
 
 	CHECK(game.zone_of(monster) == domain::Zone::MONSTER);
 	CHECK(game.zone_of(monster_reborn) == domain::Zone::GRAVEYARD);
-	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(monster)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 }
 
 TEST_CASE("flow::Duel resolves Silver's Cry")
@@ -5308,7 +5400,7 @@ TEST_CASE("flow::Duel resolves Silver's Cry")
 
 	CHECK(game.zone_of(dragon) == domain::Zone::MONSTER);
 	CHECK(game.zone_of(silvers_cry) == domain::Zone::GRAVEYARD);
-	CHECK(game.find_instance(dragon)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(dragon)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 }
 
 TEST_CASE("flow::Duel resolves Dragon Spirit of White")
@@ -5391,7 +5483,7 @@ TEST_CASE("flow::Duel resolves Dragon Spirit of White")
 		settle(duel);
 
 		CHECK(game.zone_of(spirit) == domain::Zone::MONSTER);
-		CHECK(game.find_instance(spirit)->summon_record().method == domain::SummonMethod::SPECIAL);
+		CHECK(game.find_instance(spirit)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 	}
 
 	SUBCASE("is a Normal Monster in the GY for Dragon Shrine's second send")
@@ -5699,7 +5791,7 @@ TEST_CASE("flow::Duel resolves Dragon Spirit of White")
 
 		CHECK(game.zone_of(spirit) == domain::Zone::GRAVEYARD);
 		CHECK(game.zone_of(blue_eyes) == domain::Zone::MONSTER);
-		CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::SPECIAL);
+		CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 	}
 }
 
@@ -5764,6 +5856,924 @@ TEST_CASE("flow::Duel removes a subtype while a static effect applies")
 
 	CHECK(game.zone_of(monster) == domain::Zone::HAND);
 	CHECK(game.zone_of(spell) == domain::Zone::GRAVEYARD);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel resolves Blue-Eyes Alternative White Dragon")
+{
+	constexpr domain::CardCode alternative_code{38517737};
+	constexpr domain::CardCode blue_eyes_code{89631139};
+	constexpr domain::CardCode monster_reborn_code{83764718};
+	constexpr domain::CardCode opponent_monster_code{97003001};
+
+	const auto alternative_definition = []
+	{
+		auto definition = make_monster(alternative_code, 3000, 2500, 8, domain::Race::DRAGON);
+		definition.subtypes = {domain::CardSubtype::EFFECT, domain::CardSubtype::SPECIAL_SUMMON};
+		return definition;
+	}();
+	const auto blue_eyes_definition = make_monster(blue_eyes_code, 3000, 2500, 8, domain::Race::DRAGON);
+	const auto monster_reborn_definition = make_spell(monster_reborn_code, {domain::CardSubtype::NORMAL});
+	const auto opponent_monster_definition = make_monster(opponent_monster_code, 1000, 1000, 4);
+
+	const auto prepare = [&](flow::Duel& duel) -> void
+	{
+		auto& game = duel.game();
+		game.register_definition(alternative_definition);
+		game.register_definition(blue_eyes_definition);
+		game.register_definition(monster_reborn_definition);
+		game.register_definition(opponent_monster_definition);
+
+		REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+		const auto script_errors = duel.take_script_errors();
+		for (const auto& error: script_errors)
+		{
+			MESSAGE(error);
+		}
+		REQUIRE(script_errors.empty());
+
+		const auto* alternative_script = duel.find_script(alternative_code);
+		REQUIRE(alternative_script != nullptr);
+		REQUIRE(alternative_script->summons.size() == 1);
+		const auto* rule = std::get_if<dsl::RuleSpecialProcedure>(&alternative_script->summons[0]);
+		REQUIRE(rule != nullptr);
+		CHECK(rule->once_per_turn);
+
+		game.set_life_points(domain::Player::FIRST, 8000);
+		game.set_life_points(domain::Player::SECOND, 8000);
+	};
+
+	const auto advance_to_second_player_main_1 = [](flow::Duel& duel) -> void
+	{
+		advance_phase(duel); // STANDBY
+		advance_phase(duel); // MAIN_1
+		advance_phase(duel); // END (first turn skips Battle)
+		duel.end_turn();
+		advance_phase(duel); // STANDBY
+		advance_phase(duel); // MAIN_1
+	};
+
+	SUBCASE("cannot be Normal Summoned/Set and needs Blue-Eyes in hand")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto alternative = game.create_instance(alternative_code, domain::Player::FIRST);
+		REQUIRE(alternative.valid());
+		game.place(
+			*game.find_instance_mutable(alternative),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK_FALSE(duel.normal_summon(alternative, domain::FieldColumn::C1));
+		CHECK_FALSE(duel.set_monster(alternative, domain::FieldColumn::C1));
+
+		const auto first_tribute = game.create_instance(opponent_monster_code, domain::Player::FIRST);
+		REQUIRE(first_tribute.valid());
+		game.place(
+			*game.find_instance_mutable(first_tribute),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		const auto second_tribute = game.create_instance(opponent_monster_code, domain::Player::FIRST);
+		REQUIRE(second_tribute.valid());
+		game.place(
+			*game.find_instance_mutable(second_tribute),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		const std::array tributes{first_tribute, second_tribute};
+		CHECK_FALSE(duel.tribute_summon(alternative, domain::FieldColumn::C3, tributes));
+		CHECK(game.zone_of(first_tribute) == domain::Zone::MONSTER);
+		CHECK(game.zone_of(second_tribute) == domain::Zone::MONSTER);
+
+		CHECK_FALSE(duel.rule_special_summon(
+			alternative,
+			domain::MonsterPlacement{.column = domain::FieldColumn::C3, .position = domain::Position::FACE_UP_ATTACK}
+		));
+
+		const auto blue_eyes = game.create_instance(blue_eyes_code, domain::Player::FIRST);
+		REQUIRE(blue_eyes.valid());
+		game.place(
+			*game.find_instance_mutable(blue_eyes),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		CHECK(duel.rule_special_summon(
+			alternative,
+			domain::MonsterPlacement{.column = domain::FieldColumn::C3, .position = domain::Position::FACE_UP_ATTACK}
+		));
+		resolve_summon(duel);
+		settle(duel);
+
+		CHECK(game.zone_of(alternative) == domain::Zone::MONSTER);
+		CHECK(game.zone_of(blue_eyes) == domain::Zone::HAND);
+		CHECK(game.find_instance(alternative)->properly_summoned());
+		CHECK(game.find_instance(alternative)->summon_record().method == domain::SummonMethod::RULE_SPECIAL);
+
+		const auto second_alternative = game.create_instance(alternative_code, domain::Player::FIRST);
+		REQUIRE(second_alternative.valid());
+		game.place(
+			*game.find_instance_mutable(second_alternative),
+			domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		const auto second_blue_eyes = game.create_instance(blue_eyes_code, domain::Player::FIRST);
+		REQUIRE(second_blue_eyes.valid());
+		game.place(
+			*game.find_instance_mutable(second_blue_eyes),
+			domain::HandPlacement{.index = 2, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		CHECK_FALSE(duel.rule_special_summon(
+			second_alternative,
+			domain::MonsterPlacement{.column = domain::FieldColumn::C4, .position = domain::Position::FACE_UP_ATTACK}
+		));
+		CHECK(game.zone_of(second_alternative) == domain::Zone::HAND);
+		CHECK(game.zone_of(second_blue_eyes) == domain::Zone::HAND);
+	}
+
+	SUBCASE("destroys an opponent monster only when Special Summoned from the hand")
+	{
+		driver::LocalTestSelector selector{nullptr, nullptr, nullptr, choose_all_triggers};
+		flow::Duel duel{selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto alternative = game.create_instance(alternative_code, domain::Player::FIRST);
+		REQUIRE(alternative.valid());
+		game.place(
+			*game.find_instance_mutable(alternative),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		const auto blue_eyes = game.create_instance(blue_eyes_code, domain::Player::FIRST);
+		REQUIRE(blue_eyes.valid());
+		game.place(
+			*game.find_instance_mutable(blue_eyes),
+			domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		const auto first_opponent = game.create_instance(opponent_monster_code, domain::Player::SECOND);
+		REQUIRE(first_opponent.valid());
+		game.place(
+			*game.find_instance_mutable(first_opponent),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK(duel.rule_special_summon(
+			alternative,
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		));
+		resolve_summon(duel);
+		settle(duel);
+
+		CHECK(game.zone_of(first_opponent) == domain::Zone::GRAVEYARD);
+
+		game.move_to_graveyard(*game.find_instance_mutable(alternative), {domain::Reason::EFFECT});
+
+		const auto monster_reborn = game.create_instance(monster_reborn_code, domain::Player::FIRST);
+		REQUIRE(monster_reborn.valid());
+		game.place(
+			*game.find_instance_mutable(monster_reborn),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		const auto second_opponent = game.create_instance(opponent_monster_code, domain::Player::SECOND);
+		REQUIRE(second_opponent.valid());
+		game.place(
+			*game.find_instance_mutable(second_opponent),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		CHECK(duel.activate_card(monster_reborn));
+		settle(duel);
+
+		CHECK(game.zone_of(alternative) == domain::Zone::MONSTER);
+		CHECK(game.zone_of(second_opponent) == domain::Zone::MONSTER);
+	}
+
+	SUBCASE("cannot be revived before being properly Special Summoned")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto alternative = game.create_instance(alternative_code, domain::Player::FIRST);
+		REQUIRE(alternative.valid());
+		game.place(*game.find_instance_mutable(alternative), domain::GraveyardPlacement{.index = 0});
+
+		const auto monster_reborn = game.create_instance(monster_reborn_code, domain::Player::FIRST);
+		REQUIRE(monster_reborn.valid());
+		game.place(
+			*game.find_instance_mutable(monster_reborn),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK(duel.activate_card(monster_reborn));
+		settle(duel);
+
+		CHECK(game.zone_of(alternative) == domain::Zone::GRAVEYARD);
+	}
+
+	SUBCASE("cannot attack after using its destroy effect")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto alternative = game.create_instance(alternative_code, domain::Player::SECOND);
+		REQUIRE(alternative.valid());
+		game.place(
+			*game.find_instance_mutable(alternative),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		const auto opponent_monster = game.create_instance(opponent_monster_code, domain::Player::FIRST);
+		REQUIRE(opponent_monster.valid());
+		game.place(
+			*game.find_instance_mutable(opponent_monster),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		advance_to_second_player_main_1(duel);
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK(duel.activate_effect(alternative, 1));
+		settle(duel);
+
+		CHECK(game.zone_of(opponent_monster) == domain::Zone::GRAVEYARD);
+
+		CHECK(advance_phase(duel)); // BATTLE
+		REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+		CHECK_FALSE(duel.declare_attack(alternative, std::nullopt));
+	}
+
+	SUBCASE("cannot use its destroy effect after declaring an attack")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto alternative = game.create_instance(alternative_code, domain::Player::FIRST);
+		REQUIRE(alternative.valid());
+		game.place(
+			*game.find_instance_mutable(alternative),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		const auto opponent_monster = game.create_instance(opponent_monster_code, domain::Player::SECOND);
+		REQUIRE(opponent_monster.valid());
+		game.place(
+			*game.find_instance_mutable(opponent_monster),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		game.mark_attacked(*game.find_instance_mutable(alternative));
+
+		CHECK_FALSE(duel.activate_effect(alternative, 1));
+		CHECK(game.zone_of(opponent_monster) == domain::Zone::MONSTER);
+	}
+
+	SUBCASE("can attack again after being revived")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto alternative = game.create_instance(alternative_code, domain::Player::SECOND);
+		REQUIRE(alternative.valid());
+		game.place(
+			*game.find_instance_mutable(alternative),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		const auto blue_eyes = game.create_instance(blue_eyes_code, domain::Player::SECOND);
+		REQUIRE(blue_eyes.valid());
+		game.place(
+			*game.find_instance_mutable(blue_eyes),
+			domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		const auto opponent_monster = game.create_instance(opponent_monster_code, domain::Player::FIRST);
+		REQUIRE(opponent_monster.valid());
+		game.place(
+			*game.find_instance_mutable(opponent_monster),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		advance_to_second_player_main_1(duel);
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK(duel.rule_special_summon(
+			alternative,
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		));
+		resolve_summon(duel);
+		settle(duel);
+
+		CHECK(duel.activate_effect(alternative, 1));
+		settle(duel);
+		CHECK(game.zone_of(opponent_monster) == domain::Zone::GRAVEYARD);
+
+		game.move_to_graveyard(*game.find_instance_mutable(alternative), {domain::Reason::EFFECT});
+
+		const auto monster_reborn = game.create_instance(monster_reborn_code, domain::Player::SECOND);
+		REQUIRE(monster_reborn.valid());
+		game.place(
+			*game.find_instance_mutable(monster_reborn),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		CHECK(duel.activate_card(monster_reborn));
+		settle(duel);
+		CHECK(game.zone_of(alternative) == domain::Zone::MONSTER);
+
+		CHECK(advance_phase(duel)); // BATTLE
+		REQUIRE(duel.turn().phase() == domain::Phase::BATTLE);
+		CHECK(duel.declare_attack(alternative, std::nullopt));
+	}
+
+	SUBCASE("each copy can use its destroy effect once per turn")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto first_alternative = game.create_instance(alternative_code, domain::Player::FIRST);
+		REQUIRE(first_alternative.valid());
+		game.place(
+			*game.find_instance_mutable(first_alternative),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		const auto second_alternative = game.create_instance(alternative_code, domain::Player::FIRST);
+		REQUIRE(second_alternative.valid());
+		game.place(
+			*game.find_instance_mutable(second_alternative),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		const auto first_opponent = game.create_instance(opponent_monster_code, domain::Player::SECOND);
+		REQUIRE(first_opponent.valid());
+		game.place(
+			*game.find_instance_mutable(first_opponent),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		const auto second_opponent = game.create_instance(opponent_monster_code, domain::Player::SECOND);
+		REQUIRE(second_opponent.valid());
+		game.place(
+			*game.find_instance_mutable(second_opponent),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK(duel.activate_effect(first_alternative, 1));
+		settle(duel);
+		CHECK(duel.activate_effect(second_alternative, 1));
+		settle(duel);
+
+		CHECK(game.zone_of(first_opponent) == domain::Zone::GRAVEYARD);
+		CHECK(game.zone_of(second_opponent) == domain::Zone::GRAVEYARD);
+	}
+}
+
+TEST_CASE("flow::Duel treats Blue-Eyes Alternative White Dragon as Blue-Eyes White Dragon")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_alternative_name";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	const auto write = [&](const std::string_view name, const std::string_view text) -> void
+	{
+		std::ofstream stream{directory / name, std::ios::binary};
+		stream << text;
+	};
+
+	write(
+		"98000010.json",
+		R"({"identity":{"kind":"SPELL","subtypes":["NORMAL"]},"effects":[{"type":"activated","activation":{"mode":"activation"},"condition":{"call":"exists_matching","args":{"players":["SELF"],"zones":["MONSTER","EXTRA_MONSTER","GRAVEYARD"],"min":1,"filter":{"call":"is_code","args":{"card":{"call":"$"},"code":89631139}}}},"effect":[{"call":"pick_resolution","args":{"players":["SELF"],"zones":["MONSTER","EXTRA_MONSTER","GRAVEYARD"],"min":1,"max":1,"filter":{"call":"is_code","args":{"card":{"call":"$"},"code":89631139}}},"bind":"selected"},{"call":"add_to_hand","args":{"cards":{"var":"selected"}}}]}]})"
+	);
+
+	constexpr domain::CardCode alternative_code{38517737};
+	constexpr domain::CardCode spell_code{98000010};
+
+	const auto alternative_definition = []
+	{
+		auto definition = make_monster(alternative_code, 3000, 2500, 8, domain::Race::DRAGON);
+		definition.subtypes = {domain::CardSubtype::EFFECT, domain::CardSubtype::SPECIAL_SUMMON};
+		return definition;
+	}();
+	const auto spell_definition = make_spell(spell_code, {domain::CardSubtype::NORMAL});
+
+	const auto prepare = [&](flow::Duel& duel) -> void
+	{
+		auto& game = duel.game();
+		game.register_definition(alternative_definition);
+		game.register_definition(spell_definition);
+
+		REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+		REQUIRE(duel.load_scripts(directory));
+
+		game.set_life_points(domain::Player::FIRST, 8000);
+		game.set_life_points(domain::Player::SECOND, 8000);
+	};
+
+	SUBCASE("in the Graveyard")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto alternative = game.create_instance(alternative_code, domain::Player::FIRST);
+		REQUIRE(alternative.valid());
+		game.place(*game.find_instance_mutable(alternative), domain::GraveyardPlacement{.index = 0});
+
+		const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+		REQUIRE(spell.valid());
+		game.place(
+			*game.find_instance_mutable(spell),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK(duel.activate_card(spell));
+		settle(duel);
+
+		CHECK(game.zone_of(alternative) == domain::Zone::HAND);
+	}
+
+	SUBCASE("on the field")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto alternative = game.create_instance(alternative_code, domain::Player::FIRST);
+		REQUIRE(alternative.valid());
+		game.place(
+			*game.find_instance_mutable(alternative),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		const auto spell = game.create_instance(spell_code, domain::Player::FIRST);
+		REQUIRE(spell.valid());
+		game.place(
+			*game.find_instance_mutable(spell),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK(duel.activate_card(spell));
+		settle(duel);
+
+		CHECK(game.zone_of(alternative) == domain::Zone::HAND);
+	}
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel resolves unclassified effect Special Summons without a chain")
+{
+	constexpr domain::CardCode cyber_dragon_code{70095154};
+	constexpr domain::CardCode opponent_monster_code{97003001};
+	constexpr domain::CardCode effect_summon_code{98000020};
+
+	const auto cyber_dragon_definition = []
+	{
+		auto definition = make_monster(cyber_dragon_code, 2100, 1600, 5, domain::Race::MACHINE);
+		definition.subtypes = {domain::CardSubtype::EFFECT};
+		definition.monster->attribute = domain::Attribute::LIGHT;
+		return definition;
+	}();
+	const auto opponent_monster_definition = make_monster(opponent_monster_code, 1000, 1000, 4);
+
+	const auto prepare = [&](flow::Duel& duel) -> void
+	{
+		auto& game = duel.game();
+		game.register_definition(cyber_dragon_definition);
+		game.register_definition(opponent_monster_definition);
+
+		REQUIRE(duel.load_scripts(std::filesystem::path{CG_CARDS_DIR}));
+		game.set_life_points(domain::Player::FIRST, 8000);
+		game.set_life_points(domain::Player::SECOND, 8000);
+	};
+
+	SUBCASE("Cyber Dragon Special Summons itself from the hand")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto cyber_dragon = game.create_instance(cyber_dragon_code, domain::Player::FIRST);
+		REQUIRE(cyber_dragon.valid());
+		game.place(
+			*game.find_instance_mutable(cyber_dragon),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		const auto opponent_monster = game.create_instance(opponent_monster_code, domain::Player::SECOND);
+		REQUIRE(opponent_monster.valid());
+		game.place(
+			*game.find_instance_mutable(opponent_monster),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		const auto* script = duel.find_script(cyber_dragon_code);
+		REQUIRE(script != nullptr);
+		CHECK(script->summons.empty());
+		REQUIRE(script->effects.size() == 1);
+		CHECK(std::get_if<dsl::UnclassifiedSpecialSummon>(&script->effects[0].body) != nullptr);
+
+		CHECK_FALSE(duel.activate_effect(cyber_dragon, 0));
+		CHECK(duel.apply_special_summon_effect(
+			cyber_dragon,
+			0,
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		));
+		CHECK(duel.chain().empty());
+		CHECK(duel.pending_summon());
+
+		resolve_summon(duel);
+		settle(duel);
+
+		CHECK(game.zone_of(cyber_dragon) == domain::Zone::MONSTER);
+		CHECK(game.find_instance(cyber_dragon)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
+	}
+
+	SUBCASE("effect only applies when only the opponent controls a monster")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto cyber_dragon = game.create_instance(cyber_dragon_code, domain::Player::FIRST);
+		REQUIRE(cyber_dragon.valid());
+		game.place(
+			*game.find_instance_mutable(cyber_dragon),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK_FALSE(duel.apply_special_summon_effect(
+			cyber_dragon,
+			0,
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		));
+		CHECK(game.zone_of(cyber_dragon) == domain::Zone::HAND);
+	}
+
+	SUBCASE("effect is rejected when you also control a monster")
+	{
+		flow::Duel duel{g_selector};
+		prepare(duel);
+		auto& game = duel.game();
+
+		const auto cyber_dragon = game.create_instance(cyber_dragon_code, domain::Player::FIRST);
+		REQUIRE(cyber_dragon.valid());
+		game.place(
+			*game.find_instance_mutable(cyber_dragon),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		const auto own_monster = game.create_instance(opponent_monster_code, domain::Player::FIRST);
+		REQUIRE(own_monster.valid());
+		game.place(
+			*game.find_instance_mutable(own_monster),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		const auto opponent_monster = game.create_instance(opponent_monster_code, domain::Player::SECOND);
+		REQUIRE(opponent_monster.valid());
+		game.place(
+			*game.find_instance_mutable(opponent_monster),
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		);
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK_FALSE(duel.apply_special_summon_effect(
+			cyber_dragon,
+			0,
+			domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}
+		));
+	}
+
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_effect_special_usage";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+	{
+		std::ofstream stream{directory / "98000020.json", std::ios::binary};
+		stream <<
+				R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"unclassified_special_summon","source_zones":["HAND"],"condition":true,"usage":{"kind":"TURN_PER_NAME","count":1}}]})";
+	}
+
+	SUBCASE("effect usage restriction is enforced without a chain")
+	{
+		const auto effect_definition = make_monster(effect_summon_code, 1000, 1000, 4);
+		flow::Duel duel{g_selector};
+		auto& game = duel.game();
+		game.register_definition(effect_definition);
+
+		REQUIRE(duel.load_scripts(directory));
+		game.set_life_points(domain::Player::FIRST, 8000);
+		game.set_life_points(domain::Player::SECOND, 8000);
+
+		const auto first = game.create_instance(effect_summon_code, domain::Player::FIRST);
+		REQUIRE(first.valid());
+		game.place(
+			*game.find_instance_mutable(first),
+			domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		const auto second = game.create_instance(effect_summon_code, domain::Player::FIRST);
+		REQUIRE(second.valid());
+		game.place(
+			*game.find_instance_mutable(second),
+			domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE}
+		);
+
+		CHECK(advance_phase(duel)); // STANDBY
+		CHECK(advance_phase(duel)); // MAIN_1
+		REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+		CHECK(duel.apply_special_summon_effect(
+			first,
+			0,
+			domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+		));
+		CHECK(duel.chain().empty());
+		resolve_summon(duel);
+		settle(duel);
+		CHECK(game.zone_of(first) == domain::Zone::MONSTER);
+
+		CHECK_FALSE(duel.apply_special_summon_effect(
+			second,
+			0,
+			domain::MonsterPlacement{.column = domain::FieldColumn::C2, .position = domain::Position::FACE_UP_ATTACK}
+		));
+		CHECK(game.zone_of(second) == domain::Zone::HAND);
+	}
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel isolates TURN_PER_NAME usage and mutex by controller")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_usage_controller";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	{
+		std::ofstream stream{directory / "98000030.json", std::ios::binary};
+		stream <<
+				R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":50}}]},{"type":"activated","activation":{"mode":"quick"},"usage":{"kind":"TURN_PER_NAME","count":1},"mutex":0,"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":100}}]}]})";
+	}
+
+	constexpr domain::CardCode effect_code{98000030};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+	game.register_definition(make_monster(effect_code, 1000, 1000, 4));
+	const auto loaded = duel.load_scripts(directory);
+	for (const auto& error: duel.take_script_errors())
+	{
+		MESSAGE(error);
+	}
+	REQUIRE(loaded);
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto first = game.create_instance(effect_code, domain::Player::FIRST);
+	REQUIRE(first.valid());
+	game.place(
+		*game.find_instance_mutable(first),
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+	);
+
+	const auto second = game.create_instance(effect_code, domain::Player::SECOND);
+	REQUIRE(second.valid());
+	game.place(
+		*game.find_instance_mutable(second),
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+	);
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_effect(first, 1));
+	REQUIRE(duel.chain().size() == 1);
+	CHECK(duel.activate_effect(second, 1));
+	REQUIRE(duel.chain().size() == 2);
+
+	settle(duel);
+
+	CHECK(game.life_points(domain::Player::FIRST) == 7900);
+	CHECK(game.life_points(domain::Player::SECOND) == 7900);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel supports composite TURN_PER_NAME and ONCE_PER_CARD restriction")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_usage_combined_face_up";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+
+	{
+		std::ofstream stream{directory / "98000040.json", std::ios::binary};
+		stream <<
+				R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"quick"},"usage":{"kind":["TURN_PER_NAME","ONCE_PER_CARD"],"count":1},"effect":[{"call":"effect_damage","args":{"players":["OPPONENT"],"amount":100}}]}]})";
+	}
+
+	constexpr domain::CardCode effect_code{98000040};
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+	game.register_definition(make_monster(effect_code, 1000, 1000, 4));
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto card = game.create_instance(effect_code, domain::Player::FIRST);
+	REQUIRE(card.valid());
+	game.place(
+		*game.find_instance_mutable(card),
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+	);
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	// 第一次使用:两个限制同时记录
+	CHECK(duel.activate_effect(card, 0));
+	settle(duel);
+	CHECK_FALSE(duel.activate_effect(card, 0));
+
+	// 控制权转移不重置“表侧存在一次”
+	game.place(
+		*game.find_instance_mutable(card),
+		domain::Player::SECOND,
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+	);
+
+	CHECK(advance_phase(duel)); // END(first turn skips Battle)
+	CHECK(duel.end_turn());
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+
+	// 卡名限制已随回合重置,但表侧存在一次仍阻止使用
+	CHECK_FALSE(duel.activate_effect(card, 0));
+
+	// 翻里侧再翻表侧:表侧存在周期重置,但卡名限制仍允许(本回合 SECOND 未使用过)
+	game.place(
+		*game.find_instance_mutable(card),
+		domain::Player::SECOND,
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+	game.place(
+		*game.find_instance_mutable(card),
+		domain::Player::SECOND,
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+	);
+
+	CHECK(duel.activate_effect(card, 0));
+	settle(duel);
+
+	// 再翻一次只重置“表侧存在一次”;卡名限制本回合已使用,仍不能再用
+	game.place(
+		*game.find_instance_mutable(card),
+		domain::Player::SECOND,
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+	game.place(
+		*game.find_instance_mutable(card),
+		domain::Player::SECOND,
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+	);
+	CHECK_FALSE(duel.activate_effect(card, 0));
+
+	CHECK(game.life_points(domain::Player::FIRST) == 7900);
+	CHECK(game.life_points(domain::Player::SECOND) == 7900);
+
+	std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("flow::Duel resolves activating effect Special Summons as chain links")
+{
+	const auto directory = std::filesystem::temp_directory_path() / "cg_duel_activating_effect_special";
+	std::filesystem::remove_all(directory);
+	std::filesystem::create_directories(directory);
+	{
+		std::ofstream stream{directory / "98000021.json", std::ios::binary};
+		stream <<
+				R"({"identity":{"kind":"MONSTER","subtypes":["EFFECT"],"monster":{"attribute":"DARK","race":"FIEND","level":4,"attack":1000,"defense":1000}},"effects":[{"type":"activated","activation":{"mode":"ignition"},"zones":["HAND"],"usage":{"kind":"TURN_PER_NAME","count":1},"condition":{"call":"exists_matching","args":{"players":["OPPONENT"],"zones":["MONSTER","EXTRA_MONSTER"],"min":1}},"effect":[{"call":"special_summon","args":{"card":{"call":"this_card","args":{}},"method":"EFFECT_SPECIAL","position":"FACE_UP_ATTACK"}}]}]})";
+	}
+
+	constexpr domain::CardCode activating_code{98000021};
+	constexpr domain::CardCode opponent_monster_code{97003001};
+
+	const auto activating_definition = []
+	{
+		auto definition = make_monster(activating_code, 1000, 1000, 4);
+		definition.subtypes = {domain::CardSubtype::EFFECT};
+		return definition;
+	}();
+	const auto opponent_monster_definition = make_monster(opponent_monster_code, 1000, 1000, 4);
+
+	flow::Duel duel{g_selector};
+	auto& game = duel.game();
+	game.register_definition(activating_definition);
+	game.register_definition(opponent_monster_definition);
+	REQUIRE(duel.load_scripts(directory));
+
+	game.set_life_points(domain::Player::FIRST, 8000);
+	game.set_life_points(domain::Player::SECOND, 8000);
+
+	const auto first = game.create_instance(activating_code, domain::Player::FIRST);
+	REQUIRE(first.valid());
+	game.place(
+		*game.find_instance_mutable(first),
+		domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+
+	const auto second = game.create_instance(activating_code, domain::Player::FIRST);
+	REQUIRE(second.valid());
+	game.place(
+		*game.find_instance_mutable(second),
+		domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+
+	const auto opponent_monster = game.create_instance(opponent_monster_code, domain::Player::SECOND);
+	REQUIRE(opponent_monster.valid());
+	game.place(
+		*game.find_instance_mutable(opponent_monster),
+		domain::MonsterPlacement{.column = domain::FieldColumn::C1, .position = domain::Position::FACE_UP_ATTACK}
+	);
+
+	const auto* script = duel.find_script(activating_code);
+	REQUIRE(script != nullptr);
+	CHECK(script->summons.empty());
+	REQUIRE(script->effects.size() == 1);
+	CHECK(std::get_if<dsl::ActivatedEffect>(&script->effects[0].body) != nullptr);
+	CHECK(std::get_if<dsl::UnclassifiedSpecialSummon>(&script->effects[0].body) == nullptr);
+
+	CHECK(advance_phase(duel)); // STANDBY
+	CHECK(advance_phase(duel)); // MAIN_1
+	REQUIRE(duel.turn().phase() == domain::Phase::MAIN_1);
+
+	CHECK(duel.activate_effect(first, 0));
+	CHECK(!duel.chain().empty());
+	CHECK(!duel.pending_summon());
+
+	settle(duel);
+
+	CHECK(game.zone_of(first) == domain::Zone::MONSTER);
+	CHECK(game.find_instance(first)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
+
+	CHECK_FALSE(duel.activate_effect(second, 0));
+	CHECK(game.zone_of(second) == domain::Zone::HAND);
 
 	std::filesystem::remove_all(directory);
 }
@@ -6484,7 +7494,7 @@ TEST_CASE("flow::Duel resolves Sage with Eyes of Blue discard effect")
 	CHECK(game.zone_of(sage) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(effect_monster) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(blue_eyes) == domain::Zone::MONSTER);
-	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 }
 
 TEST_CASE("flow::Duel excludes the activating card from pick_cost")
@@ -6702,7 +7712,7 @@ TEST_CASE("flow::Duel resolves One for One")
 	CHECK(game.zone_of(cost) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(target) == domain::Zone::MONSTER);
 	CHECK(game.zone_of(one_for_one) == domain::Zone::GRAVEYARD);
-	CHECK(game.find_instance(target)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(target)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 }
 
 TEST_CASE("flow::Duel resolves Protector with Eyes of Blue normal-summon effect")
@@ -6810,7 +7820,7 @@ TEST_CASE("flow::Duel resolves Protector with Eyes of Blue send effect")
 	CHECK(game.zone_of(protector) == domain::Zone::MONSTER);
 	CHECK(game.zone_of(effect_monster) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(blue_eyes) == domain::Zone::MONSTER);
-	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 }
 
 TEST_CASE("flow::Duel resolves Master with Eyes of Blue normal-summon effect")
@@ -6929,7 +7939,7 @@ TEST_CASE("flow::Duel resolves Master with Eyes of Blue graveyard effect")
 	CHECK(game.zone_of(master) == domain::Zone::DECK);
 	CHECK(game.zone_of(effect_monster) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(blue_eyes) == domain::Zone::MONSTER);
-	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 }
 
 TEST_CASE("flow::Duel resolves The White Stone of Ancients end-phase effect")
@@ -6991,7 +8001,7 @@ TEST_CASE("flow::Duel resolves The White Stone of Ancients end-phase effect")
 
 	CHECK(game.zone_of(white_stone) == domain::Zone::GRAVEYARD);
 	CHECK(game.zone_of(blue_eyes) == domain::Zone::MONSTER);
-	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::SPECIAL);
+	CHECK(game.find_instance(blue_eyes)->summon_record().method == domain::SummonMethod::EFFECT_SPECIAL);
 }
 
 TEST_CASE("flow::Duel resolves The White Stone of Ancients graveyard effect")

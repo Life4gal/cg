@@ -375,6 +375,12 @@ namespace cg::state
 		// 记录召唤信息
 		auto set_summon_record(CardInstance& card, domain::Player controller, domain::SummonMethod method, domain::Placement from, std::vector<CardInstanceId> materials) const noexcept -> void;
 
+		// 禁止该卡在当前回合攻击(离场或重新召唤时清除)
+		auto prevent_attack(CardInstance& card) const noexcept -> void;
+
+		// 记录该卡已在当前回合宣言攻击
+		auto mark_attacked(CardInstance& card) const noexcept -> void;
+
 		// 添加超量素材
 		auto add_overlay(CardInstance& card, const CardInstance& material) noexcept -> void;
 		// 移除超量素材

@@ -70,7 +70,7 @@
 								"group": {"var": "monster"}
 							}
 						},
-						"method": "SPECIAL",
+						"method": "EFFECT_SPECIAL",
 						"position": "FACE_UP_ATTACK"
 					}
 				}

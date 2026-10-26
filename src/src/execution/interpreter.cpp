@@ -269,6 +269,10 @@ namespace cg::execution
 		{
 			return discard(*definition, call, context);
 		}
+		if (definition->name == "reveal")
+		{
+			return reveal(*definition, call, context);
+		}
 		if (definition->name == "send_to_graveyard")
 		{
 			return send_to_graveyard(*definition, call, context);
@@ -324,6 +328,10 @@ namespace cg::execution
 		if (definition->name == "sent_to_graveyard_this_turn")
 		{
 			return sent_to_graveyard_this_turn(*definition, call, context);
+		}
+		if (definition->name == "summoned_from_hand")
+		{
+			return summoned_from_hand(*definition, call, context);
 		}
 		if (definition->name == "attack")
 		{
@@ -396,6 +404,10 @@ namespace cg::execution
 		if (definition->name == "change_position")
 		{
 			return change_position(*definition, call, context);
+		}
+		if (definition->name == "prevent_attack_this_turn")
+		{
+			return prevent_attack_this_turn(*definition, call, context);
 		}
 		if (definition->name == "special_summon")
 		{
@@ -718,6 +730,33 @@ namespace cg::execution
 
 			pending_events_.emplace_back(domain::EventCode::DISCARDED, card);
 			pending_events_.emplace_back(domain::EventCode::SENT_TO_GRAVEYARD, card);
+		}
+
+		return Void{};
+	}
+
+	auto Interpreter::reveal(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* cards = as_argument<dsl::ValueClass::GROUP>(*args, 0);
+		if (cards == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		for (const auto card: *cards)
+		{
+			if (game.find_instance(card) == nullptr)
+			{
+				return std::nullopt;
+			}
 		}
 
 		return Void{};
@@ -1201,6 +1240,31 @@ namespace cg::execution
 		return Boolean{instance->move_provenance().turn_id == game.turn_id()};
 	}
 
+	auto Interpreter::summoned_from_hand(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		const auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		if (card == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		const auto* instance = game.find_instance(*card);
+		if (instance == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		return Boolean{domain::zone_of(instance->summon_record().from) == domain::Zone::HAND};
+	}
+
 	auto Interpreter::level(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
 		const auto& game = game_.get();
@@ -1668,6 +1732,44 @@ namespace cg::execution
 		return Void{};
 	}
 
+	auto Interpreter::prevent_attack_this_turn(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
+	{
+		auto& game = game_.get();
+
+		const auto args = evaluate_arguments(definition, call, context);
+		if (!args.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const auto* card = as_argument<dsl::ValueClass::CARD>(*args, 0);
+		if (card == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		auto* instance = game.find_instance_mutable(*card);
+		if (instance == nullptr)
+		{
+			return std::nullopt;
+		}
+
+		if (const auto zone = game.zone_of(*card);
+			zone != domain::Zone::MONSTER && zone != domain::Zone::EXTRA_MONSTER)
+		{
+			return std::nullopt;
+		}
+
+		if (instance->has_attacked(game.turn_id()))
+		{
+			return std::nullopt;
+		}
+
+		game.prevent_attack(*instance);
+
+		return Void{};
+	}
+
 	auto Interpreter::special_summon(const dsl::PrimitiveDef& definition, const dsl::PrimitiveCall& call, Context& context) noexcept -> std::optional<Value>
 	{
 		auto& game = game_.get();
@@ -1711,6 +1813,7 @@ namespace cg::execution
 					domain::CardSubtype::XYZ,
 					domain::CardSubtype::LINK,
 					domain::CardSubtype::RITUAL,
+					domain::CardSubtype::SPECIAL_SUMMON,
 			}
 		);
 

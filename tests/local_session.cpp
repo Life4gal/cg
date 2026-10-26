@@ -269,6 +269,79 @@ TEST_CASE("driver::LocalDuelSession reports surrender")
 	CHECK(*result.winner == domain::Player::SECOND);
 }
 
+TEST_CASE("driver::LocalDuelSession applies a self Special Summon action")
+{
+	constexpr domain::CardCode alternative_code{38517737};
+	constexpr domain::CardCode blue_eyes_code{89631139};
+
+	auto first = std::make_unique<driver::ScriptedController>();
+	auto second = std::make_unique<driver::ScriptedController>();
+	auto* const first_controller = first.get();
+	auto* const second_controller = second.get();
+
+	driver::LocalDuelSession session{std::move(first), std::move(second)};
+	REQUIRE(session.load_scripts(CG_CARDS_DIR));
+
+	flow::DuelDeck deck{};
+	deck.main_deck = {alternative_code, blue_eyes_code};
+
+	flow::DuelConfig config{};
+	config.decks[std::to_underlying(domain::Player::FIRST)] = deck;
+	config.decks[std::to_underlying(domain::Player::SECOND)] = deck;
+	config.seed = 20261026;
+	config.first_player = domain::Player::FIRST;
+	config.opening_hand = 0;
+	config.deck_rules.main_min = 1;
+	config.deck_rules.main_max = 60;
+
+	REQUIRE(session.initialize(config));
+
+	auto& game = session.duel().game();
+	const auto alternative = game.create_instance(alternative_code, domain::Player::FIRST);
+	REQUIRE(alternative.valid());
+	game.place(
+		*game.find_instance_mutable(alternative),
+		domain::HandPlacement{.index = 0, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+
+	const auto blue_eyes = game.create_instance(blue_eyes_code, domain::Player::FIRST);
+	REQUIRE(blue_eyes.valid());
+	game.place(
+		*game.find_instance_mutable(blue_eyes),
+		domain::HandPlacement{.index = 1, .position = domain::Position::FACE_DOWN_DEFENSE}
+	);
+
+	first_controller->set_actions(
+		{
+				driver::PassAction{},
+				driver::PassAction{},
+				driver::SelfSpecialSummonAction{
+						.card = alternative,
+						.placement = domain::MonsterPlacement{
+								.column = domain::FieldColumn::C1,
+								.position = domain::Position::FACE_UP_ATTACK,
+						},
+				},
+				driver::PassAction{},
+		}
+	);
+	second_controller->set_actions(
+		{
+				driver::PassAction{},
+				driver::AdvancePhaseAction{},
+				driver::PassAction{},
+				driver::AdvancePhaseAction{},
+				driver::PassAction{},
+		}
+	);
+
+	const auto result = session.run();
+
+	CHECK(result.status == driver::LocalDuelSession::Status::NO_ACTION);
+	CHECK(game.zone_of(alternative) == domain::Zone::MONSTER);
+	CHECK(game.zone_of(blue_eyes) == domain::Zone::HAND);
+}
+
 TEST_CASE("driver::LocalDuelSession initializes the Blue-Eyes pilot deck")
 {
 	auto first = std::make_unique<driver::ScriptedController>();
@@ -302,9 +375,9 @@ TEST_CASE("driver::LocalDuelSession initializes the Blue-Eyes pilot deck")
 
 	const auto view = session.view(domain::Player::FIRST);
 	CHECK(view.self_side.hand.size() == 5);
-	CHECK(view.self_side.deck_count == 54);
+	CHECK(view.self_side.deck_count == 55);
 	CHECK(view.self_side.extra_deck.size() == 3);
 	CHECK(view.opponent_side.hand_count == 5);
-	CHECK(view.opponent_side.deck_count == 54);
+	CHECK(view.opponent_side.deck_count == 55);
 	CHECK(view.opponent_side.extra_deck_count == 3);
 }

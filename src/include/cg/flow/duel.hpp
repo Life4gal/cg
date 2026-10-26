@@ -91,7 +91,7 @@ namespace cg::flow
 			domain::SummonMethod method;
 			// 召唤的卡
 			std::reference_wrapper<state::CardInstance> card;
-			// 祭品/素材(已在宣言前处理)
+			// 祭品/素材(已在召唤前处理)
 			std::vector<std::reference_wrapper<state::CardInstance>> materials;
 		};
 
@@ -163,59 +163,167 @@ namespace cg::flow
 		// 使用次数记录
 		// ================================================================
 
-		class UsageKey
+		// dsl::UsageKind::TURN_PER_CARD
+		class UsageTurnPerCard
 		{
 		public:
-			using owner_type = state::CardInstanceId::value_type;
+			state::CardInstanceId card;
+			dsl::EffectId effect;
 
-			// state::CardInstanceId / domain::CardCode
-			owner_type owner;
+			[[nodiscard]] constexpr auto operator==(const UsageTurnPerCard&) const noexcept -> bool = default;
 
-			dsl::UsageKind kind;
-			// 计数器身份: 效果ID或互斥组代表
-			dsl::EffectId counter;
-
-			[[nodiscard]] constexpr auto operator<(const UsageKey& other) const noexcept -> bool
+			[[nodiscard]] constexpr auto operator<(const UsageTurnPerCard& other) const noexcept -> bool
 			{
-				if (owner != other.owner)
+				if (card != other.card)
 				{
-					return owner < other.owner;
-				}
-				if (kind != other.kind)
-				{
-					return kind < other.kind;
+					return card < other.card;
 				}
 
-				return counter < other.counter;
+				return effect < other.effect;
 			}
 		};
 
-		// 互斥选择(按卡名、按回合)
+		// dsl::UsageKind::TURN_PER_NAME
+		class UsageTurnPerName
+		{
+		public:
+			domain::CardCode code;
+			domain::Player player;
+			dsl::EffectId effect;
+
+			[[nodiscard]] constexpr auto operator==(const UsageTurnPerName&) const noexcept -> bool = default;
+
+			[[nodiscard]] constexpr auto operator<(const UsageTurnPerName& other) const noexcept -> bool
+			{
+				if (code != other.code)
+				{
+					return std::to_underlying(code) < std::to_underlying(other.code);
+				}
+				if (player != other.player)
+				{
+					return std::to_underlying(player) < std::to_underlying(other.player);
+				}
+
+				return effect < other.effect;
+			}
+		};
+
+		// dsl::UsageKind::ONCE_PER_CARD
+		class UsageOncePerCard
+		{
+		public:
+			// FIXME(OPT): 一个更好的定义
+			using generation_type = std::uint32_t;
+
+			state::CardInstanceId card;
+			generation_type generation;
+			dsl::EffectId effect;
+
+			[[nodiscard]] constexpr auto operator==(const UsageOncePerCard&) const noexcept -> bool = default;
+
+			[[nodiscard]] constexpr auto operator<(const UsageOncePerCard& other) const noexcept -> bool
+			{
+				if (card != other.card)
+				{
+					return card < other.card;
+				}
+				if (generation != other.generation)
+				{
+					return generation < other.generation;
+				}
+
+				return effect < other.effect;
+			}
+		};
+
+		// dsl::UsageKind::ONCE_PER_DUEL
+		class UsageOncePerDuel
+		{
+		public:
+			domain::CardCode code;
+			domain::Player player;
+			dsl::EffectId effect;
+
+			[[nodiscard]] constexpr auto operator==(const UsageOncePerDuel&) const noexcept -> bool = default;
+
+			[[nodiscard]] constexpr auto operator<(const UsageOncePerDuel& other) const noexcept -> bool
+			{
+				if (code != other.code)
+				{
+					return std::to_underlying(code) < std::to_underlying(other.code);
+				}
+				if (player != other.player)
+				{
+					return std::to_underlying(player) < std::to_underlying(other.player);
+				}
+
+				return effect < other.effect;
+			}
+		};
+
+		class UsageKey : public std::variant<
+					UsageTurnPerCard,
+					UsageTurnPerName,
+					UsageOncePerCard,
+					UsageOncePerDuel
+				>
+		{
+		public:
+			using variant::variant;
+
+			[[nodiscard]] constexpr auto operator<(const UsageKey& other) const noexcept -> bool
+			{
+				const auto index = this->index();
+				const auto other_index = other.index();
+
+				if (index != other_index)
+				{
+					return index < other.index();
+				}
+
+				return std::visit(
+					[&]<typename T>(const T& u) noexcept -> bool
+					{
+						const auto& other_u = std::get<T>(other);
+						return u < other_u;
+					},
+					*this
+				);
+			}
+		};
+
+		// 互斥选择
 		class MutexKey
 		{
 		public:
-			using owner_type = state::CardInstanceId::value_type;
+			using owner_type = domain::CardCode;
 
-			// 卡号
-			domain::CardCode owner;
+			// 实例控制者
+			domain::Player controller;
+			// 实例卡密
+			domain::CardCode code;
 			// 组代表
 			dsl::EffectId group;
 
 			[[nodiscard]] constexpr auto operator<(const MutexKey& other) const noexcept -> bool
 			{
-				if (owner != other.owner)
+				if (controller != other.controller)
 				{
-					return owner < other.owner;
+					return controller < other.controller;
+				}
+				if (code != other.code)
+				{
+					return std::to_underlying(code) < std::to_underlying(other.code);
 				}
 
 				return group < other.group;
 			}
 		};
 
-		// 键 = (拥有者ID, kind, 计数器);值 = 已使用次数
+		// 键 = (拥有者ID, 控制者, kind, 来源, 表侧周期, 计数器);值 = 已使用次数
 		std::map<UsageKey, dsl::UsageRestriction::size_type> usage_;
 
-		// 键 = (卡号, 组代表);值 = 当前选中的效果ID
+		// 键 = (卡号, 控制者, 组代表);值 = 当前选中的效果ID
 		std::map<MutexKey, dsl::EffectId> mutex_choices_;
 
 		// ================================================================
@@ -400,14 +508,16 @@ namespace cg::flow
 		auto perform_normal_summon(state::CardInstanceId card, domain::MonsterPlacement placement) noexcept -> bool;
 		auto perform_tribute_summon(state::CardInstanceId card, domain::MonsterPlacement placement, std::span<const state::CardInstanceId> tributes) noexcept -> bool;
 
+		// 规则特招与不发动效果特招共用的不入连锁召唤入口
+		[[nodiscard]] auto perform_special_summon(
+			state::CardInstance& instance,
+			domain::MonsterPlacement placement,
+			const std::variant<dsl::RuleSpecialProcedure, dsl::UnclassifiedSpecialSummon>& special
+		) noexcept -> bool;
+
 		// ================================================================
 		// 使用限制/互斥
 		// ================================================================
-
-		// 使用限制相关
-		[[nodiscard]] auto usage_owner(dsl::UsageKind kind, const state::CardInstance& card) const noexcept -> UsageKey::owner_type;
-		[[nodiscard]] auto make_usage_key(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> UsageKey;
-		[[nodiscard]] auto make_mutex_key(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> MutexKey;
 
 		// 检查效果能否使用
 		[[nodiscard]] auto can_use(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> bool;
@@ -416,6 +526,12 @@ namespace cg::flow
 		auto mark_used(const dsl::Effect& effect, const state::CardInstance& card) noexcept -> bool;
 		// 发动/效果被无效时回滚次数
 		auto unmark_used(const dsl::Effect& effect, const state::CardInstance& card, bool mutex_inserted) noexcept -> void;
+
+		// 为规则特招开洞
+		// 理论上一张卡只会有一个规则特招,且一般只有"卡名一回合一次"的限制
+		[[nodiscard]] auto can_use_for_rule_special(const state::CardInstance& card, bool once_per_turn) const noexcept -> bool;
+		auto mark_used_for_rule_special(const state::CardInstance& card) noexcept -> void;
+		auto unmark_used_for_rule_special(const state::CardInstance& card) noexcept -> void;
 
 		// ================================================================
 		// 战斗/伤害步骤
@@ -605,10 +721,11 @@ namespace cg::flow
 			requires(utility::variant_index_v<P, domain::AnyMonsterPlacement> != utility::invalid_variant_index)
 		auto self_special_summon(const state::CardInstanceId card, const P placement) noexcept -> bool
 		{
-			return this->self_special_summon(card, {placement});
+			return this->rule_special_summon(card, {placement});
 		}
 
-		auto self_special_summon(state::CardInstanceId card, domain::AnyMonsterPlacement placement) noexcept -> bool;
+		// 规则特招,假定有且仅有一个规则特招
+		auto rule_special_summon(state::CardInstanceId card, domain::MonsterPlacement placement) noexcept -> bool;
 
 		// 灵摆召唤:召唤列表中的怪兽
 		auto pendulum_summon(std::span<const state::CardInstanceId> cards) noexcept -> bool;
@@ -640,8 +757,13 @@ namespace cg::flow
 		// 驱动动作: 效果
 		// ================================================================
 
-		// 主动发动(Ignition/Quick):需当前优先权持有者控制该卡
+		// 主动发动(Ignition/Quick):需当前优先权持有者控制该卡。
+		// 只处理 ActivatedEffect;发动后在结算中特招的效果也走这里。
 		auto activate_effect(state::CardInstanceId card, std::size_t effect_index) noexcept -> bool;
+
+		// 应用不发动、不入连锁的 dsl::UnclassifiedSpecialSummon 效果
+		// 这不是`发动`,因此不进入连锁
+		auto apply_special_summon_effect(state::CardInstanceId card, std::size_t effect_index, domain::MonsterPlacement placement) noexcept -> bool;
 
 		// ================================================================
 		// 测试 / 调试支持

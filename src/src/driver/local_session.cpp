@@ -179,6 +179,10 @@ namespace cg::driver
 					{
 						return duel_.tribute_summon(a.card, a.column, a.tributes);
 					},
+					[&](const SelfSpecialSummonAction& a) noexcept -> bool
+					{
+						return duel_.self_special_summon(a.card, a.placement);
+					},
 					[&](const ExtraSummonAction& a) noexcept -> bool
 					{
 						switch (a.kind)
@@ -224,6 +228,10 @@ namespace cg::driver
 					[&](const ActivateEffectAction& a) noexcept -> bool
 					{
 						return duel_.activate_effect(a.card, a.effect_index);
+					},
+					[&](const ApplySpecialSummonEffectAction& a) noexcept -> bool
+					{
+						return duel_.apply_special_summon_effect(a.card, a.effect_index, a.placement);
 					},
 			},
 			action

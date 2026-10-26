@@ -1,0 +1,41 @@
+{
+	"identity": {
+		"kind": "MONSTER",
+		"subtypes": ["EFFECT"],
+		"monster": {
+			"attribute": "LIGHT",
+			"race": "MACHINE",
+			"level": 5,
+			"attack": 2100,
+			"defense": 1600
+		}
+	},
+	"effects": [
+		{
+			"type": "unclassified_special_summon",
+			"source_zones": ["HAND"],
+			"condition": {
+				"and": [
+					{
+						"call": "exists_matching",
+						"args": {
+							"players": ["OPPONENT"],
+							"zones": ["MONSTER", "EXTRA_MONSTER"],
+							"min": 1
+						}
+					},
+					{
+						"not": {
+							"call": "exists_matching",
+							"args": {
+								"players": ["SELF"],
+								"zones": ["MONSTER", "EXTRA_MONSTER"],
+								"min": 1
+							}
+						}
+					}
+				]
+			}
+		}
+	]
+}

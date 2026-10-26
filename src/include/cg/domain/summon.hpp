@@ -25,8 +25,10 @@ namespace cg::domain
 		PENDULUM,
 		// 连接召唤
 		LINK,
-		// 特殊召唤(不包括仪式、融合、同调、超量、灵摆、连接)(规则特招或者效果特招)
-		SPECIAL,
+		// 效果特招
+		EFFECT_SPECIAL,
+		// 规则特招
+		RULE_SPECIAL,
 	};
 
 	// 通常召唤类型

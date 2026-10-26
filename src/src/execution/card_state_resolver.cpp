@@ -119,7 +119,31 @@ namespace cg::execution
 		for (const auto& modifier: collect_static_modifiers(card) | std::views::transform(&std::reference_wrapper<const dsl::StaticModifier>::get))
 		{
 			const auto* definition = vocabulary.find(modifier.primitive);
-			if (definition == nullptr || definition->name != "change_name")
+			if (definition == nullptr)
+			{
+				continue;
+			}
+
+			if (definition->name == "change_name_to_code")
+			{
+				const auto args = interpreter.evaluate_list(modifier.args, context);
+				if (!args.has_value() || args->size() != 1)
+				{
+					continue;
+				}
+
+				if (const auto* value = std::get_if<Integer>(&args->front());
+					value != nullptr)
+				{
+					return static_cast<domain::CardCode>(
+						static_cast<std::underlying_type_t<domain::CardCode>>(static_cast<Integer::value_type>(*value))
+					);
+				}
+
+				continue;
+			}
+
+			if (definition->name != "change_name")
 			{
 				continue;
 			}
@@ -431,7 +455,7 @@ namespace cg::execution
 		Context context{card.controller(), card.id()};
 
 		auto result = static_card_subtypes(card, context);
-		result.unite_with(card.origin_subtypes());
+		result.unite_with(card.origin_card_subtypes());
 		result.subtract_with(static_removed_card_subtypes(card, context));
 
 		return result;

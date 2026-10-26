@@ -99,7 +99,7 @@ namespace cg::dsl::json
 		[[nodiscard]] auto read_summon_xyz_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<XyzProcedure>;
 		[[nodiscard]] auto read_summon_link_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<LinkProcedure>;
 		[[nodiscard]] auto read_summon_ritual_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<RitualProcedure>;
-		[[nodiscard]] auto read_summon_self_special_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<SelfSpecialProcedure>;
+		[[nodiscard]] auto read_summon_rule_special_procedure(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<RuleSpecialProcedure>;
 
 		// 素材谓词:在 scoped card 作用域内读取 bool 表达式;候选用 `$` 原语
 		[[nodiscard]] auto read_summon_material_expression(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<Expression>;
@@ -111,7 +111,6 @@ namespace cg::dsl::json
 		[[nodiscard]] auto read_effect_list(const nlohmann::json::const_iterator& effects, std::string_view path) noexcept -> std::optional<EffectList>;
 		[[nodiscard]] auto read_effect_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<EffectBody>;
 
-
 		[[nodiscard]] auto read_activated_effect_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<ActivatedEffect>;
 		[[nodiscard]] auto read_activated_effect_activation(const nlohmann::json::const_iterator& activation, std::string_view path) noexcept -> std::optional<ActivationKind>;
 		[[nodiscard]] auto read_activated_effect_activation_trigger_source_list(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<TriggerSourceList>;
@@ -120,6 +119,8 @@ namespace cg::dsl::json
 
 		[[nodiscard]] auto read_static_effect_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<StaticEffect>;
 		[[nodiscard]] auto read_static_effect_modifier(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<StaticModifier>;
+
+		[[nodiscard]] auto read_unclassified_special_summon_body(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<UnclassifiedSpecialSummon>;
 
 		[[nodiscard]] auto read_effect_usage_restriction(const nlohmann::json::const_iterator& usage, std::string_view path) noexcept -> std::optional<UsageRestriction>;
 		[[nodiscard]] auto read_effect_properties(const nlohmann::json& json, std::string_view path) noexcept -> std::optional<utility::EnumMask<EffectProperty>>;

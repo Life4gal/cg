@@ -26,35 +26,58 @@ namespace cg::state
 	{
 		auto& instance = ref();
 
-		instance.placement_ = placement;
-		if (const auto zone = domain::zone_of(placement);
+		const auto old_placement = instance.placement_;
+		const auto& new_placement = placement;
+
+		const auto old_zone = domain::zone_of(old_placement);
+		const auto new_zone = domain::zone_of(new_placement);
+
+		const auto old_position = domain::position_of(old_placement);
+		const auto new_position = domain::position_of(new_placement);
+
+		const auto is_field_zone = [](const domain::Zone zone) noexcept -> bool
+		{
+			return
+					zone == domain::Zone::MONSTER ||
+					zone == domain::Zone::EXTRA_MONSTER ||
+					zone == domain::Zone::SPELL_TRAP ||
+					zone == domain::Zone::FIELD_SPELL;
+		};
+		const auto is_face_up = [](const std::optional<domain::Position>& position) noexcept -> bool
+		{
+			return
+					position.has_value() &&
+					(*position == domain::Position::FACE_UP_ATTACK || *position == domain::Position::FACE_UP_DEFENSE);
+		};
+
+		// 表侧存在周期结束:离场或从表侧翻到里侧
+		// 单纯的攻守表示变化、区域移动或控制权转移不结束周期
+		if (
+			is_field_zone(old_zone) &&
+			(!is_field_zone(new_zone) || (is_face_up(old_position) && !is_face_up(new_position)))
+		)
+		{
+			instance.face_up_generation_ += 1;
+		}
+
+		instance.placement_ = new_placement;
+		if (const auto zone = domain::zone_of(new_placement);
 			zone == domain::Zone::DECK || zone == domain::Zone::EXTRA_DECK || zone == domain::Zone::HAND)
 		{
+			// 返回卡组/额外卡组/手牌后不再视为正规召唤过
 			instance.properly_summoned_ = false;
 		}
-	}
 
-	auto CardInstance::Modifier::set_move_provenance(const MoveProvenance& provenance) noexcept -> void
-	{
-		ref().move_ = provenance;
-	}
-
-	auto CardInstance::Modifier::set_summon_record(SummonRecord record) noexcept -> void
-	{
-		auto& instance = ref();
-
-		instance.summon_ = std::move(record);
-		if (!instance.properly_summoned_)
+		if (const auto zone = domain::zone_of(new_placement);
+			zone != domain::Zone::MONSTER &&
+			zone != domain::Zone::EXTRA_MONSTER &&
+			zone != domain::Zone::SPELL_TRAP &&
+			zone != domain::Zone::FIELD_SPELL)
 		{
-			const auto properly_summoned =
-					(instance.summon_.method == domain::SummonMethod::FUSION && instance.origin_is_card_subtype(domain::CardSubtype::FUSION)) ||
-					(instance.summon_.method == domain::SummonMethod::SYNCHRO && instance.origin_is_card_subtype(domain::CardSubtype::SYNCHRO)) ||
-					(instance.summon_.method == domain::SummonMethod::XYZ && instance.origin_is_card_subtype(domain::CardSubtype::XYZ)) ||
-					(instance.summon_.method == domain::SummonMethod::LINK && instance.origin_is_card_subtype(domain::CardSubtype::LINK)) ||
-					(instance.summon_.method == domain::SummonMethod::RITUAL && instance.origin_is_card_subtype(domain::CardSubtype::RITUAL)
-					);
+			// 移动到非场上区域重置状态
 
-			instance.properly_summoned_ = properly_summoned;
+			// 重置不可攻击
+			instance.cannot_attack_turn_.reset();
 		}
 	}
 
@@ -68,6 +91,95 @@ namespace cg::state
 		return std::erase(ref().overlays_, material.id()) != 0;
 	}
 
+	auto CardInstance::Modifier::prevent_attack(const domain::TurnId turn_id) noexcept -> void
+	{
+		ref().cannot_attack_turn_ = turn_id;
+	}
+
+	auto CardInstance::Modifier::mark_attacked(const domain::TurnId turn_id) noexcept -> void
+	{
+		ref().attacked_turn_ = turn_id;
+	}
+
+	auto CardInstance::Modifier::set_move_provenance(const MoveProvenance& provenance) noexcept -> void
+	{
+		ref().move_ = provenance;
+	}
+
+	auto CardInstance::Modifier::set_summon_record(SummonRecord record) noexcept -> void
+	{
+		auto& instance = ref();
+
+		instance.summon_ = std::move(record);
+		instance.cannot_attack_turn_.reset();
+
+		if (!instance.properly_summoned_)
+		{
+			instance.properly_summoned_ = [&] noexcept -> bool
+			{
+				const auto subtypes = instance.origin_card_subtypes();
+
+				switch (instance.summon_.method)
+				{
+					case domain::SummonMethod::NORMAL:
+					case domain::SummonMethod::TRIBUTE:
+					case domain::SummonMethod::FLIP:
+					{
+						// 可以通常召唤的怪兽都视为正规召唤
+						return true;
+					}
+					case domain::SummonMethod::RITUAL:
+					{
+						return subtypes.contains(domain::CardSubtype::RITUAL);
+					}
+					case domain::SummonMethod::FUSION:
+					{
+						return subtypes.contains(domain::CardSubtype::FUSION);
+					}
+					case domain::SummonMethod::SYNCHRO:
+					{
+						return subtypes.contains(domain::CardSubtype::SYNCHRO);
+					}
+					case domain::SummonMethod::XYZ:
+					{
+						return subtypes.contains(domain::CardSubtype::XYZ);
+					}
+					case domain::SummonMethod::PENDULUM:
+					{
+						// 可以灵摆召唤的怪兽都视为正规召唤
+						return true;
+					}
+					case domain::SummonMethod::LINK:
+					{
+						return subtypes.contains(domain::CardSubtype::LINK);
+					}
+					case domain::SummonMethod::EFFECT_SPECIAL:
+					{
+						// 如果是特殊召唤,则不能是融合/仪式/同调/超量/连接子类型,否则视为非正规召唤
+						constexpr utility::EnumMask excludes
+						{
+								domain::CardSubtype::FUSION,
+								domain::CardSubtype::RITUAL,
+								domain::CardSubtype::SYNCHRO,
+								domain::CardSubtype::XYZ,
+								domain::CardSubtype::LINK,
+						};
+						return subtypes.intersect(excludes).empty();
+					}
+					case domain::SummonMethod::RULE_SPECIAL:
+					{
+						// 规则特招总是视为正规召唤
+						return true;
+					}
+					default: // NOLINT(clang-diagnostic-covered-switch-default)
+					{
+						std::unreachable();
+					}
+				}
+			}();
+		}
+	}
+
 	CardInstance::CardInstance(const CardInstanceId id, const domain::Player owner, const dsl::CardIdentity& definition) noexcept
 		: definition_{definition},
 		  id_{id},
@@ -75,6 +187,9 @@ namespace cg::state
 		  controller_{owner},
 		  // placement_{},
 		  // overlays_{},
+		  face_up_generation_{0},
+		  properly_summoned_{false},
+		  token_{false},
 		  move_
 		  {
 				  //
@@ -82,9 +197,7 @@ namespace cg::state
 		  summon_
 		  {
 				  //
-		  },
-		  properly_summoned_{false},
-		  token_{false} {}
+		  } {}
 
 	auto CardInstance::id() const noexcept -> CardInstanceId
 	{
@@ -104,11 +217,6 @@ namespace cg::state
 	auto CardInstance::placement() const noexcept -> domain::Placement
 	{
 		return placement_;
-	}
-
-	auto CardInstance::is_token() const noexcept -> bool
-	{
-		return token_;
 	}
 
 	auto CardInstance::origin_code() const noexcept -> domain::CardCode
@@ -141,19 +249,19 @@ namespace cg::state
 		return origin_is_card_type(domain::CardType::TRAP);
 	}
 
-	auto CardInstance::origin_subtypes() const noexcept -> utility::EnumMask<domain::CardSubtype>
+	auto CardInstance::origin_card_subtypes() const noexcept -> utility::EnumMask<domain::CardSubtype>
 	{
 		return definition_.get().subtypes;
 	}
 
 	auto CardInstance::origin_is_card_subtype(const domain::CardSubtype subtype) const noexcept -> bool
 	{
-		return origin_subtypes().contains(subtype);
+		return origin_card_subtypes().contains(subtype);
 	}
 
-	auto CardInstance::origin_is_card_subtype(const utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool
+	auto CardInstance::origin_is_card_subtypes(const utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool
 	{
-		return !origin_subtypes().intersect(subtypes).empty();
+		return !origin_card_subtypes().intersect(subtypes).empty();
 	}
 
 	auto CardInstance::origin_attribute() const noexcept -> domain::Attribute
@@ -277,6 +385,36 @@ namespace cg::state
 		return std::ranges::contains(definition_.get().archetypes, archetype);
 	}
 
+	auto CardInstance::overlays() const noexcept -> const std::vector<CardInstanceId>&
+	{
+		return overlays_;
+	}
+
+	auto CardInstance::face_up_generation() const noexcept -> std::uint32_t
+	{
+		return face_up_generation_;
+	}
+
+	auto CardInstance::properly_summoned() const noexcept -> bool
+	{
+		return properly_summoned_;
+	}
+
+	auto CardInstance::is_token() const noexcept -> bool
+	{
+		return token_;
+	}
+
+	auto CardInstance::cannot_attack(const domain::TurnId turn_id) const noexcept -> bool
+	{
+		return cannot_attack_turn_.has_value() && *cannot_attack_turn_ == turn_id;
+	}
+
+	auto CardInstance::has_attacked(const domain::TurnId turn_id) const noexcept -> bool
+	{
+		return attacked_turn_.has_value() && *attacked_turn_ == turn_id;
+	}
+
 	auto CardInstance::move_provenance() const noexcept -> const MoveProvenance&
 	{
 		return move_;
@@ -285,15 +423,5 @@ namespace cg::state
 	auto CardInstance::summon_record() const noexcept -> const SummonRecord&
 	{
 		return summon_;
-	}
-
-	auto CardInstance::properly_summoned() const noexcept -> bool
-	{
-		return properly_summoned_;
-	}
-
-	auto CardInstance::overlays() const noexcept -> const std::vector<CardInstanceId>&
-	{
-		return overlays_;
 	}
 }

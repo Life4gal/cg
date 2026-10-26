@@ -67,17 +67,23 @@ namespace cg::state
 			// 设置卡牌当前位置
 			auto set_placement(const domain::Placement& placement) noexcept -> void;
 
-			// 设置移动来源
-			auto set_move_provenance(const MoveProvenance& provenance) noexcept -> void;
-
-			// 设置召唤记录
-			auto set_summon_record(SummonRecord record) noexcept -> void;
-
 			// 添加超量素材
 			auto add_overlay(const CardInstance& material) noexcept -> void;
 
 			// 移除超量素材
 			auto remove_overlay(const CardInstance& material) noexcept -> bool;
+
+			// 禁止在指定回合攻击
+			auto prevent_attack(domain::TurnId turn_id) noexcept -> void;
+
+			// 记录本回合已宣言攻击
+			auto mark_attacked(domain::TurnId turn_id) noexcept -> void;
+
+			// 设置移动来源
+			auto set_move_provenance(const MoveProvenance& provenance) noexcept -> void;
+
+			// 设置召唤记录
+			auto set_summon_record(SummonRecord record) noexcept -> void;
 		};
 
 	private:
@@ -96,15 +102,24 @@ namespace cg::state
 		// 当前持有的超量素材
 		std::vector<CardInstanceId> overlays_;
 
-		// 最近一次移动前的快照
-		MoveProvenance move_;
-		// 最近一次召唤的记录
-		SummonRecord summon_;
+		// 表侧存在周期:离场或翻里侧时递增
+		// 用于 dsl::UsageKind::ONCE_PER_CARD 的限制;控制权转移不改变该值
+		// 类型为 flow::Duel::UsageOncePerCard::generation_type
+		std::uint32_t face_up_generation_;
 
 		// 是否曾经完成正规召唤
 		bool properly_summoned_;
 		// 是否为衍生物
 		bool token_;
+		// 禁止攻击的回合(离场或重新召唤时清除)
+		std::optional<domain::TurnId> cannot_attack_turn_;
+		// 本回合已宣言攻击
+		std::optional<domain::TurnId> attacked_turn_;
+
+		// 最近一次移动前的快照
+		MoveProvenance move_;
+		// 最近一次召唤的记录
+		SummonRecord summon_;
 
 	public:
 		CardInstance(CardInstanceId id, domain::Player owner, const dsl::CardIdentity& definition) noexcept;
@@ -124,9 +139,6 @@ namespace cg::state
 		// 卡牌当前位置
 		[[nodiscard]] auto placement() const noexcept -> domain::Placement;
 
-		// 是否为衍生物
-		[[nodiscard]] auto is_token() const noexcept -> bool;
-
 		// ================================================================
 		// 原本数据(印刷值)
 		// ================================================================
@@ -144,11 +156,11 @@ namespace cg::state
 		[[nodiscard]] auto origin_is_trap_card() const noexcept -> bool;
 
 		// 卡牌子类型
-		[[nodiscard]] auto origin_subtypes() const noexcept -> utility::EnumMask<domain::CardSubtype>;
+		[[nodiscard]] auto origin_card_subtypes() const noexcept -> utility::EnumMask<domain::CardSubtype>;
 
 		// 是否是指定卡子类型
 		[[nodiscard]] auto origin_is_card_subtype(domain::CardSubtype subtype) const noexcept -> bool;
-		[[nodiscard]] auto origin_is_card_subtype(utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool;
+		[[nodiscard]] auto origin_is_card_subtypes(utility::EnumMask<domain::CardSubtype> subtypes) const noexcept -> bool;
 
 		// 属性 -- 假定是怪兽卡
 		[[nodiscard]] auto origin_attribute() const noexcept -> domain::Attribute;
@@ -187,12 +199,24 @@ namespace cg::state
 		// 历史/素材
 		// ================================================================
 
-		[[nodiscard]] auto move_provenance() const noexcept -> const MoveProvenance&;
+		[[nodiscard]] auto overlays() const noexcept -> const std::vector<CardInstanceId>&;
 
-		[[nodiscard]] auto summon_record() const noexcept -> const SummonRecord&;
+		// 当前表侧存在周期(离场/翻里侧后递增)
+		[[nodiscard]] auto face_up_generation() const noexcept -> std::uint32_t;
 
 		[[nodiscard]] auto properly_summoned() const noexcept -> bool;
 
-		[[nodiscard]] auto overlays() const noexcept -> const std::vector<CardInstanceId>&;
+		// 是否为衍生物
+		[[nodiscard]] auto is_token() const noexcept -> bool;
+
+		// 是否因当前回合的持续效果不能攻击
+		[[nodiscard]] auto cannot_attack(domain::TurnId turn_id) const noexcept -> bool;
+
+		// 本回合是否已经宣言攻击
+		[[nodiscard]] auto has_attacked(domain::TurnId turn_id) const noexcept -> bool;
+
+		[[nodiscard]] auto move_provenance() const noexcept -> const MoveProvenance&;
+
+		[[nodiscard]] auto summon_record() const noexcept -> const SummonRecord&;
 	};
 }

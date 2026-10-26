@@ -90,15 +90,19 @@ namespace cg::dsl
 		[[nodiscard]] constexpr auto operator==(const RitualProcedure&) const -> bool = default;
 	};
 
-	// 卡自身手续特招,不需要发动效果,不开连锁
-	class SelfSpecialProcedure
+	// 规则特招(效果外文本):卡自身的手续,不需要发动、不入连锁,也不属于效果
+	// 其条件/代价/来源区域以及文本明确写出的限制(如once_per_turn)都属于召唤条件的一部分
+	// 例如:青眼亚白龙[38517737]的效果外文本`这张卡不能通常召唤.向对手展示手牌的1只「青眼の白龍／青眼白龙」的场合可以特殊召唤.「青眼の亜白龍／青眼亚白龙」的以这个方法所作的特殊召唤1回合只能1次.`
+	class RuleSpecialProcedure
 	{
 	public:
 		std::optional<Expression> condition;
 		StatementList cost;
 		utility::EnumMask<domain::Zone> source_zones;
+		// 同一卡名每回合只能通过此手续成功特殊召唤一次(显式文本限制)
+		bool once_per_turn;
 
-		[[nodiscard]] constexpr auto operator==(const SelfSpecialProcedure&) const -> bool = default;
+		[[nodiscard]] constexpr auto operator==(const RuleSpecialProcedure&) const -> bool = default;
 	};
 
 	class SummonProcedure : public std::variant<
@@ -107,7 +111,7 @@ namespace cg::dsl
 				XyzProcedure,
 				LinkProcedure,
 				RitualProcedure,
-				SelfSpecialProcedure
+				RuleSpecialProcedure
 			> {};
 
 	class SummonProcedureList : public std::vector<SummonProcedure> {};

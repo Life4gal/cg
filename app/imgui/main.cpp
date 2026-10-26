@@ -951,6 +951,19 @@ namespace
 				ImGui::SameLine();
 				submit_button("Summon", controller_, driver::LocalAction{driver::NormalSummonAction{card, column}}, queued);
 				ImGui::SameLine();
+				submit_button(
+					"Special Summon",
+					controller_,
+					driver::LocalAction{
+							driver::SelfSpecialSummonAction
+							{
+									card,
+									domain::MonsterPlacement{.column = column, .position = domain::Position::FACE_UP_ATTACK},
+							}
+					},
+					queued
+				);
+				ImGui::SameLine();
 				if (ImGui::SmallButton("Tribute"))
 				{
 					tribute_card_ = card;
@@ -963,9 +976,26 @@ namespace
 				ImGui::SameLine();
 				submit_button("Activate", controller_, driver::LocalAction{driver::ActivateCardAction{card}}, queued);
 				ImGui::SameLine();
-				submit_button("Effect 0", controller_, driver::LocalAction{driver::ActivateEffectAction{card, 0}}, queued);
+				submit_button("Effect 0",
+				              controller_,
+				              driver::LocalAction{driver::ActivateEffectAction{card, 0}},
+				              queued);
 				ImGui::SameLine();
-				submit_button("Effect 1", controller_, driver::LocalAction{driver::ActivateEffectAction{card, 1}}, queued);
+				submit_button("Effect 1",
+				              controller_,
+				              driver::LocalAction{driver::ActivateEffectAction{card, 1}},
+				              queued);
+				ImGui::SameLine();
+				const auto placement = domain::MonsterPlacement{.column = column, .position = domain::Position::FACE_UP_ATTACK};
+				submit_button("Apply 0",
+				              controller_,
+				              driver::LocalAction{driver::ApplySpecialSummonEffectAction{card, 0, placement}},
+				              queued);
+				ImGui::SameLine();
+				submit_button("Apply 1",
+				              controller_,
+				              driver::LocalAction{driver::ApplySpecialSummonEffectAction{card, 1, placement}},
+				              queued);
 				ImGui::PopID();
 			}
 
@@ -979,9 +1009,26 @@ namespace
 				ImGui::PushID(static_cast<int>(card.raw()));
 				ImGui::Text("%s", card_text(view, card).c_str());
 				ImGui::SameLine();
-				submit_button("Effect 0", controller_, driver::LocalAction{driver::ActivateEffectAction{card, 0}}, queued);
+				submit_button("Effect 0",
+				              controller_,
+				              driver::LocalAction{driver::ActivateEffectAction{card, 0}},
+				              queued);
 				ImGui::SameLine();
-				submit_button("Effect 1", controller_, driver::LocalAction{driver::ActivateEffectAction{card, 1}}, queued);
+				submit_button("Effect 1",
+				              controller_,
+				              driver::LocalAction{driver::ActivateEffectAction{card, 1}},
+				              queued);
+				ImGui::SameLine();
+				const auto placement = domain::MonsterPlacement{.column = column, .position = domain::Position::FACE_UP_ATTACK};
+				submit_button("Apply 0",
+				              controller_,
+				              driver::LocalAction{driver::ApplySpecialSummonEffectAction{card, 0, placement}},
+				              queued);
+				ImGui::SameLine();
+				submit_button("Apply 1",
+				              controller_,
+				              driver::LocalAction{driver::ApplySpecialSummonEffectAction{card, 1, placement}},
+				              queued);
 				ImGui::SameLine();
 				submit_button("Attack Direct", controller_, driver::LocalAction{driver::DeclareAttackAction{card, std::nullopt}}, queued);
 				for (const auto target: view.opponent_side.monsters)

@@ -129,7 +129,7 @@
 							"call": "sole_card",
 							"args": {"group": {"var": "selected"}}
 						},
-						"method": "SPECIAL",
+						"method": "EFFECT_SPECIAL",
 						"position": "FACE_UP_ATTACK"
 					}
 				}

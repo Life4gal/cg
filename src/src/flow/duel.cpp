@@ -560,29 +560,61 @@ namespace cg::flow
 
 		for (const auto& summon: script->summons)
 		{
-			if (method == domain::SummonMethod::SYNCHRO && std::holds_alternative<dsl::SynchroProcedure>(summon))
+			switch (const auto index = summon.index();
+				index)
 			{
-				return &summon;
-			}
-			if (method == domain::SummonMethod::XYZ && std::holds_alternative<dsl::XyzProcedure>(summon))
-			{
-				return &summon;
-			}
-			if (method == domain::SummonMethod::FUSION && std::holds_alternative<dsl::FusionProcedure>(summon))
-			{
-				return &summon;
-			}
-			if (method == domain::SummonMethod::LINK && std::holds_alternative<dsl::LinkProcedure>(summon))
-			{
-				return &summon;
-			}
-			if (method == domain::SummonMethod::RITUAL && std::holds_alternative<dsl::RitualProcedure>(summon))
-			{
-				return &summon;
-			}
-			if (method == domain::SummonMethod::SPECIAL && std::holds_alternative<dsl::SelfSpecialProcedure>(summon))
-			{
-				return &summon;
+				case utility::variant_index_v<dsl::FusionProcedure, dsl::SummonProcedure>:
+				{
+					if (method == domain::SummonMethod::FUSION)
+					{
+						return &summon;
+					}
+					break;
+				}
+				case utility::variant_index_v<dsl::SynchroProcedure, dsl::SummonProcedure>:
+				{
+					if (method == domain::SummonMethod::SYNCHRO)
+					{
+						return &summon;
+					}
+					break;
+				}
+				case utility::variant_index_v<dsl::XyzProcedure, dsl::SummonProcedure>:
+				{
+					if (method == domain::SummonMethod::XYZ)
+					{
+						return &summon;
+					}
+					break;
+				}
+				case utility::variant_index_v<dsl::LinkProcedure, dsl::SummonProcedure>:
+				{
+					if (method == domain::SummonMethod::LINK)
+					{
+						return &summon;
+					}
+					break;
+				}
+				case utility::variant_index_v<dsl::RitualProcedure, dsl::SummonProcedure>:
+				{
+					if (method == domain::SummonMethod::RITUAL)
+					{
+						return &summon;
+					}
+					break;
+				}
+				case utility::variant_index_v<dsl::RuleSpecialProcedure, dsl::SummonProcedure>:
+				{
+					if (method == domain::SummonMethod::RULE_SPECIAL)
+					{
+						return &summon;
+					}
+					break;
+				}
+				default:
+				{
+					std::unreachable();
+				}
 			}
 		}
 
@@ -1212,6 +1244,11 @@ namespace cg::flow
 			}
 		}
 
+		if (summon.method == domain::SummonMethod::RULE_SPECIAL)
+		{
+			mark_used_for_rule_special(instance);
+		}
+
 		priority_.reset();
 		trigger_event(dsl::TriggerSource{domain::EventCode::SPECIAL_SUMMON_SUCCESS}, instance.id());
 
@@ -1356,6 +1393,12 @@ namespace cg::flow
 			return false;
 		}
 
+		// 特殊召唤怪兽不能通常召唤/盖放
+		if (interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::SPECIAL_SUMMON))
+		{
+			return false;
+		}
+
 		// 等级 5 以上需要祭品(使用 tribute_summon / tribute_set)
 		if (const auto level = interpreter_.state_resolver().level(*instance);
 			level >= 5)
@@ -1404,6 +1447,12 @@ namespace cg::flow
 
 		if (const auto zone = game_.zone_of(card);
 			zone != domain::Zone::HAND)
+		{
+			return false;
+		}
+
+		// 特殊召唤怪兽不能通常召唤/盖放
+		if (interpreter_.state_resolver().contains_card_subtype(*instance, domain::CardSubtype::SPECIAL_SUMMON))
 		{
 			return false;
 		}
@@ -1481,61 +1530,140 @@ namespace cg::flow
 		);
 	}
 
-	auto Duel::usage_owner(const dsl::UsageKind kind, const state::CardInstance& card) const noexcept -> UsageKey::owner_type
+	auto Duel::perform_special_summon(
+		state::CardInstance& instance,
+		const domain::MonsterPlacement placement,
+		const std::variant<dsl::RuleSpecialProcedure, dsl::UnclassifiedSpecialSummon>& special
+	) noexcept -> bool
 	{
-		if (kind == dsl::UsageKind::TURN_PER_CARD)
+		if (has_pending_summon())
 		{
-			return card.id().raw();
+			return false;
 		}
 
-		return std::to_underlying(interpreter_.state_resolver().effective_code(card));
-	}
-
-	auto Duel::make_usage_key(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> UsageKey
-	{
-		LIBASSERT_DEBUG_ASSERT(effect.usage.has_value());
-
-		return
+		// 必须是表侧攻击/守备表示
+		if (placement.position != domain::Position::FACE_UP_ATTACK && placement.position != domain::Position::FACE_UP_DEFENSE)
 		{
-				.owner = usage_owner(effect.usage->kind, card), // NOLINT(bugprone-unchecked-optional-access)
-				.kind = effect.usage->kind, // NOLINT(bugprone-unchecked-optional-access)
-				.counter = effect.id,
-		};
-	}
+			return false;
+		}
 
-	auto Duel::make_mutex_key(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> MutexKey
-	{
-		LIBASSERT_DEBUG_ASSERT(effect.mutex.has_value());
-
-		return
+		auto* summon_instance = summonable_instance_of(instance.id(), placement);
+		if (summon_instance == nullptr)
 		{
-				.owner = interpreter_.state_resolver().effective_code(card),
-				.group = *effect.mutex,
-		};
+			return false;
+		}
+
+		return std::visit(
+			[&]<typename T>(const T& s) noexcept -> bool
+			{
+				if (const auto source_zone = game_.zone_of(instance.id());
+					!s.source_zones.contains(source_zone))
+				{
+					return false;
+				}
+
+				execution::Context context{instance.controller(), instance.id()};
+				if (s.condition.has_value())
+				{
+					const auto result = interpreter_.evaluate(*s.condition, context);
+					if (!result.has_value())
+					{
+						return false;
+					}
+
+					const auto* value = std::get_if<execution::Boolean>(&*result);
+					if (value == nullptr || !*value)
+					{
+						return false;
+					}
+				}
+
+				if (!s.cost.empty() && !interpreter_.execute(s.cost, context))
+				{
+					return false;
+				}
+
+				return begin_summon(
+					SummonState
+					{
+							.controller = instance.controller(),
+							.placement = placement,
+							.method = std::is_same_v<T, dsl::RuleSpecialProcedure> ? domain::SummonMethod::RULE_SPECIAL : domain::SummonMethod::EFFECT_SPECIAL,
+							.card = std::ref(instance),
+							.materials = {},
+					},
+					domain::EventCode::SPECIAL_SUMMON_DECLARED
+				);
+			},
+			special
+		);
 	}
 
 	auto Duel::can_use(const dsl::Effect& effect, const state::CardInstance& card) const noexcept -> bool
 	{
-		if (effect.usage.has_value())
-		{
-			const auto key = make_usage_key(effect, card);
-			const auto it = usage_.find(key);
-
-			if (const auto used = it == usage_.end() ? dsl::UsageRestriction::size_type{0} : it->second;
-				used >= effect.usage->count)
-			{
-				return false;
-			}
-		}
-
+		// 先检查mutex(相对廉价)
 		if (effect.mutex.has_value())
 		{
-			const auto key = make_mutex_key(effect, card);
+			// 注意使用当前卡密,如果该卡复制了另一张卡的卡名和效果,那它应当遵守那张卡的效果限制
+			const MutexKey key{.controller = card.controller(), .code = interpreter_.state_resolver().effective_code(card), .group = *effect.mutex};
 
 			if (const auto it = mutex_choices_.find(key);
 				it != mutex_choices_.end() && it->second != effect.id)
 			{
 				return false;
+			}
+		}
+
+		// 再检查usage
+		if (effect.usage.has_value())
+		{
+			const auto check = [&](const UsageKey key) noexcept -> bool
+			{
+				const auto it = usage_.find(key);
+				if (it == usage_.end())
+				{
+					// 假定可用次数不会等于0
+					return true;
+				}
+
+				return it->second < effect.usage->count;
+			};
+
+			const auto kind = effect.usage->kind;
+
+			if (kind.contains(dsl::UsageKind::TURN_PER_CARD))
+			{
+				if (const UsageTurnPerCard key{.card = card.id(), .effect = effect.id};
+					!check(key))
+				{
+					return false;
+				}
+			}
+			if (kind.contains(dsl::UsageKind::TURN_PER_NAME))
+			{
+				// 注意使用当前卡密,如果该卡复制了另一张卡的卡名和效果,那它应当遵守那张卡的效果限制
+				if (const UsageTurnPerName key{.code = interpreter_.state_resolver().effective_code(card), .player = card.controller(), .effect = effect.id};
+					!check(key))
+				{
+					return false;
+				}
+			}
+			if (kind.contains(dsl::UsageKind::ONCE_PER_CARD))
+			{
+				if (const UsageOncePerCard key{.card = card.id(), .generation = card.face_up_generation(), .effect = effect.id};
+					!check(key))
+				{
+					return false;
+				}
+			}
+			if (kind.contains(dsl::UsageKind::ONCE_PER_DUEL))
+			{
+				// 注意使用当前卡密,如果该卡复制了另一张卡的卡名和效果,那它应当遵守那张卡的效果限制
+				if (const UsageOncePerDuel key{.code = interpreter_.state_resolver().effective_code(card), .player = card.controller(), .effect = effect.id};
+					!check(key))
+				{
+					return false;
+				}
 			}
 		}
 
@@ -1546,15 +1674,42 @@ namespace cg::flow
 	{
 		if (effect.usage.has_value())
 		{
-			const auto key = make_usage_key(effect, card);
+			const auto marker = [&](const UsageKey key) noexcept -> void
+			{
+				usage_[key] += 1;
+			};
 
-			usage_[key] += 1;
+			const auto kind = effect.usage->kind;
+
+			if (kind.contains(dsl::UsageKind::TURN_PER_CARD))
+			{
+				const UsageTurnPerCard key{.card = card.id(), .effect = effect.id};
+				marker(key);
+			}
+			if (kind.contains(dsl::UsageKind::TURN_PER_NAME))
+			{
+				// 注意使用当前卡密,如果该卡复制了另一张卡的卡名和效果,那它应当遵守那张卡的效果限制
+				const UsageTurnPerName key{.code = interpreter_.state_resolver().effective_code(card), .player = card.controller(), .effect = effect.id};
+				marker(key);
+			}
+			if (kind.contains(dsl::UsageKind::ONCE_PER_CARD))
+			{
+				const UsageOncePerCard key{.card = card.id(), .generation = card.face_up_generation(), .effect = effect.id};
+				marker(key);
+			}
+			if (kind.contains(dsl::UsageKind::ONCE_PER_DUEL))
+			{
+				// 注意使用当前卡密,如果该卡复制了另一张卡的卡名和效果,那它应当遵守那张卡的效果限制
+				const UsageOncePerDuel key{.code = interpreter_.state_resolver().effective_code(card), .player = card.controller(), .effect = effect.id};
+				marker(key);
+			}
 		}
 
 		auto mutex_inserted = false;
 		if (effect.mutex.has_value())
 		{
-			const auto key = make_mutex_key(effect, card);
+			// 注意使用当前卡密,如果该卡复制了另一张卡的卡名和效果,那它应当遵守那张卡的效果限制
+			const MutexKey key{.controller = card.controller(), .code = interpreter_.state_resolver().effective_code(card), .group = *effect.mutex};
 
 			mutex_inserted = mutex_choices_.try_emplace(key, effect.id).second;
 		}
@@ -1566,24 +1721,91 @@ namespace cg::flow
 	{
 		if (effect.usage.has_value())
 		{
-			const auto key = make_usage_key(effect, card);
-
-			if (const auto it = usage_.find(key);
-				it != usage_.end() && it->second > 0)
+			const auto marker = [&](const UsageKey key) noexcept -> void
 			{
-				it->second -= 1;
+				const auto it = usage_.find(key);
+
+				if (it == usage_.end())
+				{
+					return;
+				}
+
+				if (it->second > 0)
+				{
+					it->second -= 1;
+				}
+			};
+
+			const auto kind = effect.usage->kind;
+
+			if (kind.contains(dsl::UsageKind::TURN_PER_CARD))
+			{
+				const UsageTurnPerCard key{.card = card.id(), .effect = effect.id};
+				marker(key);
+			}
+			if (kind.contains(dsl::UsageKind::TURN_PER_NAME))
+			{
+				// 注意使用当前卡密,如果该卡复制了另一张卡的卡名和效果,那它应当遵守那张卡的效果限制
+				const UsageTurnPerName key{.code = interpreter_.state_resolver().effective_code(card), .player = card.controller(), .effect = effect.id};
+				marker(key);
+			}
+			if (kind.contains(dsl::UsageKind::ONCE_PER_CARD))
+			{
+				const UsageOncePerCard key{.card = card.id(), .generation = card.face_up_generation(), .effect = effect.id};
+				marker(key);
+			}
+			if (kind.contains(dsl::UsageKind::ONCE_PER_DUEL))
+			{
+				// 注意使用当前卡密,如果该卡复制了另一张卡的卡名和效果,那它应当遵守那张卡的效果限制
+				const UsageOncePerDuel key{.code = interpreter_.state_resolver().effective_code(card), .player = card.controller(), .effect = effect.id};
+				marker(key);
 			}
 		}
 
 		if (effect.mutex.has_value() && mutex_inserted)
 		{
-			const auto key = make_mutex_key(effect, card);
+			// 注意使用当前卡密,如果该卡复制了另一张卡的卡名和效果,那它应当遵守那张卡的效果限制
+			const MutexKey key{.controller = card.controller(), .code = interpreter_.state_resolver().effective_code(card), .group = *effect.mutex};
 
 			if (const auto it = mutex_choices_.find(key);
 				it != mutex_choices_.end() && it->second == effect.id)
 			{
 				mutex_choices_.erase(it);
 			}
+		}
+	}
+
+	auto Duel::can_use_for_rule_special(const state::CardInstance& card, const bool once_per_turn) const noexcept -> bool
+	{
+		// 如果不是一回合一次,直接可用
+		if (!once_per_turn)
+		{
+			return true;
+		}
+
+		// 使用原本卡密,规则特招有且仅有从手牌特殊召唤到场上,此时不存在效果影响
+		const UsageTurnPerName key{.code = card.origin_code(), .player = card.controller(), .effect = dsl::EffectId{dsl::EffectId::invalid_id}};
+
+		return !usage_.contains(key);
+	}
+
+	auto Duel::mark_used_for_rule_special(const state::CardInstance& card) noexcept -> void
+	{
+		// 使用原本卡密,规则特招有且仅有从手牌特殊召唤到场上,此时不存在效果影响
+		const UsageTurnPerName key{.code = card.origin_code(), .player = card.controller(), .effect = dsl::EffectId{dsl::EffectId::invalid_id}};
+
+		usage_[key] += 1;
+	}
+
+	auto Duel::unmark_used_for_rule_special(const state::CardInstance& card) noexcept -> void
+	{
+		// 使用原本卡密,规则特招有且仅有从手牌特殊召唤到场上,此时不存在效果影响
+		const UsageTurnPerName key{.code = card.origin_code(), .player = card.controller(), .effect = dsl::EffectId{dsl::EffectId::invalid_id}};
+
+		if (const auto it = usage_.find(key);
+			it != usage_.end() && it->second > 0)
+		{
+			it->second -= 1;
 		}
 	}
 
@@ -2347,12 +2569,34 @@ namespace cg::flow
 		// TurnState
 		state_ = {};
 
-		// 清除本回合的使用记录(DUEL范围保留)
+		// 清除本回合的使用记录
 		std::erase_if(
 			usage_,
-			[](const std::pair<const UsageKey&, const dsl::UsageRestriction::size_type>& p) noexcept -> bool
+			[this](const std::pair<const UsageKey&, const dsl::UsageRestriction::size_type>& p) noexcept -> bool
 			{
-				return p.first.kind == dsl::UsageKind::TURN_PER_CARD || p.first.kind == dsl::UsageKind::TURN_PER_NAME;
+				const auto index = p.first.index();
+
+				// 如果是按回合计算的效果则直接移除
+				if (index == utility::variant_index_v<UsageTurnPerCard, UsageKey> || index == utility::variant_index_v<UsageTurnPerName, UsageKey>)
+				{
+					return true;
+				}
+
+				// 如果是按实例计算的效果则检查实例最后一次正面表示的代数
+				if (index == utility::variant_index_v<UsageOncePerCard, UsageKey>)
+				{
+					const auto& key = std::get<UsageOncePerCard>(p.first);
+					const auto* instance = game_.find_instance(key.card);
+
+					if (instance == nullptr)
+					{
+						return true;
+					}
+
+					return instance->face_up_generation() != key.generation;
+				}
+
+				return false;
 			}
 		);
 
@@ -2646,84 +2890,61 @@ namespace cg::flow
 		);
 	}
 
-	auto Duel::self_special_summon(const state::CardInstanceId card, const domain::AnyMonsterPlacement placement) noexcept -> bool
+	auto Duel::rule_special_summon(const state::CardInstanceId card, const domain::MonsterPlacement placement) noexcept -> bool
 	{
-		if (has_pending_summon())
-		{
-			return false;
-		}
-
-		// 必须是表侧攻击/守备表示
-		if (const auto position = domain::position_of(placement);
-			position != domain::Position::FACE_UP_ATTACK && position != domain::Position::FACE_UP_DEFENSE)
-		{
-			return false;
-		}
-
-		auto* instance = summonable_instance_of(card, placement);
+		auto* instance = game_.find_instance_mutable(card);
 		if (instance == nullptr)
 		{
 			return false;
 		}
 
-		// 必须存在对应的特殊召唤 procedure
-		const auto* procedure = find_summon_procedure(*instance, domain::SummonMethod::SPECIAL);
-		if (procedure == nullptr)
+		if (has_pending_summon() || !chain_.empty())
 		{
 			return false;
 		}
 
-		const auto* special = std::get_if<dsl::SelfSpecialProcedure>(procedure);
-		if (special == nullptr)
+		const auto phase = turn_.phase();
+		if (phase != domain::Phase::MAIN_1 && phase != domain::Phase::MAIN_2)
 		{
 			return false;
 		}
 
-		const auto source_zone = game_.zone_of(card);
-		if (special->source_zones.empty())
+		if (instance->controller() != turn_.turn_player())
 		{
-			if (source_zone != domain::Zone::HAND)
+			return false;
+		}
+
+		if (priority_.holder_player(turn_.turn_player()) != instance->controller())
+		{
+			return false;
+		}
+
+		const auto* script = interpreter_.find_script(instance->origin_code());
+		if (script == nullptr)
+		{
+			return false;
+		}
+
+		const auto it = std::ranges::find_if(
+			script->summons,
+			[](const dsl::SummonProcedure& candidate) noexcept -> bool
 			{
-				return false;
+				return candidate.index() == utility::variant_index_v<dsl::RuleSpecialProcedure, dsl::SummonProcedure>;
 			}
-		}
-		else if (!special->source_zones.contains(source_zone))
-		{
-			return false;
-		}
-
-		execution::Context context{instance->controller(), instance->id()};
-		if (special->condition.has_value())
-		{
-			const auto condition = interpreter_.evaluate(*special->condition, context);
-			if (!condition.has_value())
-			{
-				return false;
-			}
-
-			const auto* value = std::get_if<execution::Boolean>(&*condition);
-			if (value == nullptr || !*value)
-			{
-				return false;
-			}
-		}
-
-		if (!special->cost.empty() && !interpreter_.execute(special->cost, context))
-		{
-			return false;
-		}
-
-		return begin_summon(
-			SummonState
-			{
-					.controller = instance->controller(),
-					.placement = placement,
-					.method = domain::SummonMethod::SPECIAL,
-					.card = std::ref(*instance),
-					.materials = {},
-			},
-			domain::EventCode::SPECIAL_SUMMON_DECLARED
 		);
+		if (it == script->summons.end())
+		{
+			return false;
+		}
+
+		const auto& rule = std::get<dsl::RuleSpecialProcedure>(*it);
+
+		if (!can_use_for_rule_special(*instance, rule.once_per_turn))
+		{
+			return false;
+		}
+
+		return perform_special_summon(*instance, placement, rule);
 	}
 
 	auto Duel::pendulum_summon(const std::span<const state::CardInstanceId> cards) noexcept -> bool
@@ -3166,8 +3387,13 @@ namespace cg::flow
 			return false;
 		}
 
-		const auto* instance = game_.find_instance(attacker);
+		auto* instance = game_.find_instance_mutable(attacker);
 		if (instance == nullptr)
+		{
+			return false;
+		}
+
+		if (instance->cannot_attack(turn_.turn_id()))
 		{
 			return false;
 		}
@@ -3218,6 +3444,8 @@ namespace cg::flow
 
 		// 攻击宣言只开时点;伤害步骤由 pass_priority 推进
 		windows_.clear();
+
+		game_.mark_attacked(*instance);
 
 		state_.attacked_monsters.push_back(attacker);
 		state_.attacked = true;
@@ -3288,7 +3516,7 @@ namespace cg::flow
 
 	auto Duel::activate_effect(const state::CardInstanceId card, const std::size_t effect_index) noexcept -> bool
 	{
-		const auto* instance = game_.find_instance(card);
+		auto* instance = game_.find_instance_mutable(card);
 		if (instance == nullptr)
 		{
 			return false;
@@ -3319,92 +3547,187 @@ namespace cg::flow
 
 		const auto& effect = script->effects[effect_index];
 
-		const auto* activated = std::get_if<dsl::ActivatedEffect>(&effect.body);
-		if (activated == nullptr)
+		return std::visit(
+			utility::Overloaded
+			{
+					[&](const dsl::ActivatedEffect& activated) noexcept -> bool
+					{
+						// 同一效果不能在同一连锁上重复发动;不同效果可以
+						if (contains_duplicated_effect(card, &effect))
+						{
+							return false;
+						}
+
+						if (!can_use(effect, *instance))
+						{
+							// 指定实例的卡牌效果无法发动
+							return false;
+						}
+
+						const auto available = [&] noexcept -> bool
+						{
+							switch (const auto index = activated.activation.index();
+								index)
+							{
+								case utility::variant_index_v<dsl::CardActivation, dsl::ActivationKind>:
+								{
+									// 卡发动不可手动激活
+									return false;
+								}
+								case utility::variant_index_v<dsl::Ignition, dsl::ActivationKind>:
+								{
+									// 启动效果:回合玩家、主要阶段、开放状态
+									if (controller != turn_.turn_player())
+									{
+										return false;
+									}
+									if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
+									{
+										return false;
+									}
+									if (!chain_.empty())
+									{
+										return false;
+									}
+
+									return true;
+								}
+								case utility::variant_index_v<dsl::Trigger, dsl::ActivationKind>:
+								{
+									// 诱发效果不可手动激活
+									return false;
+								}
+								case utility::variant_index_v<dsl::Quick, dsl::ActivationKind>:
+								{
+									return true;
+								}
+								default:
+								{
+									std::unreachable();
+								}
+							}
+						}();
+
+						if (!available)
+						{
+							return false;
+						}
+
+						// 召唤宣言窗口的第一环必须是召唤无效效果
+						if (
+							has_pending_summon() &&
+							chain_.empty() &&
+							!effect.properties.contains(dsl::EffectProperty::SUMMON_NEGATE)
+						)
+						{
+							return false;
+						}
+
+						if (!can_activate_in_damage_step(*instance, &effect))
+						{
+							// 伤害步骤内该效果不属于可发动类别
+							return false;
+						}
+
+						const auto speed = activation_speed(*instance, activated.activation);
+						if (!can_chain(speed))
+						{
+							return false;
+						}
+
+						if (!activated.activation_zones.empty() && !activated.activation_zones.contains(game_.zone_of(card)))
+						{
+							return false;
+						}
+
+						execution::Context context{controller, card, {.chain = std::ref(chain_), .link_index = chain_.size()}};
+						if (!interpreter_.activate(activated, context))
+						{
+							return false;
+						}
+
+						const auto mutex_inserted = mark_used(effect, *instance);
+
+						push_chain_link(
+							controller,
+							speed,
+							card,
+							&activated,
+							&effect,
+							std::move(context),
+							mutex_inserted
+						);
+
+						return true;
+					},
+					[&]([[maybe_unused]] const dsl::StaticEffect& s) noexcept -> bool
+					{
+						std::unreachable();
+					},
+					[&]([[maybe_unused]] const dsl::UnclassifiedSpecialSummon& special_summon) noexcept -> bool
+					{
+						// 不发动效果特招走apply_unclassified_effect
+						return false;
+					},
+			},
+			effect.body
+		);
+	}
+
+	auto Duel::apply_special_summon_effect(const state::CardInstanceId card, const std::size_t effect_index, const domain::MonsterPlacement placement) noexcept -> bool
+	{
+		auto* instance = game_.find_instance_mutable(card);
+		if (instance == nullptr)
 		{
-			// 指定实例的卡牌效果不是发动效果
 			return false;
 		}
 
-		// 同一效果不能在同一连锁上重复发动;不同效果可以
-		if (contains_duplicated_effect(card, &effect))
+		if (has_pending_summon() || !chain_.empty())
+		{
+			return false;
+		}
+
+		const auto phase = turn_.phase();
+		if (phase != domain::Phase::MAIN_1 && phase != domain::Phase::MAIN_2)
+		{
+			return false;
+		}
+
+		const auto controller = instance->controller();
+		if (controller != turn_.turn_player())
+		{
+			return false;
+		}
+
+		if (priority_.holder_player(turn_.turn_player()) != controller)
+		{
+			return false;
+		}
+
+		const auto* script = interpreter_.find_script(instance->origin_code());
+		if (script == nullptr || effect_index >= script->effects.size())
+		{
+			return false;
+		}
+
+		const auto& effect = script->effects[effect_index];
+		const auto* special_summon = std::get_if<dsl::UnclassifiedSpecialSummon>(&effect.body);
+		if (special_summon == nullptr)
 		{
 			return false;
 		}
 
 		if (!can_use(effect, *instance))
 		{
-			// 指定实例的卡牌效果无法发动
-			return false;
-		}
-
-		if (const auto* ignition = std::get_if<dsl::Ignition>(&activated->activation);
-			ignition != nullptr)
-		{
-			// 启动效果:回合玩家、主要阶段、开放状态
-			if (controller != turn_.turn_player())
-			{
-				return false;
-			}
-			if (turn_.phase() != domain::Phase::MAIN_1 && turn_.phase() != domain::Phase::MAIN_2)
-			{
-				return false;
-			}
-			if (!chain_.empty())
-			{
-				return false;
-			}
-		}
-		else if (!std::holds_alternative<dsl::Quick>(activated->activation))
-		{
-			// 卡发动/诱发效果不可手动激活
-			return false;
-		}
-
-		// 召唤宣言窗口的第一环必须是召唤无效效果
-		if (
-			has_pending_summon() &&
-			chain_.empty() &&
-			!effect.properties.contains(dsl::EffectProperty::SUMMON_NEGATE)
-		)
-		{
-			return false;
-		}
-
-		if (!can_activate_in_damage_step(*instance, &effect))
-		{
-			// 伤害步骤内该效果不属于可发动类别
-			return false;
-		}
-
-		const auto speed = activation_speed(*instance, activated->activation);
-		if (!can_chain(speed))
-		{
-			return false;
-		}
-
-		if (!activated->activation_zones.empty() && !activated->activation_zones.contains(game_.zone_of(card)))
-		{
-			return false;
-		}
-
-		execution::Context context{controller, card, {.chain = std::ref(chain_), .link_index = chain_.size()}};
-		if (!interpreter_.activate(*activated, context))
-		{
 			return false;
 		}
 
 		const auto mutex_inserted = mark_used(effect, *instance);
-
-		push_chain_link(
-			controller,
-			speed,
-			card,
-			activated,
-			&effect,
-			std::move(context),
-			mutex_inserted
-		);
+		if (!perform_special_summon(*instance, placement, *special_summon))
+		{
+			unmark_used(effect, *instance, mutex_inserted);
+			return false;
+		}
 
 		return true;
 	}

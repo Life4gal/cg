@@ -43,7 +43,7 @@
 							"call": "sole_card",
 							"args": {"group": {"var": "target"}}
 						},
-						"method": "SPECIAL",
+						"method": "EFFECT_SPECIAL",
 						"position": "FACE_UP_ATTACK"
 					}
 				}
